@@ -85,11 +85,7 @@ export async function requireNotTrial(featureKey: string): Promise<TrialGateResu
   }
 
   // 2. Active paid subscription → full access
-  if (
-    status === 'active' &&
-    plan !== 'free' &&
-    (!planEnd || planEnd.getTime() > now.getTime())
-  ) {
+  if (status === 'active' && plan !== 'free') {
     return { ok: true, userId: user.id, tenantId: user.tenantId };
   }
 

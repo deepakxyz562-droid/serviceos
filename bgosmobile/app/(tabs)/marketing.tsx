@@ -739,6 +739,7 @@ export default function MarketingScreen() {
     }>;
   }>('/api/social/ai-posts', 0, activeMode === 'studio');
   const [localAiPosts, setLocalAiPosts] = useState<any[]>([]);
+  const [dismissedUpcomingIds, setDismissedUpcomingIds] = useState<string[]>([]);
   const [selectedAiPostForDetail, setSelectedAiPostForDetail] = useState<SocialPostRow | null>(null);
   const [activeAiPostIndex, setActiveAiPostIndex] = useState(0);
   const aiPostSliderRef = useRef<ScrollViewInstance | null>(null);
@@ -3109,11 +3110,18 @@ export default function MarketingScreen() {
               ''
             }
             refreshTrigger={boardRefresh}
+            deletedPostIds={dismissedUpcomingIds}
+            onDeletePost={(id) => setDismissedUpcomingIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
             onCreateWithAi={() => setCreatePostModalOpen(true)}
             onViewPost={(post) => {
+              const fullContent =
+                post.caption && post.caption.startsWith(post.headline)
+                  ? post.caption
+                  : `${post.headline}\n\n${post.caption}`;
+
               const row: SocialPostRow = {
                 id: post.id,
-                content: `${post.headline}\n\n${post.caption}`,
+                content: fullContent,
                 title: post.headline,
                 status: (post.status as any) || 'scheduled',
                 scheduledAt: post.scheduledTime,
@@ -6264,11 +6272,34 @@ export default function MarketingScreen() {
         <PostDetailModal
           visible={selectedAiPostForDetail !== null}
           post={selectedAiPostForDetail}
+          defaultWebsiteUrl={
+            brandProfile.data?.profile?.website ||
+            gbpPlace.data?.place?.website ||
+            ''
+          }
+          defaultBookingUrl={
+            (gbpPlace.data?.place as any)?.googlePlaceActions?.appointmentUri ||
+            ''
+          }
           onClose={() => setSelectedAiPostForDetail(null)}
-          onDelete={(postToDelete) => {
-            setLocalAiPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
+          onPublished={() => {
             setBoardRefresh((k) => k + 1);
             setSelectedAiPostForDetail(null);
+          }}
+          onDelete={async (postToDelete) => {
+            const pid = postToDelete.id;
+            setDismissedUpcomingIds((prev) => (prev.includes(pid) ? prev : [...prev, pid]));
+            setLocalAiPosts((prev) => prev.filter((p) => p.id !== pid));
+            setSelectedAiPostForDetail(null);
+            setBoardRefresh((k) => k + 1);
+
+            if (pid && !pid.startsWith('ai_post_') && !pid.startsWith('up-')) {
+              try {
+                await apiRequest(`/api/social/posts/${pid}`, { method: 'DELETE' });
+              } catch (err) {
+                console.warn('[marketing] Post delete API error:', err);
+              }
+            }
           }}
           onEditSave={(updated) => {
             setLocalAiPosts((prev) =>

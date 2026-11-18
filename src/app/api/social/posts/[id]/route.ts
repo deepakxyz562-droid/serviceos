@@ -286,24 +286,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });
     }
 
-    // Hard-delete drafts. Soft-cancel scheduled posts (preserve audit trail).
+    // Hard-delete drafts. Soft-cancel scheduled or other posts.
     if (existing.status === 'draft') {
       await db.socialPost.delete({ where: { id } });
-    } else if (existing.status === 'scheduled') {
+    } else {
       await db.socialPost.update({
         where: { id },
         data: { status: 'cancelled' },
       });
-    } else {
-      // Published / partial / failed / cancelled / publishing — can't delete
-      // (preserve the record for metrics + audit). The UI hides the delete
-      // button for these statuses, so this is a defensive 409.
-      return NextResponse.json(
-        {
-          error: `Cannot delete a post with status '${existing.status}'. Only drafts can be deleted; scheduled posts can be cancelled.`,
-        },
-        { status: 409 },
-      );
     }
 
     await logActivity({

@@ -61,8 +61,8 @@ Strict Guidelines:
 
 Respond ONLY with a valid JSON object with the following schema:
 {
-  "headline": "A punchy, attention-grabbing headline (under 70 chars) with 1-2 relevant emojis",
-  "content": "A captivating, SEO-optimized body paragraph (100-200 words). Include genuine local keywords for ${industry} in ${location}. Clearly state benefits, reliability, and end with an irresistible call to action (e.g. Call now, Visit us, or Request a quote). Include 3-5 relevant local hashtags at the very end.",
+  "headline": "A punchy, attention-grabbing headline (under 70 chars)",
+  "content": "A high-converting local GBP post strictly formatted as:\\n\\n[Intro paragraph introducing the experience, location, and guest/customer comfort]\\n\\n✓ [Benefit 1]: [Details]\\n✓ [Benefit 2]: [Details]\\n✓ [Benefit 3]: [Details]\\n✓ [Benefit 4]: [Details]\\n✓ [Benefit 5]: [Details]\\n\\n[Concluding paragraph on quality, facilities, and local peace of mind]\\n\\nCall ${businessName} in ${location} to ask about services and plan your visit.\\n\\nCTA: CALL\\n\\n#[Hashtags]",
   "ctaType": "CALL" | "BOOK" | "LEARN_MORE" | "ORDER",
   "ctaLabel": "e.g. Call Now, Book Appointment, Get Quote",
   "suggestedOffer": {

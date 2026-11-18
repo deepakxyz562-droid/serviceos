@@ -69,6 +69,10 @@ function isSourcePaidActive(
     const copiedFromTrial =
       trialEnd !== null && Math.abs(periodEnd.getTime() - trialEnd.getTime()) <= 120_000;
     if (!copiedFromTrial) {
+      if (isTenantRow) {
+        // Stale legacy planEndsAt on a tenant whose status was explicitly marked active
+        return true;
+      }
       return false;
     }
   }
@@ -220,6 +224,21 @@ export function evaluateBgosEntitlement(params: {
     toValidDate(effectivePrimary?.currentPeriodEnd ?? effectivePrimary?.endDate) ??
     toValidDate(subRow?.endDate) ??
     toValidDate(tenantRow?.currentPeriodEnd);
+
+  // If primary status was explicitly active on a paid plan, do not falsely report as expired trial
+  if (primaryStatus === 'active' && normalizeBgosPlanCode(effectivePrimary?.plan) !== 'free') {
+    return {
+      entitled: true,
+      isTrial: false,
+      isPaid: true,
+      trialExpired: false,
+      trialDaysLeft: 0,
+      status: 'active',
+      plan: normalizeBgosPlanCode(effectivePrimary?.plan) || 'starter',
+      trialEndsAt: null,
+      currentPeriodEnd: fallbackPeriodEnd ? fallbackPeriodEnd.toISOString() : null,
+    };
+  }
 
   return {
     entitled: false,

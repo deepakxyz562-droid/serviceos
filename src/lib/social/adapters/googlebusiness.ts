@@ -483,6 +483,29 @@ export const googleBusinessAdapter: PlatformAdapter = {
       }
     }
 
+    // Media fallback resilience: If image URL cannot be fetched by Google, retry text-only
+    if (!res.ok && body.media) {
+      const errClone = res.clone();
+      const errText = await errClone.text().catch(() => '');
+      if (errText.includes('media') || errText.includes('sourceUrl') || res.status === 400) {
+        console.warn('[googlebusiness] Media attachment rejected by Google, falling back to text-only post:', errText);
+        const textOnlyBody: Record<string, unknown> = {
+          summary: params.content,
+          topicType: 'STANDARD',
+        };
+        if (body.callToAction) textOnlyBody.callToAction = body.callToAction;
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${account.accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(textOnlyBody),
+        });
+      }
+    }
+
     await assertOk(res, 'publish');
 
     let json: { name?: string; searchUrl?: string } | null = null;

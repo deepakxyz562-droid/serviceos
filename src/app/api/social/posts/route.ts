@@ -81,8 +81,8 @@ export async function GET(request: NextRequest) {
 
     const where: {
       tenantId: string;
-      status?: string;
-      NOT?: {designJson:{equals:null}};
+      status?: string | { not: string };
+      NOT?: any;
       approvalStatus?: string;
       OR?: Array<Record<string, unknown>>;
       createdAt?: { gte?: Date; lte?: Date };
@@ -90,7 +90,12 @@ export async function GET(request: NextRequest) {
 
     const posterDrafts = status === 'draft' && searchParams.get('kind') === 'poster';
     if (posterDrafts) where.NOT = {designJson:{equals:null}};
-    if (status) where.status = status;
+    if (status) {
+      where.status = status;
+    } else {
+      // Exclude soft-deleted / cancelled posts by default
+      where.status = { not: 'cancelled' };
+    }
 
     // AI-post review workflow (Pending / Approved / Rejected pills).
     // approvalStatus is handled gracefully in-memory and via gbpOfferData fallback

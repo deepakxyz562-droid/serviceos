@@ -36,6 +36,8 @@ interface UpcomingPostsCarouselProps {
   defaultWebsiteUrl?: string;
   onPostPublished?: () => void;
   refreshTrigger?: number;
+  deletedPostIds?: string[];
+  onDeletePost?: (postId: string) => void;
 }
 
 export function UpcomingPostsCarousel({
@@ -46,9 +48,12 @@ export function UpcomingPostsCarousel({
   defaultWebsiteUrl = '',
   onPostPublished,
   refreshTrigger,
+  deletedPostIds = [],
+  onDeletePost,
 }: UpcomingPostsCarouselProps) {
   const [posts, setPosts] = useState<UpcomingPostItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedEditPost, setSelectedEditPost] = useState<GeneratedPostData | null>(null);
@@ -56,53 +61,28 @@ export function UpcomingPostsCarousel({
   const isTech = /software|it|tech|comput|web|app/i.test(businessCategory);
   const isFarmStay = /resort|farm|hotel|stay|villa|pool/i.test(businessCategory);
 
-  // Dynamic fallback posts tailored to business
+  // Dynamic fallback posts tailored to business with rich 5-bullet GBP viral copywriting
   const fallbackPosts: UpcomingPostItem[] = useMemo(() => {
-    if (isTech) {
-      return [
-        {
-          id: 'up-1',
-          type: 'Standard Post',
-          scheduledTime: 'Tomorrow, 09:00 AM',
-          headline: `Smart IT Support & Scalable Solutions for Growing Businesses`,
-          caption: `Looking to automate operations and secure your cloud infrastructure? At ${businessName}, we build robust digital systems designed to accelerate your growth. Contact our expert team today!`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
-          channels: ['googlebusiness'],
-          status: 'scheduled',
-          ctaAction: 'CALL',
-        },
-        {
-          id: 'up-2',
-          type: 'Offer Post',
-          scheduledTime: 'In 3 days, 11:30 AM',
-          headline: `Exclusive Seasonal Promotion: Custom Software Audit at ${businessName}`,
-          caption: `Upgrade your workflows with our end-to-end digital audit. Get actionable recommendations, faster turnaround, and dedicated technical maintenance.`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
-          channels: ['googlebusiness'],
-          status: 'scheduled',
-          ctaAction: 'CALL',
-        },
-        {
-          id: 'up-3',
-          type: 'Event Post',
-          scheduledTime: 'This Saturday, 05:00 PM',
-          headline: `Product Demo & Tech Consultation Session With ${businessName}`,
-          caption: `Join our live walkthrough and discover how modern AI automation tools can cut operational costs by up to 40%. Reserve your slot today.`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-003.webp',
-          channels: ['googlebusiness'],
-          status: 'scheduled',
-          ctaAction: 'CALL',
-        },
-      ];
-    }
     if (isFarmStay) {
       return [
         {
           id: 'up-1',
           type: 'Standard Post',
           scheduledTime: 'Tomorrow, 09:00 AM',
-          headline: `How clean pool facilities enhance guest comfort and trust at ${businessName}`,
-          caption: `A refreshing swim feels better when the surroundings are clean, comfortable and welcoming. At ${businessName}, we put the focus on what matters: a relaxing setting where guest comfort comes first.`,
+          headline: 'How clean pool facilities enhance guest comfort and trust',
+          caption: `A refreshing swim feels better when the surroundings are clean, comfortable and welcoming. For families looking for a farmhouse with swimming pool or a swimming pool near Kanvi, ${businessName} puts the focus on what matters: a relaxing setting where guest comfort comes first.
+
+✓ A welcoming first impression: Clean pool surroundings help guests feel more at ease from the moment they arrive.
+✓ Comfort beyond the water: Tidy spaces around the swimming pool make time spent relaxing with family feel more enjoyable.
+✓ Confidence through care: Attention to pool facilities shows guests that their experience matters, helping build trust over time.
+✓ A better family outing: Well-kept surroundings let everyone enjoy the atmosphere without unnecessary distractions.
+✓ More memorable downtime: A cared-for pool setting adds to the pleasure of a farmhouse visit, whether you come to swim or simply unwind.
+
+Choosing a nearby pool is about more than distance. The condition of the facilities and the care given to shared spaces can make a meaningful difference to your visit.
+
+Call ${businessName} in Kanvi to ask about pool access and plan a comfortable, refreshing outing with your family.
+
+CTA: CALL`,
           imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/salon_spa/salon_spa-001.webp',
           channels: ['googlebusiness'],
           status: 'scheduled',
@@ -112,9 +92,71 @@ export function UpcomingPostsCarousel({
           id: 'up-2',
           type: 'Offer Post',
           scheduledTime: 'In 3 days, 11:30 AM',
-          headline: `Exclusive Seasonal Promotion: 20% Off Packages at ${businessName}`,
-          caption: `Upgrade your weekdays with our exclusive promotion. Enjoy peaceful luxury, personalized hospitality, and refreshing outdoor experiences.`,
+          headline: `Exclusive Seasonal Promotion: 20% Off Weekend Packages at ${businessName}`,
+          caption: `Planning a memorable family getaway or a refreshing weekend escape? At ${businessName}, we offer private serene cottages, lush green surroundings, and full farm amenities tailored for quality relaxation.
+
+✓ Peaceful rural ambiance: Enjoy calm scenic nature away from bustling city traffic and noise.
+✓ Clean private accommodations: Comfortable, sanitized farm rooms and cozy family cottages.
+✓ Private lawn & pool access: Ample outdoor spaces for games, family gatherings, and evening barbecues.
+✓ Fresh authentic meals: Wholesome local culinary preparations prepared with fresh ingredients.
+✓ Seamless early bookings: Dedicated host coordination and flexible booking slots for group visits.
+
+Make the most of the season with our limited-time special offer. Quality family moments start with a tranquil setting designed for your complete comfort.
+
+Call ${businessName} today to lock in your 20% discounted seasonal rate and confirm availability.
+
+CTA: BOOK`,
           imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/restaurant_dining/restaurant_dining-001.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'BOOK',
+        },
+      ];
+    }
+    if (isTech) {
+      return [
+        {
+          id: 'up-1',
+          type: 'Standard Post',
+          scheduledTime: 'Tomorrow, 09:00 AM',
+          headline: `Smart IT Support & Scalable Solutions for Growing Businesses`,
+          caption: `Looking to automate operations and secure your cloud infrastructure? At ${businessName}, our dedicated technology specialists deliver reliable end-to-end digital engineering built for high-performance organizations.
+
+✓ Proactive system monitoring: Prevent downtime with 24/7 continuous health checks and immediate issue resolution.
+✓ Tailored cloud integration: Seamless migration to scalable AWS, Google Cloud, and enterprise database systems.
+✓ Enterprise-grade security: Safeguard sensitive customer records with modern encryption and access governance.
+✓ Rapid response SLA: Dedicated support channels ensuring your mission-critical tools run smoothly without delays.
+✓ Scalable architectural design: Software built to grow seamlessly as your active transaction volume expands.
+
+Choosing the right technology partner drives sustainable business advantage. Our engineers ensure your systems remain dependable, fast, and secure.
+
+Call ${businessName} today to discuss your technical roadmap and receive a personalized technology consultation.
+
+CTA: CALL`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+        {
+          id: 'up-2',
+          type: 'Offer Post',
+          scheduledTime: 'In 3 days, 11:30 AM',
+          headline: `Exclusive Seasonal Promotion: Full Digital & Software Audit at ${businessName}`,
+          caption: `Is legacy software or slow infrastructure holding back your business efficiency? Partner with ${businessName} for a comprehensive digital health check and actionable system optimization.
+
+✓ Comprehensive code review: Pinpoint performance bottlenecks and security vulnerabilities across your stack.
+✓ Workflow automation insights: Eliminate repetitive manual tasks with custom API integrations and automated pipelines.
+✓ Database query optimization: Accelerate page load times and data processing by up to 50%.
+✓ Mobile-ready compliance: Ensure your web and mobile applications provide flawless customer experiences on all devices.
+✓ Clear cost reduction roadmap: Identify redundant cloud licenses and optimize your monthly operational expenses.
+
+Take advantage of our exclusive seasonal promotion to modernize your digital assets with expert engineering guidance.
+
+Call ${businessName} today to claim your software audit and explore custom digital solutions for your team.
+
+CTA: CALL`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
           channels: ['googlebusiness'],
           status: 'scheduled',
           ctaAction: 'CALL',
@@ -127,7 +169,19 @@ export function UpcomingPostsCarousel({
         type: 'Standard Post',
         scheduledTime: 'Tomorrow, 09:00 AM',
         headline: `Trusted Quality & Certified Excellence You Can Rely On at ${businessName}`,
-        caption: `We take pride in delivering top-tier service tailored to your exact needs. Experience high reliability, fast response times, and five-star customer care with ${businessName}.`,
+        caption: `When choosing a local service partner, dependability, transparent communication, and genuine attention to detail make all the difference. At ${businessName}, we take pride in delivering five-star customer care tailored to your exact needs.
+
+✓ Certified local expertise: Experienced professionals dedicated to consistent, high-standard workmanship.
+✓ Transparent upfront quotes: Clear pricing with no hidden charges or unexpected surprises at completion.
+✓ Prompt flexible scheduling: Convenient appointment windows designed to fit around your busy routine.
+✓ Premium guaranteed materials: We use only verified, durable components to ensure long-lasting results.
+✓ Dedicated after-service support: Responsive follow-ups and verified satisfaction on every single job.
+
+Local customer trust is earned through consistent quality and honest service. Experience why our clients rate us 5 stars on Google.
+
+Call ${businessName} today to check our availability, ask questions, or request an instant quote.
+
+CTA: CALL`,
         imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
         channels: ['googlebusiness'],
         status: 'scheduled',
@@ -138,7 +192,19 @@ export function UpcomingPostsCarousel({
         type: 'Offer Post',
         scheduledTime: 'In 3 days, 11:30 AM',
         headline: `Special Seasonal Offer: Get Started With ${businessName} Today`,
-        caption: `Take advantage of our exclusive seasonal package. Dedicated service, premium quality, and personalized support for your complete peace of mind.`,
+        caption: `Upgrade your experience with our limited-time seasonal service package. At ${businessName}, our team is ready to deliver premium results and unmatched local convenience.
+
+✓ Exclusive seasonal pricing: Significant savings on our most popular, high-demand local service packages.
+✓ Priority booking slots: Fast-track scheduling with guaranteed early arrival for our valued clients.
+✓ Comprehensive service guarantee: 100% satisfaction assurance backed by our experienced local team.
+✓ Customized service scope: Tailored specifically to your timeline, requirements, and budget preferences.
+✓ Complimentary consultation: Expert assessment and professional recommendations before starting any work.
+
+Don't miss out on this limited-time opportunity to get superior local service at special promotional rates.
+
+Call ${businessName} today to book your session and claim this exclusive seasonal promotion.
+
+CTA: CALL`,
         imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
         channels: ['googlebusiness'],
         status: 'scheduled',
@@ -151,27 +217,29 @@ export function UpcomingPostsCarousel({
     try {
       const res = await apiRequest<{ data: any[] }>('/api/social/posts?limit=15');
       if (res?.data && res.data.length > 0) {
-        const mapped: UpcomingPostItem[] = res.data.map((p, idx) => ({
-          id: p.id || `p-${idx}`,
-          type: p.gbpPostType
-            ? `${p.gbpPostType.charAt(0).toUpperCase() + p.gbpPostType.slice(1)} Post`
-            : 'Standard Post',
-          scheduledTime: p.scheduledAt
-            ? new Date(p.scheduledAt).toLocaleDateString('en-US', {
-                day: 'numeric',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : `Scheduled Update ${idx + 1}`,
-          headline: (p.content || '').split('\n')[0]?.slice(0, 75) || `${businessName} Weekly Update`,
-          caption: p.content || '',
-          imageUrl: p.mediaUrls?.[0] || fallbackPosts[idx % fallbackPosts.length]?.imageUrl,
-          channels: (p.publishTargets || []).map((t: any) => t.platform) || ['googlebusiness'],
-          status: p.status || 'scheduled',
-          ctaAction: p.gbpCta?.actionType || 'CALL',
-          ctaUrl: p.gbpCta?.url || '',
-        }));
+        const mapped: UpcomingPostItem[] = res.data
+          .filter((p) => p.status !== 'cancelled')
+          .map((p, idx) => ({
+            id: p.id || `p-${idx}`,
+            type: p.gbpPostType
+              ? `${p.gbpPostType.charAt(0).toUpperCase() + p.gbpPostType.slice(1)} Post`
+              : 'Standard Post',
+            scheduledTime: p.scheduledAt
+              ? new Date(p.scheduledAt).toLocaleDateString('en-US', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : `Scheduled Update ${idx + 1}`,
+            headline: (p.content || '').split('\n')[0]?.slice(0, 75) || `${businessName} Weekly Update`,
+            caption: p.content || '',
+            imageUrl: p.mediaUrls?.[0] || fallbackPosts[idx % fallbackPosts.length]?.imageUrl,
+            channels: (p.publishTargets || []).map((t: any) => t.platform) || ['googlebusiness'],
+            status: p.status || 'scheduled',
+            ctaAction: p.gbpCta?.actionType || 'CALL',
+            ctaUrl: p.gbpCta?.url || '',
+          }));
         setPosts(mapped);
       } else {
         setPosts(fallbackPosts);
@@ -187,7 +255,14 @@ export function UpcomingPostsCarousel({
     void fetchScheduled();
   }, [businessName, refreshTrigger]);
 
-  const activePosts = posts.length > 0 ? posts : fallbackPosts;
+  const effectiveDeletedIds = useMemo(() => {
+    return new Set([...dismissedIds, ...(deletedPostIds || [])]);
+  }, [dismissedIds, deletedPostIds]);
+
+  const activePosts = useMemo(() => {
+    const source = posts.length > 0 ? posts : fallbackPosts;
+    return source.filter((p) => !effectiveDeletedIds.has(p.id));
+  }, [posts, fallbackPosts, effectiveDeletedIds]);
 
   const handleOpenPost = (post: UpcomingPostItem) => {
     if (onViewPost) {

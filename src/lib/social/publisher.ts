@@ -482,34 +482,66 @@ async function publishSingleTarget(
   };
 
   try {
-    // 1. Load the SocialAccount.
-    const account = await db.socialAccount.findFirst({
-      where: {
-        id: target.socialAccountId,
-        tenantId,
-        platform: target.platform,
-      },
-      select: {
-        id: true,
-        platform: true,
-        accountId: true,
-        accountName: true,
-        accessToken: true,
-        refreshToken: true,
-        tokenExpiry: true,
-        metadata: true,
-        isActive: true,
-      },
-    });
+    // 1. Load the SocialAccount (with automatic fallback to active account on reconnection)
+    let account = target.socialAccountId
+      ? await db.socialAccount.findFirst({
+          where: {
+            id: target.socialAccountId,
+            tenantId,
+            platform: target.platform,
+          },
+          select: {
+            id: true,
+            platform: true,
+            accountId: true,
+            accountName: true,
+            accessToken: true,
+            refreshToken: true,
+            tokenExpiry: true,
+            metadata: true,
+            isActive: true,
+          },
+        })
+      : null;
+
+    // Fallback: If not found by specific id or inactive, recover with any active account for this platform
+    if (!account || !account.isActive) {
+      const activeAccount = await db.socialAccount.findFirst({
+        where: {
+          tenantId,
+          platform: target.platform,
+          isActive: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          platform: true,
+          accountId: true,
+          accountName: true,
+          accessToken: true,
+          refreshToken: true,
+          tokenExpiry: true,
+          metadata: true,
+          isActive: true,
+        },
+      });
+
+      if (activeAccount) {
+        account = activeAccount;
+        target.socialAccountId = activeAccount.id;
+        updated.socialAccountId = activeAccount.id;
+      }
+    }
 
     if (!account) {
+      const platformName = target.platform === 'googlebusiness' ? 'Google Business Profile' : target.platform;
       throw new Error(
-        `SocialAccount not found (id=${target.socialAccountId}). It may have been disconnected.`,
+        `${platformName} account is not connected. Please connect your account in Settings.`,
       );
     }
     if (!account.isActive) {
       throw new Error(
-        `SocialAccount '${account.accountName}' is inactive — reconnect it in Social Accounts.`,
+        `Social account '${account.accountName}' is inactive. Please reconnect it in Social Accounts.`,
       );
     }
 

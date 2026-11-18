@@ -496,6 +496,9 @@ export function PostDetailModal({
   onRetry,
   onDelete,
   onEditSave,
+  onPublished,
+  defaultWebsiteUrl = '',
+  defaultBookingUrl = '',
 }: {
   post: SocialPostRow | null;
   visible: boolean;
@@ -505,10 +508,15 @@ export function PostDetailModal({
   onRetry?: (post: SocialPostRow) => void;
   onDelete?: (post: SocialPostRow) => void;
   onEditSave?: (updatedPost: SocialPostRow) => void;
+  onPublished?: () => void;
+  defaultWebsiteUrl?: string;
+  defaultBookingUrl?: string;
 }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
 
   const [editTitle, setEditTitle] = useState('');
   const [editIntro, setEditIntro] = useState('');
@@ -516,6 +524,9 @@ export function PostDetailModal({
   const [editConclusion, setEditConclusion] = useState('');
   const [editCta, setEditCta] = useState('CALL');
   const [editHashtags, setEditHashtags] = useState('');
+
+  const [selectedCta, setSelectedCta] = useState<'CALL' | 'BOOK' | 'LEARN_MORE' | 'ORDER'>('CALL');
+  const [ctaUrl, setCtaUrl] = useState('');
 
   useEffect(() => {
     if (post) {
@@ -528,8 +539,16 @@ export function PostDetailModal({
       setEditHashtags(p.hashtags.join(' '));
       setIsEditing(false);
       setMenuVisible(false);
+
+      const rawAction = (post.ctaAction || p.ctaText || 'CALL').toUpperCase();
+      if (['CALL', 'BOOK', 'LEARN_MORE', 'ORDER'].includes(rawAction)) {
+        setSelectedCta(rawAction as any);
+      } else {
+        setSelectedCta('CALL');
+      }
+      setCtaUrl(post.ctaUrl || defaultBookingUrl || defaultWebsiteUrl || '');
     }
-  }, [post]);
+  }, [post, defaultBookingUrl, defaultWebsiteUrl]);
 
   if (!post || !visible) return null;
 
@@ -572,10 +591,11 @@ export function PostDetailModal({
           style: 'destructive',
           onPress: async () => {
             try {
+              if (post.id && !post.id.startsWith('ai_post_') && !post.id.startsWith('up-')) {
+                await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' });
+              }
               if (onDelete) {
                 onDelete(post);
-              } else if (post.id && !post.id.startsWith('ai_post_')) {
-                await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' });
               }
               onClose();
               Alert.alert('Deleted', 'Post deleted successfully.');
@@ -623,10 +643,125 @@ export function PostDetailModal({
     }
   };
 
-  const handleNativeCall = () => {
-    const rawPhone = parsed.phone || '+919876543210';
-    const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
-    void Linking.openURL(`tel:${cleanPhone}`);
+  const handleNativeAction = () => {
+    if (selectedCta === 'CALL') {
+      const rawPhone = parsed.phone || (post as any)?.phone || '+919876543210';
+      const cleanPhone = rawPhone.replace(/[^\d+]/g, '');
+      void Linking.openURL(`tel:${cleanPhone}`);
+    } else {
+      const targetUrl = ctaUrl.trim() || defaultBookingUrl || defaultWebsiteUrl || 'https://google.com';
+      const fullUrl = targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`;
+      void Linking.openURL(fullUrl).catch(() => {
+        Alert.alert('Notice', `Could not open link: ${fullUrl}`);
+      });
+    }
+  };
+
+  const handlePublishToGoogle = async () => {
+    setIsPublishing(true);
+    try {
+      const fullContent = post.content || `${parsed.title}\n\n${parsed.intro}`;
+      const gbpType =
+        post.gbpPostType ||
+        (post.title?.toLowerCase().includes('offer')
+          ? 'offer'
+          : post.title?.toLowerCase().includes('event')
+            ? 'event'
+            : 'standard');
+
+      const res = await apiRequest<{ success?: boolean; error?: string; message?: string }>('/api/social/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          content: fullContent,
+          mediaUrls: post.mediaUrls || [],
+          publishTargets: [{ platform: 'googlebusiness' }],
+          status: 'published',
+          gbpPostType: gbpType,
+          gbpCta: {
+            actionType: selectedCta,
+            url: selectedCta !== 'CALL' ? (ctaUrl.trim() || defaultWebsiteUrl || undefined) : undefined,
+          },
+        }),
+      });
+
+      if (res?.error) throw new Error(res.error);
+
+      if (post.id && !post.id.startsWith('ai_post_') && !post.id.startsWith('up-')) {
+        await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' }).catch(() => {});
+      }
+
+      Alert.alert('Post Published! 🎉', 'Your update has been published directly to Google Business Profile.', [
+        {
+          text: 'Great',
+          onPress: () => {
+            onClose();
+            if (onPublished) onPublished();
+          },
+        },
+      ]);
+    } catch (err: unknown) {
+      Alert.alert('Publish Notice', err instanceof Error ? err.message : 'Could not publish to Google at this moment.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleSchedulePost = async () => {
+    setIsScheduling(true);
+    try {
+      const fullContent = post.content || `${parsed.title}\n\n${parsed.intro}`;
+      const gbpType =
+        post.gbpPostType ||
+        (post.title?.toLowerCase().includes('offer')
+          ? 'offer'
+          : post.title?.toLowerCase().includes('event')
+            ? 'event'
+            : 'standard');
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(10, 0, 0, 0);
+
+      const res = await apiRequest<{ success?: boolean; error?: string }>('/api/social/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          content: fullContent,
+          mediaUrls: post.mediaUrls || [],
+          publishTargets: [{ platform: 'googlebusiness' }],
+          status: 'scheduled',
+          scheduledAt: tomorrow.toISOString(),
+          gbpPostType: gbpType,
+          gbpCta: {
+            actionType: selectedCta,
+            url: selectedCta !== 'CALL' ? (ctaUrl.trim() || defaultWebsiteUrl || undefined) : undefined,
+          },
+        }),
+      });
+
+      if (res?.error) throw new Error(res.error);
+
+      if (post.id && !post.id.startsWith('ai_post_') && !post.id.startsWith('up-')) {
+        await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' }).catch(() => {});
+      }
+
+      Alert.alert(
+        'Post Scheduled! 📅',
+        `Post scheduled for ${tomorrow.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} at optimal search hours.`,
+        [
+          {
+            text: 'Done',
+            onPress: () => {
+              onClose();
+              if (onPublished) onPublished();
+            },
+          },
+        ],
+      );
+    } catch (err: unknown) {
+      Alert.alert('Schedule Notice', err instanceof Error ? err.message : 'Could not schedule post.');
+    } finally {
+      setIsScheduling(false);
+    }
   };
 
   const insets = useSafeAreaInsets();
@@ -831,6 +966,33 @@ export function PostDetailModal({
                   </Text>
                 </View>
 
+                {/* Publishing Failure Notice Banner (if post failed to publish) */}
+                {(post.status === 'failed' || post.failureReason) && (
+                  <View style={styles.modalFailureCard}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <MaterialIcons name="error" size={18} color="#DC2626" />
+                      <Text style={styles.modalFailureTitle}>Publishing Notice</Text>
+                    </View>
+                    <Text style={styles.modalFailureReason}>
+                      {post.failureReason || 'Could not publish to Google Business Profile. Please check your connection and tap retry.'}
+                    </Text>
+                    <Pressable
+                      onPress={handlePublishToGoogle}
+                      disabled={isPublishing}
+                      style={styles.modalRetryBtn}
+                    >
+                      {isPublishing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="refresh" size={16} color="#FFFFFF" />
+                          <Text style={styles.modalRetryBtnText}>Retry Publish to Google</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+
                 {/* Bold SEO Headline (H1) */}
                 <Text style={styles.postHeadline}>{parsed.title}</Text>
 
@@ -865,53 +1027,187 @@ export function PostDetailModal({
                   </View>
                 )}
 
-                {/* Native Action Button (CALL) */}
-                <View style={{ marginTop: 8, paddingBottom: 16 }}>
+                {/* Native Action Button (Adapts to selected CTA: CALL, BOOK, LEARN_MORE, ORDER) */}
+                <View style={{ marginTop: 8 }}>
                   <Pressable
-                    onPress={handleNativeCall}
+                    onPress={handleNativeAction}
                     style={styles.nativeCallBtn}
                     accessibilityRole="button"
-                    accessibilityLabel={parsed.ctaText || 'CALL'}
+                    accessibilityLabel={
+                      selectedCta === 'BOOK'
+                        ? 'BOOK ONLINE'
+                        : selectedCta === 'LEARN_MORE'
+                          ? 'LEARN MORE'
+                          : selectedCta === 'ORDER'
+                            ? 'ORDER NOW'
+                            : 'CALL'
+                    }
                   >
-                    <MaterialIcons name="call" size={18} color="#0F172A" />
-                    <Text style={styles.nativeCallBtnText}>{parsed.ctaText || 'CALL'}</Text>
+                    <MaterialIcons
+                      name={
+                        selectedCta === 'BOOK'
+                          ? 'event-available'
+                          : selectedCta === 'LEARN_MORE'
+                            ? 'open-in-browser'
+                            : selectedCta === 'ORDER'
+                              ? 'shopping-bag'
+                              : 'call'
+                      }
+                      size={18}
+                      color="#0F172A"
+                    />
+                    <Text style={styles.nativeCallBtnText}>
+                      {selectedCta === 'BOOK'
+                        ? 'BOOK ONLINE'
+                        : selectedCta === 'LEARN_MORE'
+                          ? 'LEARN MORE'
+                          : selectedCta === 'ORDER'
+                            ? 'ORDER NOW'
+                            : 'CALL'}
+                    </Text>
                   </Pressable>
                 </View>
 
-                {/* Google Post Live Link or Approval Bar */}
-                {googlePostUrl ? (
-                  <Pressable
-                    onPress={() => void openGooglePostLink(googlePostUrl)}
-                    style={styles.liveGoogleBar}
-                  >
-                    <MaterialIcons name="open-in-new" size={16} color="#009F50" />
-                    <Text style={styles.liveGoogleBarText}>View Live on Google Business</Text>
-                  </Pressable>
-                ) : post.approvalStatus === 'pending' ? (
-                  <View style={styles.approvalBar}>
+                {/* Google Post Live Link or Action / Schedule Bar */}
+                {googlePostUrl || post.status === 'published' ? (
+                  <View style={{ marginTop: 4, paddingBottom: 16 }}>
                     <Pressable
-                      onPress={() => {
-                        onReject && onReject(post);
-                        onClose();
-                      }}
-                      style={[styles.approvalBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1 }]}
+                      onPress={() => void openGooglePostLink(googlePostUrl || '')}
+                      style={styles.liveGoogleBar}
                     >
-                      <MaterialIcons name="close" size={16} color="#DC2626" />
-                      <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Reject</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => {
-                        onApprove && onApprove(post);
-                        onClose();
-                      }}
-                      style={[styles.approvalBtn, { backgroundColor: '#009F50' }]}
-                    >
-                      <MaterialIcons name="check" size={16} color="#FFFFFF" />
-                      <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Approve & Schedule</Text>
+                      <MaterialIcons name="open-in-new" size={16} color="#009F50" />
+                      <Text style={styles.liveGoogleBarText}>View Live on Google Business</Text>
                     </Pressable>
                   </View>
-                ) : null}
+                ) : (
+                  <View style={{ gap: 12, marginTop: 4, paddingBottom: 24 }}>
+                    {/* CTA Configuration Card */}
+                    <View style={styles.ctaSelectorCard}>
+                      <Text style={styles.ctaSelectorTitle}>BUTTON ACTION ON GOOGLE MAPS</Text>
+                      <View style={styles.ctaPillsRow}>
+                        {(
+                          [
+                            { id: 'CALL', label: 'Call', icon: 'call' },
+                            { id: 'BOOK', label: 'Book', icon: 'event-available' },
+                            { id: 'LEARN_MORE', label: 'Learn More', icon: 'open-in-browser' },
+                            { id: 'ORDER', label: 'Order', icon: 'shopping-bag' },
+                          ] as const
+                        ).map((btn) => {
+                          const isActive = selectedCta === btn.id;
+                          return (
+                            <Pressable
+                              key={btn.id}
+                              onPress={() => setSelectedCta(btn.id)}
+                              style={[styles.ctaPill, isActive && styles.ctaPillActive]}
+                            >
+                              <MaterialIcons
+                                name={btn.icon as any}
+                                size={14}
+                                color={isActive ? '#009F50' : '#64748B'}
+                              />
+                              <Text style={[styles.ctaPillText, isActive && styles.ctaPillTextActive]}>
+                                {btn.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      {selectedCta !== 'CALL' && (
+                        <View style={{ marginTop: 10 }}>
+                          <Text style={styles.ctaUrlLabel}>
+                            {selectedCta === 'BOOK' ? 'Booking / Appointment Link' : 'Destination URL Link'}
+                          </Text>
+                          <TextInput
+                            value={ctaUrl}
+                            onChangeText={setCtaUrl}
+                            style={styles.ctaUrlInput}
+                            placeholder="https://..."
+                            placeholderTextColor="#94A3B8"
+                            autoCapitalize="none"
+                            keyboardType="url"
+                          />
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Primary Action Buttons: Post to Google Now / Schedule */}
+                    <Pressable
+                      onPress={handlePublishToGoogle}
+                      disabled={isPublishing || isScheduling}
+                      style={styles.postToGoogleBtn}
+                    >
+                      {isPublishing ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="rocket-launch" size={18} color="#FFFFFF" />
+                          <Text style={styles.postToGoogleBtnText}>Post to Google Now</Text>
+                        </>
+                      )}
+                    </Pressable>
+
+                    <View style={styles.secondaryActionsRow}>
+                      <Pressable
+                        onPress={handleSchedulePost}
+                        disabled={isPublishing || isScheduling}
+                        style={styles.secondaryActionBtn}
+                      >
+                        {isScheduling ? (
+                          <ActivityIndicator size="small" color="#009F50" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="schedule" size={16} color="#009F50" />
+                            <Text style={styles.secondaryActionBtnText}>Schedule</Text>
+                          </>
+                        )}
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => setIsEditing(true)}
+                        style={styles.secondaryActionBtn}
+                      >
+                        <MaterialIcons name="edit" size={16} color="#0284C7" />
+                        <Text style={[styles.secondaryActionBtnText, { color: '#0284C7' }]}>Edit</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={handleDeletePost}
+                        style={[styles.secondaryActionBtn, { borderColor: '#FECACA' }]}
+                      >
+                        <MaterialIcons name="delete-outline" size={16} color="#DC2626" />
+                        <Text style={[styles.secondaryActionBtnText, { color: '#DC2626' }]}>Delete</Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Pending Moderation Bar (if applicable) */}
+                    {post.approvalStatus === 'pending' && (
+                      <View style={styles.approvalBar}>
+                        <Pressable
+                          onPress={() => {
+                            onReject && onReject(post);
+                            onClose();
+                          }}
+                          style={[styles.approvalBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1 }]}
+                        >
+                          <MaterialIcons name="close" size={16} color="#DC2626" />
+                          <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>Reject</Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => {
+                            onApprove && onApprove(post);
+                            onClose();
+                          }}
+                          style={[styles.approvalBtn, { backgroundColor: '#009F50' }]}
+                        >
+                          <MaterialIcons name="check" size={16} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Approve & Schedule</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -1161,6 +1457,10 @@ export function PostsBoard({
           post={inspectPost}
           visible={!!inspectPost}
           onClose={() => setInspectPost(null)}
+          onPublished={() => {
+            void board.reload();
+            setInspectPost(null);
+          }}
           onApprove={(p) => void moderate(p, 'approved')}
           onReject={(p) => void moderate(p, 'rejected')}
           onRetry={(p) => void retry(p)}
@@ -1730,5 +2030,139 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ctaSelectorCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    gap: 8,
+  },
+  ctaSelectorTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  ctaPillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  ctaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  ctaPillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#009F50',
+  },
+  ctaPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  ctaPillTextActive: {
+    color: '#009F50',
+    fontWeight: '800',
+  },
+  ctaUrlLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  ctaUrlInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  postToGoogleBtn: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#009F50',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  postToGoogleBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryActionBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  secondaryActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalFailureCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+  },
+  modalFailureTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  modalFailureReason: {
+    fontSize: 12,
+    color: '#991B1B',
+    lineHeight: 17,
+  },
+  modalRetryBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    height: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  modalRetryBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

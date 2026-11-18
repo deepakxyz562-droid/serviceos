@@ -87,13 +87,14 @@ Target Platforms: ${platforms.join(', ')}
 Tone: ${tone}
 
 Local SEO Guidelines:
-1. Title: Catchy, local-search friendly (under 60 chars). Include business or service benefit.
-2. Headline: Punchy 3 to 6 words highlighting the key proposition.
-3. Caption:
-   - High-impact hook incorporating local search keywords ("near me", city, service).
-   - 2-3 structured bullet points with emojis highlighting features, reliability, or exclusive perks.
-   - Clear Google Place action call-to-action (e.g. "Call us at ${phone}", "Book online", or "Visit us today in ${location}").
-4. Hashtags: 6 to 8 relevant local SEO tags (e.g., #${businessName.replace(/[^a-zA-Z0-9]/g, '')}, city tags, industry tags).
+1. Title / Headline: Catchy local-search headline (under 70 chars). Include local benefit and business or service name.
+2. Caption Structure (MANDATORY FORMAT):
+   - Intro Paragraph: Engaging 2-3 sentence opener incorporating location/city, customer needs, and local keywords.
+   - Bullet Points: Exactly 4 to 5 structured bullet points, each starting with the checkmark symbol '✓', followed by a bold benefit title and explanation (e.g. "✓ A welcoming first impression: Clean facilities help guests feel at ease from the moment they arrive.").
+   - Concluding Paragraph: 2 sentences reinforcing dependability, trust, and why local visitors choose this business.
+   - CTA sentence: Clear prompt e.g. "Call ${businessName} in ${location} to inquire about availability and book your slot."
+   - CTA button tag: "CTA: CALL" (or "CTA: BOOK" or "CTA: LEARN_MORE").
+3. Hashtags: 4 to 6 relevant local SEO tags (e.g., #${businessName.replace(/[^a-zA-Z0-9]/g, '')}, local city tags).
 
 Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just raw JSON):
 {
@@ -101,10 +102,10 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
   "headline": "Punchy headline (3 to 6 words)",
   "alternativeHeadlines": ["Alternative headline 1", "Alternative headline 2", "Alternative headline 3"],
   "subtitle": "Clear supporting sentence (under 100 chars)",
-  "badge": "Short badge tag (e.g. '20% OFF', 'SPECIAL OFFER', 'POPULAR CHOICE', 'LIMITED TIME')",
-  "ctaText": "Short action button label (2 to 3 words, e.g. 'Call now', 'Book now', 'Claim offer', 'Get quote')",
-  "caption": "Full rich social media caption (100 to 200 words) formatted with natural spacing, 3 bullet points, and a strong local call-to-action",
-  "hashtags": ["list", "of", "6-8", "local", "SEO", "hashtags", "with", "hash"]
+  "badge": "Short badge tag (e.g. 'Standard Post', 'Special Offer', 'Popular Choice', 'Verified')",
+  "ctaText": "CALL",
+  "caption": "Full formatted caption strictly with Intro Paragraph, 4-5 bullet points starting with '✓', Concluding Paragraph, and CTA sentence",
+  "hashtags": ["list", "of", "4-6", "local", "SEO", "hashtags", "with", "hash"]
 }
 `;
 

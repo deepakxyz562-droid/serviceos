@@ -130,7 +130,13 @@ export async function GET() {
     const billingCycle = subscription?.billingCycle ?? 'monthly';
     const status = subscription?.status ?? tenant?.planStatus ?? 'trial';
     const trialStatus = String(status).toLowerCase();
-    const isTrialExpired = entitlement.trialExpired;
+    const isBgosTenant = (tenant as any)?.signupMode === 'bgos';
+    const isTrialExpired =
+      trialStatus === 'active' && plan !== 'free'
+        ? false
+        : isBgosTenant
+          ? entitlement.trialExpired
+          : trialStatus === 'expired' || (trialStatus === 'trial' && trialEndsAt ? Date.now() > trialEndsAt.getTime() : false);
     const isStandalone = (tenant as any)?.signupMode === 'standalone' || plan.startsWith('standalone');
     const tenantSignupMode = (tenant as any)?.signupMode ?? 'standard';
 
@@ -367,11 +373,13 @@ export async function GET() {
       isTrialExpired,
       entitlement,
       daysRemainingInTrial:
-        entitlement.isTrial
-          ? entitlement.trialDaysLeft
-          : trialStatus === 'trial' && trialEndsAt
-            ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-            : null,
+        trialStatus === 'active'
+          ? null
+          : entitlement.isTrial
+            ? entitlement.trialDaysLeft
+            : trialStatus === 'trial' && trialEndsAt
+              ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+              : null,
       // Phase 2 + 3 additions:
       pendingDowngrade, // { plan, effectiveAt, billingCycle } | null
       billingEvents, // last 10 audit-log entries

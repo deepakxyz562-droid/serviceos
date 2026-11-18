@@ -1161,23 +1161,23 @@ export function BillingView() {
             <div className="flex items-center gap-2">
               <Badge
                 className={`w-fit ${
-                  isTrialExpired || data.status === 'expired'
+                  data.status === 'active'
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : isTrialExpired || data.status === 'expired'
                     ? 'bg-red-600 text-white hover:bg-red-700'
                     : data.status === 'trial' || data.status === 'trialing'
                     ? 'bg-amber-500 text-white hover:bg-amber-600'
-                    : data.status === 'active'
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                     : data.status === 'past_due'
                     ? 'bg-orange-500 text-white hover:bg-orange-600'
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
-                {isTrialExpired || data.status === 'expired'
+                {data.status === 'active'
+                  ? 'Active'
+                  : isTrialExpired || data.status === 'expired'
                   ? 'Trial Expired'
                   : data.status === 'trial' || data.status === 'trialing'
                   ? 'Trial'
-                  : data.status === 'active'
-                  ? 'Active'
                   : data.status === 'past_due'
                   ? 'Past Due'
                   : data.status === 'cancelled'
@@ -1195,7 +1195,7 @@ export function BillingView() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Trial-expired banner (Phase 1) */}
-          {isTrialExpired && (
+          {isTrialExpired && data.status !== 'active' && (
             <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950/30">
               <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
               <div className="flex-1">

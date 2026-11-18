@@ -139,6 +139,7 @@ export function TrialPaywallOverlay({ trialStatus }: { trialStatus: TrialStatus 
 
   if (
     !trialStatus.isTrialExpired ||
+    trialStatus.planStatus === 'active' ||
     trialStatus.loading ||
     currentView === 'billing' ||
     currentView === 'superadmin'
