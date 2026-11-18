@@ -68,6 +68,8 @@ import {
   Film,
   Wand2,
   Lock,
+  User,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1027,6 +1029,69 @@ export function ReviewsView({
   const [requestSaveToCrm, setRequestSaveToCrm] = useState(true);
   const requestEditedMessageRef = useRef(false);
 
+  // Recipient input mode: direct phone number, recent completed customers, or bulk paste
+  const [requestMode, setRequestMode] = useState<'single' | 'recent' | 'bulk'>('single');
+  const [directCustomerName, setDirectCustomerName] = useState('');
+  const [directCustomerPhone, setDirectCustomerPhone] = useState('');
+  const [bulkPhoneNumbers, setBulkPhoneNumbers] = useState('');
+
+  const normalizeDirectPhone = (raw: string): string => {
+    let clean = raw.replace(/[^\d+]/g, '');
+    if (clean.startsWith('+')) clean = clean.slice(1);
+    if (clean.length === 10) clean = `91${clean}`;
+    return clean;
+  };
+
+  const getDirectMessageText = (name?: string) => {
+    const custName = (name || directCustomerName).trim() || 'Valued Customer';
+    const bName = profileTitle || businessName || 'our team';
+    const link = requestShortReviewUrl || reviewLink;
+    if (requestTemplateName.includes('hi') || requestTemplateName.includes('hindi')) {
+      return `नमस्ते ${custName}, ${bName} की सेवा चुनने के लिए धन्यवाद! क्या आप हमारे लिए Google पर एक छोटा सा रिव्यू दे सकते हैं? इससे हमें बहुत मदद मिलेगी: ${link}`;
+    }
+    if (requestTemplateName.includes('direct') || requestTemplateName.includes('clean')) {
+      return `Hello ${custName}, thank you for choosing ${bName}. Please take 15 seconds to rate your experience on Google: ${link}`;
+    }
+    const note = requestCustomNote.trim() ? ` ${requestCustomNote.trim()}` : '';
+    return `Hello ${custName}, thank you for choosing ${bName}! If you loved our service, would you take 30 seconds to share a quick review on Google?${note} Leave review: ${link}`;
+  };
+
+  const handleOpenDirectWhatsApp = () => {
+    const norm = normalizeDirectPhone(directCustomerPhone);
+    if (!norm || norm.length < 10) {
+      toast.error('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    const message = getDirectMessageText();
+    const waUrl = `https://wa.me/${norm}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+
+    // Background sync to CRM and log invite in queue
+    authFetch('/api/reviews/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'scheduled',
+        waDeliveryMode: 'direct_queue',
+        markSentImmediately: true,
+        channel: 'whatsapp',
+        dailyLimit: 5,
+        source: 'direct_wa_tap',
+        reviewLink,
+        businessName: profileTitle || businessName,
+        includeDirectLink,
+        messageTemplate: message,
+        saveToCustomers: requestSaveToCrm,
+        saveToLeads: requestSaveToCrm,
+        leadStatus: 'won',
+        recipients: [{ name: directCustomerName.trim() || undefined, phone: norm }],
+      }),
+    }).catch(() => {});
+
+    toast.success(`Opened WhatsApp for ${norm}! Send the invite directly.`);
+    setRequestReviewsOpen(false);
+  };
+
   const openRequestReviewsModal = (preferredChannel: 'whatsapp' | 'sms' = 'whatsapp') => {
     setRequestChannel(preferredChannel);
     setRequestReviewsOpen(true);
@@ -1567,16 +1632,52 @@ export function ReviewsView({
       const cleanClosingNote = requestCustomNote.trim()
         ? sanitizeReviewPersonalNote(requestCustomNote, 120)
         : '';
-      const selectedRecipients =
-        requestAudience === 'all_crm' && requestCandidates.length > 0
-          ? requestCandidates.map((c) => ({ name: c.name, phone: c.phone }))
-          : undefined;
+
+      let recipientsToSend: Array<{ name?: string; phone: string }> | undefined;
+
+      if (requestMode === 'single') {
+        const norm = normalizeDirectPhone(directCustomerPhone);
+        if (!norm || norm.length < 10) {
+          toast.error('Please enter a valid 10-digit mobile number.');
+          setIsSendingRequests(false);
+          return;
+        }
+        recipientsToSend = [{ name: directCustomerName.trim() || undefined, phone: norm }];
+      } else if (requestMode === 'bulk') {
+        const lines = bulkPhoneNumbers
+          .split(/[\n,;]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const parsed: Array<{ name?: string; phone: string }> = [];
+        for (const line of lines) {
+          const parts = line.split(/[-–:]+/);
+          const p = parts[parts.length - 1].trim();
+          const n = parts.length > 1 ? parts.slice(0, -1).join(' ').trim() : undefined;
+          const norm = normalizeDirectPhone(p);
+          if (norm && norm.length >= 10) {
+            parsed.push({ name: n, phone: norm });
+          }
+        }
+        if (parsed.length === 0) {
+          toast.error('No valid phone numbers found in bulk paste.');
+          setIsSendingRequests(false);
+          return;
+        }
+        recipientsToSend = parsed;
+      } else {
+        recipientsToSend =
+          requestAudience === 'all_crm' && requestCandidates.length > 0
+            ? requestCandidates.map((c) => ({ name: c.name, phone: c.phone }))
+            : undefined;
+      }
 
       const crmPayload = {
         saveToCustomers: requestSaveToCrm,
         saveToLeads: requestSaveToCrm,
         leadStatus: 'won',
       };
+
+      const effectiveMessage = requestCustomMessage.trim() || getDirectMessageText();
 
       const payload = isRequestLockedMeta
         ? {
@@ -1592,7 +1693,7 @@ export function ReviewsView({
                 ? cleanClosingNote
                 : undefined,
             ...crmPayload,
-            ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+            ...(recipientsToSend ? { recipients: recipientsToSend } : {}),
           }
         : isRequestWaDirectQueue
           ? {
@@ -1604,18 +1705,18 @@ export function ReviewsView({
               reviewLink,
               businessName: profileTitle || businessName,
               includeDirectLink,
-              messageTemplate: requestCustomMessage.trim() || undefined,
+              messageTemplate: effectiveMessage,
               ...crmPayload,
-              ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+              ...(recipientsToSend ? { recipients: recipientsToSend } : {}),
             }
           : {
               channel: 'sms',
               reviewLink,
               businessName: profileTitle || businessName,
               includeDirectLink,
-              messageTemplate: requestCustomMessage.trim() || undefined,
+              messageTemplate: effectiveMessage,
               ...crmPayload,
-              ...(selectedRecipients ? { recipients: selectedRecipients } : {}),
+              ...(recipientsToSend ? { recipients: recipientsToSend } : {}),
             };
 
       const res = await authFetch('/api/reviews/request', {
@@ -1647,6 +1748,9 @@ export function ReviewsView({
           }${crmNote}`,
         );
         setRequestReviewsOpen(false);
+        setDirectCustomerName('');
+        setDirectCustomerPhone('');
+        setBulkPhoneNumbers('');
       } else {
         toast.error(
           data.error ||
@@ -4919,19 +5023,129 @@ export function ReviewsView({
         businessName={profileTitle}
       />
 
-      {/* 4. Request Reviews Modal */}
+      {/* 4. Request Customer Reviews Modal */}
       <Dialog open={requestReviewsOpen} onOpenChange={setRequestReviewsOpen}>
-        <DialogContent className="sm:max-w-[460px] max-h-[88vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[490px] max-h-[90vh] overflow-y-auto p-5">
+          <DialogHeader className="space-y-1">
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <Send className="size-4 text-[#009F50]" /> Request Customer Reviews
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Send Google review invites to recent customers via Meta Cloud API, 1-Tap WhatsApp Queue, or SMS.
+            <DialogDescription className="text-xs text-muted-foreground">
+              Send Google review invites directly to your customers via WhatsApp or SMS.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2 text-xs">
+          <div className="space-y-4 py-2 text-xs">
+            {/* Recipient Mode Tabs */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setRequestMode('single')}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
+                  requestMode === 'single'
+                    ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900',
+                )}
+              >
+                <User className="size-3.5" /> Direct Number
+              </button>
+              <button
+                type="button"
+                onClick={() => setRequestMode('recent')}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
+                  requestMode === 'recent'
+                    ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900',
+                )}
+              >
+                <Users className="size-3.5" /> Recent ({requestCandidates.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRequestMode('bulk')}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
+                  requestMode === 'bulk'
+                    ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900',
+                )}
+              >
+                <Plus className="size-3.5" /> Paste Numbers
+              </button>
+            </div>
+
+            {/* Mode 1: Single Direct Number Input */}
+            {requestMode === 'single' && (
+              <div className="space-y-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      Customer Name
+                    </label>
+                    <Input
+                      value={directCustomerName}
+                      onChange={(e) => setDirectCustomerName(e.target.value)}
+                      placeholder="e.g. Ramesh Kumar"
+                      className="h-8 text-xs bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span>Mobile Number</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">with country code</span>
+                    </label>
+                    <Input
+                      value={directCustomerPhone}
+                      onChange={(e) => setDirectCustomerPhone(e.target.value)}
+                      placeholder="e.g. 98765 43210 or +91..."
+                      className="h-8 text-xs bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mode 2: Recent Customers / Bookings */}
+            {requestMode === 'recent' && (
+              <div className="space-y-1.5">
+                <label className="font-semibold text-slate-700 dark:text-slate-300">Audience Segment</label>
+                <select
+                  value={requestAudience}
+                  onChange={(e) => setRequestAudience(e.target.value as 'recent_completed' | 'all_crm')}
+                  className="w-full h-8 text-xs rounded-md border border-input bg-background px-2"
+                >
+                  <option value="recent_completed">Recent Completed Bookings (Last 30 days)</option>
+                  <option value="all_crm">
+                    All CRM &amp; Booking Contacts ({requestCandidates.length})
+                  </option>
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  {requestCandidates.length > 0
+                    ? `Found ${requestCandidates.length} eligible customer contact(s) ready for review invites.`
+                    : 'No previous customer bookings detected. Use "Direct Number" to send instantly.'}
+                </p>
+              </div>
+            )}
+
+            {/* Mode 3: Bulk Paste Numbers */}
+            {requestMode === 'bulk' && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Paste Mobile Numbers</label>
+                  <span className="text-[10px] text-muted-foreground">One per line or comma-separated</span>
+                </div>
+                <Textarea
+                  rows={3}
+                  value={bulkPhoneNumbers}
+                  onChange={(e) => setBulkPhoneNumbers(e.target.value)}
+                  placeholder="9876543210&#10;9812345678&#10;Priya - 9899887766"
+                  className="text-xs resize-none bg-background font-mono"
+                />
+              </div>
+            )}
+
             {/* Delivery Channel Picker */}
             <div className="space-y-1">
               <label className="font-semibold text-slate-700 dark:text-slate-300">Delivery Channel</label>
@@ -4947,7 +5161,7 @@ export function ReviewsView({
                   )}
                 >
                   <MessageCircle className="size-3.5" />
-                  WhatsApp ({requestHasWhatsApp ? 'Cloud API' : '1-Tap Queue'})
+                  WhatsApp
                 </button>
                 <button
                   type="button"
@@ -4960,184 +5174,85 @@ export function ReviewsView({
                   )}
                 >
                   <Phone className="size-3.5" />
-                  SMS ({requestSmsAvailable ? 'Auto' : 'Gateway Needed'})
+                  SMS
                 </button>
               </div>
             </div>
 
-            {/* Audience Segment */}
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Audience Segment</label>
-              <select
-                value={requestAudience}
-                onChange={(e) => setRequestAudience(e.target.value as 'recent_completed' | 'all_crm')}
-                className="w-full h-8 text-xs rounded-md border border-input bg-background px-2"
-              >
-                <option value="recent_completed">Recent Completed Bookings (Last 30 days)</option>
-                <option value="all_crm">
-                  All CRM &amp; Booking Contacts ({requestCandidates.length})
-                </option>
-              </select>
-            </div>
-
-            {/* Message Section */}
-            {isRequestLockedMeta && selectedRequestTemplate ? (
-              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 p-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Lock className="size-3.5 text-[#009F50]" />
-                    Meta Cloud API Template
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/5 dark:bg-white/10 border border-border inline-flex items-center gap-1">
-                      <Lock className="size-2.5" /> Locked for Meta Cloud API
-                    </span>
-                    <span
+            {/* Message Template Picker */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-700 dark:text-slate-300">Message Template</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { id: 'bgos_review_invite_en', label: 'Friendly Invite' },
+                  { id: 'bgos_review_feedback_en', label: 'Direct & Short' },
+                  { id: 'bgos_review_invite_hi', label: 'Hindi (हिंदी)' },
+                  { id: 'bgos_review_invite_note_en', label: 'With Custom Note' },
+                ].map((tpl) => {
+                  const active = requestTemplateName === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setRequestTemplateName(tpl.id)}
                       className={cn(
-                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-                        selectedRequestTemplate.status === 'APPROVED'
-                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                          : selectedRequestTemplate.status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800 border-rose-200'
-                            : 'bg-amber-100 text-amber-800 border-amber-200',
+                        'px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors',
+                        active
+                          ? 'bg-[#009F50] text-white border-[#009F50]'
+                          : 'bg-background text-muted-foreground border-border hover:border-[#009F50]/50',
                       )}
                     >
-                      {selectedRequestTemplate.status === 'APPROVED'
-                        ? 'Approved'
-                        : selectedRequestTemplate.status === 'REJECTED'
-                          ? 'Rejected'
-                          : 'Pending Meta Approval'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {requestMetaTemplates.map((tpl) => {
-                    const active = tpl.name === selectedRequestTemplate.name;
-                    return (
-                      <button
-                        key={tpl.name}
-                        type="button"
-                        onClick={() => setRequestTemplateName(tpl.name)}
-                        className={cn(
-                          'px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-colors',
-                          active
-                            ? 'bg-[#009F50] text-white border-[#009F50]'
-                            : 'bg-background text-muted-foreground border-border hover:border-[#009F50]/50',
-                        )}
-                      >
-                        {tpl.displayName}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {selectedRequestTemplate.status !== 'APPROVED' && (
-                  <p className="text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
-                    Wording is fixed by Meta template rules. Approve{' '}
-                    <code className="font-mono font-bold">{selectedRequestTemplate.name}</code> in Marketing → Meta Templates before live Cloud API delivery.
-                  </p>
-                )}
-
-                <div className="rounded-xl bg-[#ECE5DD] p-2.5">
-                  <div className="rounded-lg bg-white p-2.5 shadow-2xs space-y-1.5">
-                    <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
-                      {selectedRequestTemplate.bodyText
-                        .replace(/\{\{1\}\}/g, 'Priya')
-                        .replace(/\{\{2\}\}/g, profileTitle || businessName || 'Our Business')
-                        .replace(
-                          /\{\{3\}\}/g,
-                          selectedRequestTemplate.supportsCustomNote
-                            ? requestCustomNote.trim()
-                              ? sanitizeReviewPersonalNote(requestCustomNote, 120)
-                              : DEFAULT_REVIEW_PERSONAL_NOTE
-                            : 'your recent visit',
-                        )
-                        .replace(/\{\{4\}\}/g, profileTitle || businessName || 'Our Business')}
-                    </p>
-                    <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-[#128C7E]">
-                      <ExternalLink className="size-3 shrink-0" />
-                      <span className="truncate">
-                        {selectedRequestTemplate.buttonText || 'Leave Google Review'} →{' '}
-                        {requestShortReviewUrl || reviewLink}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedRequestTemplate.supportsCustomNote ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-semibold">
-                      <label>Optional 1-Line Closing Note</label>
-                      <span className="text-muted-foreground">{requestCustomNote.length}/120</span>
-                    </div>
-                    <Input
-                      value={requestCustomNote}
-                      maxLength={120}
-                      onChange={(e) =>
-                        setRequestCustomNote(e.target.value.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
-                      }
-                      placeholder={DEFAULT_REVIEW_PERSONAL_NOTE}
-                      className="h-8 text-xs bg-background"
-                    />
-                  </div>
-                ) : (
-                  <p className="text-[10.5px] text-slate-500">
-                    Template wording is locked for Meta Cloud API compliance. Choose &ldquo;Google Review Invite + Note&rdquo; above to add a personal closing line.
-                  </p>
-                )}
+                      {tpl.label}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="space-y-1.5">
-                {isRequestWaDirectQueue && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
-                    WhatsApp Cloud API is not connected — submitting queues 1-tap WhatsApp invites so you can send with your custom wording.
-                  </p>
-                )}
-                {requestChannel === 'sms' && !requestSmsAvailable && (
-                  <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
-                    SMS gateway is not configured in Integrations — switch to WhatsApp or configure Twilio/SMS first.
-                  </p>
-                )}
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Message Preview</label>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    Editable ({requestChannel === 'sms' ? 'SMS' : '1-Tap WhatsApp'})
+
+              {requestTemplateName.includes('note') && (
+                <div className="space-y-1 pt-1">
+                  <Input
+                    value={requestCustomNote}
+                    maxLength={120}
+                    onChange={(e) =>
+                      setRequestCustomNote(e.target.value.replace(/[\r\n\t]+/g, ' ').slice(0, 120))
+                    }
+                    placeholder="e.g. It was a pleasure serving you today!"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Clean WhatsApp Chat Preview Bubble */}
+            <div className="rounded-xl bg-[#ECE5DD] dark:bg-slate-800/80 p-2.5">
+              <div className="rounded-lg bg-white dark:bg-slate-900 p-2.5 shadow-2xs space-y-1.5">
+                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                  {getDirectMessageText()}
+                </p>
+                <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[11px] font-bold text-[#128C7E]">
+                  <ExternalLink className="size-3 shrink-0" />
+                  <span className="truncate">
+                    Leave Google Review → {requestShortReviewUrl || reviewLink}
                   </span>
                 </div>
-                <Textarea
-                  rows={3}
-                  value={requestCustomMessage}
-                  onChange={(e) => {
-                    requestEditedMessageRef.current = true;
-                    setRequestCustomMessage(e.target.value);
-                  }}
-                  className="text-xs resize-none bg-slate-50 dark:bg-slate-800"
-                />
               </div>
-            )}
+            </div>
 
-            <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-2.5 cursor-pointer select-none">
+            {/* Save to CRM Toggle */}
+            <label className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={requestSaveToCrm}
                 onChange={(e) => setRequestSaveToCrm(e.target.checked)}
-                className="mt-0.5 size-3.5 rounded border-slate-300 text-[#009F50] focus:ring-[#009F50]"
+                className="size-3.5 rounded border-slate-300 text-[#009F50] focus:ring-[#009F50]"
               />
-              <span className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                <strong className="font-semibold text-slate-800 dark:text-slate-100 block">
-                  Save recipients to Customers &amp; Leads CRM
-                </strong>
-                Upserts deduped Customers by phone and logs a Won lead tagged{' '}
-                <code className="text-[10px] font-mono bg-slate-200/70 dark:bg-slate-800 px-1 rounded">
-                  review_requested
-                </code>{' '}
-                without flooding open pipeline deals.
+              <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                Save contact to Customers list automatically
               </span>
             </label>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <Button
               variant="outline"
               size="sm"
@@ -5146,26 +5261,33 @@ export function ReviewsView({
             >
               Cancel
             </Button>
+
+            {requestMode === 'single' && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleOpenDirectWhatsApp}
+                className="h-8 text-xs bg-[#25D366] hover:bg-[#20BD5A] text-white font-bold flex items-center gap-1.5"
+              >
+                <MessageCircle className="size-3.5" />
+                Open in WhatsApp
+              </Button>
+            )}
+
             <Button
               size="sm"
               onClick={handleSendReviewRequests}
               disabled={isSendingRequests}
-              className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
+              className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold flex items-center gap-1.5"
             >
+              <Send className="size-3.5" />
               {isSendingRequests
                 ? 'Sending...'
-                : isRequestLockedMeta
-                  ? 'Send via WhatsApp Cloud API'
-                  : isRequestWaDirectQueue
-                    ? 'Queue 1-Tap WhatsApp'
-                    : 'Send via SMS'}
+                : requestMode === 'single'
+                  ? 'Send Review Invite'
+                  : 'Send Review Invites'}
             </Button>
           </DialogFooter>
-          <p className="text-[11px] text-slate-400 text-center pb-1">
-            {isRequestLockedMeta
-              ? 'Official Meta Cloud API templates include a dynamic 1-tap review CTA button pointing to your workspace Google review link.'
-              : 'You can also schedule 5/day drip invites or share/print the Google Review QR code from the Overview tab.'}
-          </p>
         </DialogContent>
       </Dialog>
 

@@ -564,10 +564,10 @@ async function publishSingleTarget(
       );
     }
 
-    // 4. Publish (transcode .webp images to JPEG for Google Business Profile and Instagram compatibility).
+    // 4. Publish (transcode .webp images to JPEG for Google Business Profile, Instagram, and Facebook compatibility).
     let effectiveParams = params;
     if (
-      (target.platform === 'googlebusiness' || target.platform === 'instagram') &&
+      (target.platform === 'googlebusiness' || target.platform === 'instagram' || target.platform === 'facebook') &&
       Array.isArray(params.mediaUrls) &&
       params.mediaUrls.length > 0
     ) {

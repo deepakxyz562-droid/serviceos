@@ -37,7 +37,7 @@ describe('BgosReviewsWorkstation Zero-State & Safety Verification', () => {
     }).not.toThrow();
 
     // Verify header renders
-    expect(screen.getByRole('heading', { level: 1, name: /Google Business & Reviews/i })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: /Customer Reviews|Google Business/i })).toBeDefined();
 
     // Verify left column empty state
     expect(screen.getByText(/No reviews in this view/i)).toBeDefined();

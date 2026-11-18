@@ -563,13 +563,15 @@ export async function POST(request: NextRequest) {
 
     if (design && !isDraft && !isAlreadyRendered) {
       try {
+        const { persistDesignAssets } = await import('@/lib/designs/assets');
         const { renderDesign } = await import('@/lib/designs/render');
-        const rendered = await renderDesign(design, tenantId);
+        const persistedDesign = await persistDesignAssets(design, tenantId, user.id).catch(() => design);
+        const rendered = await renderDesign(persistedDesign, tenantId);
         if (!rendered?.imageUrl) throw new Error('Missing rendered image');
         body.mediaUrls = [rendered.imageUrl];
       } catch (renderError) {
         console.warn('[api/social/posts] Design export failed', renderError instanceof Error ? renderError.message : renderError);
-        return NextResponse.json({error:'Could not render your design. Please retry before publishing.'},{status:503});
+        return NextResponse.json({ error: 'Could not render your design. Please retry before publishing.' }, { status: 503 });
       }
     }
 
