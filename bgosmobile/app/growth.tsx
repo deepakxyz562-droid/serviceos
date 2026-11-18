@@ -138,6 +138,7 @@ function GrowthScreen() {
   const [ratingFilter, setRatingFilter] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
+  const [draftAllBusy, setDraftAllBusy] = useState(false);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
 
@@ -444,6 +445,20 @@ function GrowthScreen() {
     }
   }
 
+  async function handleDraftAllReplies() {
+    if (pendingReviews.length === 0) return;
+    setDraftAllBusy(true);
+    try {
+      for (const review of pendingReviews.slice(0, 10)) {
+        if (!drafts[review.id]) {
+          await generateDraft(review);
+        }
+      }
+    } finally {
+      setDraftAllBusy(false);
+    }
+  }
+
   async function publishReply(review: Review, text: string, isEdit = false) {
     const replyText = text.trim();
     if (!replyText) {
@@ -729,6 +744,266 @@ function GrowthScreen() {
     );
   }
 
+  function GrowthIntelligenceGrid() {
+    const cards = [
+      {
+        id: 'geo_grid',
+        title: 'Maps Geo-Grid Scan',
+        subtitle: '3x3 & 5x5 Rank Heatmap',
+        detail: 'Track rank pins #1–#20 across your local neighborhood on Google Maps',
+        badge: 'Maps 3-Pack',
+        badgeBg: gbpColors.emeraldSoft,
+        badgeColor: gbpColors.emerald,
+        icon: 'pin-drop' as const,
+        iconBg: '#ECFDF5',
+        iconColor: '#059669',
+        onPress: () => router.push('/seo-growth?tab=grid'),
+      },
+      {
+        id: 'competitors',
+        title: 'Competitor Intelligence',
+        subtitle: '5km Radius & AI Gap',
+        detail: 'Spy on top local competitors & see what ChatGPT and Gemini cite',
+        badge: 'Rival Spy',
+        badgeBg: gbpColors.aiSoft,
+        badgeColor: gbpColors.aiDark,
+        icon: 'radar' as const,
+        iconBg: '#F5F3FF',
+        iconColor: '#7C3AED',
+        onPress: () => router.push('/seo-growth?tab=gap'),
+      },
+      {
+        id: 'audit',
+        title: 'Profile & SEO Audit',
+        subtitle: `${audit.data?.score ?? completion}% Completeness`,
+        detail: 'Categories, descriptions, schema JSON-LD, hours & ranking audit',
+        badge: audit.data?.isFullyOptimized ? '100% Ready' : 'Needs Optimization',
+        badgeBg: audit.data?.isFullyOptimized ? gbpColors.emeraldSoft : gbpColors.amberSoft,
+        badgeColor: audit.data?.isFullyOptimized ? gbpColors.emerald : '#B45309',
+        icon: 'fact-check' as const,
+        iconBg: '#EFF6FF',
+        iconColor: '#2563EB',
+        onPress: () => router.push('/seo-growth?tab=audit'),
+      },
+      {
+        id: 'report',
+        title: 'Growth & ROI Report',
+        subtitle: 'Performance & Trends',
+        detail: 'Customer calls, direction requests, keyword impressions & rankings',
+        badge: 'Weekly ROI',
+        badgeBg: '#FEF3C7',
+        badgeColor: '#D97706',
+        icon: 'insights' as const,
+        iconBg: '#FFFBEB',
+        iconColor: '#D97706',
+        onPress: () => router.push('/growth-report'),
+      },
+    ];
+
+    return (
+      <View style={{ gap: 10 }}>
+        <SectionHeader title="Local SEO & Growth Intelligence" icon="explore" />
+        <View style={{ gap: 10 }}>
+          {cards.map((c) => (
+            <Pressable
+              key={c.id}
+              accessibilityRole="button"
+              accessibilityLabel={c.title}
+              onPress={c.onPress}
+              style={({ pressed }) => ({
+                backgroundColor: colors.surface,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: colors.line,
+                padding: 13,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: c.iconBg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name={c.icon} size={24} color={c.iconColor} />
+              </View>
+
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>{c.title}</Text>
+                  <Pill label={c.badge} bg={c.badgeBg} color={c.badgeColor} />
+                </View>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.muted }}>{c.subtitle}</Text>
+                <Text style={{ fontSize: 11, color: colors.muted }} numberOfLines={1}>
+                  {c.detail}
+                </Text>
+              </View>
+
+              <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  function AiGrowthRecommendationsCard() {
+    const publicSlug = workspace.data?.publicSlug || '';
+    const publicUrl = publicSlug ? `https://bgos.site/${publicSlug}` : `${WEB_URL}/b`;
+
+    const items = [
+      ...(pendingReviews.length > 0
+        ? [
+            {
+              id: 'rec_reviews',
+              icon: 'rate-review' as const,
+              iconColor: '#D97706',
+              iconBg: '#FEF3C7',
+              pill: `${pendingReviews.length} Need Reply`,
+              pillBg: '#FEE2E2',
+              pillColor: '#DC2626',
+              title: `${pendingReviews.length} reviews awaiting your reply`,
+              detail: 'Personalized AI replies boost customer trust and Google local search prominence.',
+              actionLabel: '✨ Draft AI Replies',
+              onAction: () => {
+                setTab('reviews');
+                setReviewFilter('pending');
+              },
+            },
+          ]
+        : []),
+      ...(!isFullyOptimized || completion < 100
+        ? [
+            {
+              id: 'rec_seo',
+              icon: 'auto-awesome' as const,
+              iconColor: '#7C3AED',
+              iconBg: '#F3E8FF',
+              pill: 'High Impact',
+              pillBg: '#F3E8FF',
+              pillColor: '#7C3AED',
+              title: 'Enrich Service Descriptions with Search Terms',
+              detail: 'AI prepares natural 300-500 character SEO copy targeting top search queries.',
+              actionLabel: seoBusy ? 'Optimizing...' : '✨ Optimize with AI',
+              loading: seoBusy,
+              onAction: runSeoOptimizer,
+            },
+          ]
+        : []),
+      {
+        id: 'rec_booking',
+        icon: 'event-available' as const,
+        iconColor: '#2563EB',
+        iconBg: '#EFF6FF',
+        pill: 'Free Booking',
+        pillBg: '#E0E7FF',
+        pillColor: '#4338CA',
+        title: 'Dedicated Landing Page & Booking Link',
+        detail: 'Direct booking and showcase page at bgos.site linked directly to your profile.',
+        actionLabel: 'View Page ↗',
+        onAction: () => {
+          WebBrowser.openBrowserAsync(publicUrl).catch(() => Linking.openURL(publicUrl).catch(() => {}));
+        },
+      },
+      {
+        id: 'rec_whatsapp',
+        icon: 'chat' as const,
+        iconColor: '#059669',
+        iconBg: '#ECFDF5',
+        pill: 'WhatsApp',
+        pillBg: '#D1FAE5',
+        pillColor: '#065F46',
+        title: 'Collect 5★ Reviews via WhatsApp',
+        detail: 'Send polite pre-formatted review requests with direct 5★ Google Maps links.',
+        actionLabel: 'Invite via WhatsApp 💬',
+        onAction: () => setRequestOpen(true),
+      },
+    ];
+
+    return (
+      <View style={{ gap: 10 }}>
+        <SectionHeader
+          title="Your AI Growth Recommendations"
+          icon="auto-awesome"
+          iconColor={gbpColors.ai}
+          right={
+            <Pill
+              label={`${items.length} Actionable`}
+              bg={gbpColors.aiSoft}
+              color={gbpColors.aiDark}
+            />
+          }
+        />
+        <View style={{ gap: 10 }}>
+          {items.map((it) => (
+            <Card key={it.id} style={{ gap: 8, padding: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: it.iconBg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name={it.icon} size={20} color={it.iconColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink, flex: 1 }} numberOfLines={1}>
+                      {it.title}
+                    </Text>
+                    <Pill label={it.pill} bg={it.pillBg} color={it.pillColor} />
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: colors.muted, marginTop: 2 }}>
+                    {it.detail}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 4 }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={it.actionLabel}
+                  disabled={Boolean(it.loading)}
+                  onPress={it.onAction}
+                  style={({ pressed }) => ({
+                    backgroundColor: colors.brandSoft,
+                    borderWidth: 1,
+                    borderColor: colors.brand,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  {it.loading ? (
+                    <ActivityIndicator size="small" color={colors.brand} />
+                  ) : null}
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
+                    {it.actionLabel}
+                  </Text>
+                </Pressable>
+              </View>
+            </Card>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   function QuickActions() {
     const items: { label: string; icon: React.ComponentProps<typeof MaterialIcons>['name']; onPress: () => void }[] = [
       { label: 'Reviews', icon: 'star-outline', onPress: () => setTab('reviews') },
@@ -787,6 +1062,8 @@ function GrowthScreen() {
         ) : (
           <>
             <CompletionCard />
+            <AiGrowthRecommendationsCard />
+            <GrowthIntelligenceGrid />
             <View>
               <SectionHeader
                 title="Optimization Timeline"
@@ -810,34 +1087,8 @@ function GrowthScreen() {
 
         <QuickActions />
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/seo-growth')}
-          style={({ pressed }) => ({
-            backgroundColor: colors.brandSoft,
-            borderWidth: 1,
-            borderColor: colors.brand,
-            borderRadius: 14,
-            padding: 14,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: colors.brandDark }}>
-              Website SEO &amp; AI Search Readiness
-            </Text>
-            <Text style={{ fontSize: 11.5, color: colors.muted }}>
-              Audit OAI-SearchBot access, Schema JSON-LD, Maps Geo-Grid &amp; AI Visibility
-            </Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={22} color={colors.brandDark} />
-        </Pressable>
-
         <View>
-          <SectionHeader title="AI Actions" icon="auto-awesome" iconColor={gbpColors.ai} />
+          <SectionHeader title="AI Actions Trail" icon="history" iconColor={gbpColors.ai} />
           <AiActionsFeed actions={aiActions} onOpenPosts={() => setTab('posts')} />
         </View>
 
@@ -966,6 +1217,43 @@ function GrowthScreen() {
             );
           })}
         </ChipRow>
+
+        {reviewFilter === 'pending' && pendingReviews.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Draft all AI replies"
+            disabled={draftAllBusy}
+            onPress={handleDraftAllReplies}
+            style={({ pressed }) => ({
+              backgroundColor: gbpColors.aiSoft,
+              borderWidth: 1,
+              borderColor: gbpColors.aiBorder,
+              borderRadius: 12,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              {draftAllBusy ? (
+                <ActivityIndicator size="small" color={gbpColors.aiDark} />
+              ) : (
+                <MaterialIcons name="auto-awesome" size={20} color={gbpColors.aiDark} />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: gbpColors.aiDark }}>
+                  {draftAllBusy ? 'Generating AI Replies...' : `Draft All ${pendingReviews.length} AI Replies`}
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.muted }}>
+                  AI prepares personalized replies for review and 1-tap approval.
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={gbpColors.aiDark} />
+          </Pressable>
+        ) : null}
 
         {reviews.loading ? (
           <Loading />
