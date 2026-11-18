@@ -371,11 +371,21 @@ export function MediaMetadataSheet({
           .replace(/\{city\}/g, businessInfo?.city || 'Patna'),
       );
     } else {
+      const city = businessInfo?.city || 'Patna';
+      const topic = hLine || effectiveIndustry;
       const sub = tpl.subtitle ? `: ${tpl.subtitle}` : '';
       setDescription(
-        `${bName} is your trusted ${effectiveIndustry.toLowerCase()}${
-          businessInfo?.city ? ` in ${businessInfo.city}` : ''
-        }. ${hLine}${sub}. Contact us today to learn more! #${effectiveIndustry.replace(/\s+/g, '').toLowerCase()} #localbusiness`,
+        `${topic} | ${bName}\n\n` +
+        `Looking for verified ${topic.toLowerCase()} in ${city}? ${bName} delivers professional solutions tailored for reliability, quality, and complete customer satisfaction${sub}.\n\n` +
+        `✓ Verified local expertise: Experienced specialists committed to high-standard execution across ${city}.\n` +
+        `✓ Premium quality materials: Certified processes ensuring lasting value and dependable performance.\n` +
+        `✓ Transparent upfront pricing: Clear estimates with no hidden charges so you can plan with confidence.\n` +
+        `✓ Dedicated customer support: Responsive communication from initial inquiry through project completion.\n` +
+        `✓ 100% satisfaction assurance: Trusted by local clients for punctual, professional service.\n\n` +
+        `Choosing the right local partner makes all the difference. Reach out to ${bName} today for dependable support.\n\n` +
+        `Call ${bName} in ${city} to discuss ${topic.toLowerCase()} and get started.\n\n` +
+        `CTA: CALL\n\n` +
+        `#${topic.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()} #${city.toLowerCase()} #googlebusiness #localseo`
       );
     }
   }

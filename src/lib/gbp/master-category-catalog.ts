@@ -4,6 +4,7 @@ import {
 } from '../../../shared/gbp-category-dataset';
 import { normalizeCategoryContext } from '../designs/category-taxonomy';
 import { getCategoryVisualPool } from '../designs/dynamic-visual-resolver';
+import { generateStructuredLocalSeoPost } from './seo-copy-generator';
 
 export interface GeneratedCreativeBlueprint {
   id: string;
@@ -274,6 +275,17 @@ export function generateCategoryBlueprints(params: {
         : [primaryProduct, secondaryProduct];
 
   for (const [sIdx, sName] of tradeOfferings.slice(0, 6).entries()) {
+    const serviceSeo = generateStructuredLocalSeoPost({
+      businessName,
+      city,
+      topic: sName,
+      categoryOrIndustry: displayName,
+      phone,
+      ctaType: isServiceTrade ? 'CALL' : 'BOOK',
+      angle: 'service',
+      customBullets: formattedBullets,
+    });
+
     blueprints.push({
       id: `bp-service-${category?.id || 'core'}-${sIdx}`,
       categoryName: displayName,
@@ -282,7 +294,7 @@ export function generateCategoryBlueprints(params: {
       tab: 'for_business',
       layout: sIdx % 2 === 0 ? 'business_1' : 'business_0',
       theme,
-      headline: sName,
+      headline: serviceSeo.headline,
       subtitle: `Expert ${sName} and professional solutions delivered by ${businessName} in ${city}.`,
       badge: 'CORE SERVICE',
       cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
@@ -292,9 +304,48 @@ export function generateCategoryBlueprints(params: {
         { keyword: `${sName.toLowerCase()} in ${city}`, volume: 450 },
         { keyword: `${sName.toLowerCase()} company`, volume: 600 },
       ],
-      defaultCaption: `${businessName} provides verified ${sName} in ${city}. Contact us today to get started.\n\n#${sName.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase()}`,
+      defaultCaption: serviceSeo.fullContent,
     });
   }
+
+  const promoSeo = generateStructuredLocalSeoPost({
+    businessName,
+    city,
+    topic: primaryProduct,
+    categoryOrIndustry: displayName,
+    phone,
+    ctaType: isServiceTrade ? 'BOOK' : 'CALL',
+    angle: 'promotion',
+    customBullets: formattedBullets,
+  });
+
+  const showcaseSeo = generateStructuredLocalSeoPost({
+    businessName,
+    city,
+    topic: primaryProduct,
+    categoryOrIndustry: displayName,
+    phone,
+    ctaType: 'CALL',
+    angle: 'showcase',
+    customBullets: formattedBullets,
+  });
+
+  const reviewsSeo = generateStructuredLocalSeoPost({
+    businessName,
+    city,
+    topic: displayName,
+    categoryOrIndustry: displayName,
+    phone,
+    ctaType: 'CALL',
+    angle: 'reviews',
+    customBullets: [
+      'Verified Google 5-Star Rating: Consistently recommended by local clients for quality and dependability.',
+      'Transparent Upfront Pricing: Clear itemized estimates with zero hidden surprises.',
+      'Dedicated Customer Support: Responsive communication from inquiry to project completion.',
+      'Experienced Master Specialists: Certified, trained team members focused on your satisfaction.',
+      'Guaranteed Service Standards: Complete peace of mind backed by our local service commitment.',
+    ],
+  });
 
   blueprints.push(
     // 1. Promotional Blueprint
@@ -308,7 +359,7 @@ export function generateCategoryBlueprints(params: {
       theme,
       headline:
         category?.defaultHooks.offerHeadline.replace(/\{city\}/g, city) ||
-        `Special Offer on ${primaryProduct} in ${city}`,
+        promoSeo.headline,
       subtitle:
         category?.defaultHooks.subtitle.replace(/\{businessName\}/g, businessName).replace(/\{city\}/g, city) ||
         `Save big on ${primaryProduct} and ${secondaryProduct} with exclusive direct discounts from ${businessName}.`,
@@ -320,7 +371,7 @@ export function generateCategoryBlueprints(params: {
         keyword: k.replace(/\{city\}/g, city),
         volume: 850,
       })),
-      defaultCaption: `Exciting announcement from ${businessName}! Enjoy special discounted rates on ${primaryProduct}. Contact us at ${phone || 'our team'} or visit today.\n\n#${displayName.toLowerCase().replace(/[^a-z0-9]/g, '')} #specialoffer #${city.toLowerCase()}`,
+      defaultCaption: promoSeo.fullContent,
     },
 
     // 2. Core Showcase Blueprint
@@ -334,9 +385,7 @@ export function generateCategoryBlueprints(params: {
       theme,
       headline:
         category?.defaultHooks.showcaseHeadline.replace(/\{city\}/g, city) ||
-        (isServiceTrade
-          ? `Top-Rated ${primaryProduct} & Solutions in ${city}`
-          : `Premium ${primaryProduct} & ${secondaryProduct} in ${city}`),
+        showcaseSeo.headline,
       subtitle:
         category?.defaultHooks.subtitle.replace(/\{businessName\}/g, businessName).replace(/\{city\}/g, city) ||
         (isServiceTrade
@@ -350,7 +399,7 @@ export function generateCategoryBlueprints(params: {
         keyword: k.replace(/\{city\}/g, city),
         volume: 620,
       })),
-      defaultCaption: `Looking for top-tier ${displayName} in ${city}? Look no further than ${businessName}. We specialize in ${primaryProduct} crafted to the highest quality.\n\n#${displayName.toLowerCase().replace(/[^a-z0-9]/g, '')} #localbusiness #${city.toLowerCase()}`,
+      defaultCaption: showcaseSeo.fullContent,
     },
 
     // 3. Social Proof / 5-Star Reviews Blueprint
@@ -364,7 +413,7 @@ export function generateCategoryBlueprints(params: {
       theme: 'royal_gold',
       headline:
         category?.defaultHooks.trustHeadline.replace(/\{city\}/g, city) ||
-        `Rated #1 ${displayName} in ${city} — 5-Star Trusted`,
+        reviewsSeo.headline,
       subtitle: `Thank you to our valued clients and community in ${city} for making ${businessName} your most trusted ${displayName} partner.`,
       badge: '5-STAR RATED',
       cta: 'READ REVIEWS',
@@ -378,7 +427,7 @@ export function generateCategoryBlueprints(params: {
         { keyword: `best ${displayName.toLowerCase()} in ${city}`, volume: 1200 },
         { keyword: `top rated ${displayName.toLowerCase()}`, volume: 450 },
       ],
-      defaultCaption: `Proud to be recognized as one of ${city}’s highest-rated ${displayName} providers. Thank you for trusting ${businessName}!\n\n#googlebusiness #5starreviews #${city.toLowerCase()}`,
+      defaultCaption: reviewsSeo.fullContent,
     },
   );
 

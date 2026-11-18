@@ -62,6 +62,26 @@ const GBP_V4_BASE = 'https://mybusiness.googleapis.com/v4';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 /**
+ * Google Business Profile strictly rejects .webp media URLs (returns 400 INVALID_ARGUMENT).
+ * This helper normalizes any WebP image URL to a high-speed JPEG URL via our media transcode proxy.
+ */
+export function ensureGoogleCompatibleImageUrl(rawUrl: string): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return rawUrl;
+  const trimmed = rawUrl.trim();
+  if (!/\.webp(\?|$)/i.test(trimmed)) return trimmed;
+  try {
+    const appBase = (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      'https://fieseros.com'
+    ).replace(/\/+$/, '');
+    return `${appBase}/api/media/transcode?url=${encodeURIComponent(trimmed)}&format=jpeg`;
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
  * Google OAuth client credentials.
  *
  * These are read from the IntegrationCredential table at refresh time
@@ -368,8 +388,9 @@ export const googleBusinessAdapter: PlatformAdapter = {
 
     // If scheduled as photo media gallery upload, route straight to Google Media API
     if (postType === 'photo_media' || postType === 'media') {
-      const photoUrl = params.mediaUrls?.[0];
-      if (!photoUrl) throw new Error('Photo or video URL is required for Google Media upload');
+      const rawPhotoUrl = params.mediaUrls?.[0];
+      if (!rawPhotoUrl) throw new Error('Photo or video URL is required for Google Media upload');
+      const photoUrl = ensureGoogleCompatibleImageUrl(rawPhotoUrl);
       assertPublicMediaUrl(photoUrl);
       const inferredFormat =
         params.mediaFormat === 'VIDEO' || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(photoUrl)
@@ -419,11 +440,11 @@ export const googleBusinessAdapter: PlatformAdapter = {
     }
 
     // Attach media (only photo URLs — GBP local posts don't support video
-    // via this endpoint).
+    // via this endpoint). Ensure all media URLs are strictly Google-compatible (JPEG/PNG, never WebP).
     if (Array.isArray(params.mediaUrls) && params.mediaUrls.length > 0) {
       body.media = params.mediaUrls.slice(0, 10).map((sourceUrl) => ({
         mediaFormat: 'PHOTO',
-        sourceUrl,
+        sourceUrl: ensureGoogleCompatibleImageUrl(sourceUrl),
       }));
     }
 
@@ -1024,7 +1045,8 @@ export async function uploadGoogleBusinessMedia(
   thumbnailUrl?: string;
   createTime: string;
 }> {
-  assertPublicMediaUrl(mediaData.sourceUrl);
+  const normalizedSource = ensureGoogleCompatibleImageUrl(mediaData.sourceUrl);
+  assertPublicMediaUrl(normalizedSource);
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media`;
@@ -1034,7 +1056,7 @@ export async function uploadGoogleBusinessMedia(
     locationAssociation: {
       category: mediaData.category || 'ADDITIONAL',
     },
-    sourceUrl: mediaData.sourceUrl,
+    sourceUrl: normalizedSource,
     description: mediaData.description,
   };
 

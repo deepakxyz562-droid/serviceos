@@ -83,7 +83,7 @@ Choosing a nearby pool is about more than distance. The condition of the facilit
 Call ${businessName} in Kanvi to ask about pool access and plan a comfortable, refreshing outing with your family.
 
 CTA: CALL`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/salon_spa/salon_spa-001.webp',
+          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAqyYO63dAoqyKXPU-hs7X16ITF0OZYCd2tplcOE8bSxdQ2cPmoVy15AAekhPHuqecnBxdyNf1tBDqjkoul0ahSCdUmJIlJ0SKtZGnYD6m1ETMG5vnXosb9QvhuYOYJHlcrimF86-CcZC9QcsqtizgmiPRDr_rcTuWmy30SN2Q3Jbq6zFNERrT5fcVPqWJsRGGr3uTnUp96ui9GfancY6LWWkeRrM7bfVzG5EoGlxE7',
           channels: ['googlebusiness'],
           status: 'scheduled',
           ctaAction: 'CALL',
@@ -106,7 +106,7 @@ Make the most of the season with our limited-time special offer. Quality family 
 Call ${businessName} today to lock in your 20% discounted seasonal rate and confirm availability.
 
 CTA: BOOK`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/restaurant_dining/restaurant_dining-001.webp',
+          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCnhAtPY4gRRQrMbgMTO7RtmUJke0VDvqD7ActbH41efdLsmQpitEN3VSpxLZOvXs6gQRuP1xOCT6W4amXxui164tUcfS8zzXRcfKHbhD55Bol0dlM12XlAQA7lekOFTXurJbiRBdNW0o0LjL72w8XBfa1ZH7Wppr-H13JXV7wyl1h7XtOGGIBRpQJ5aOpubxvoU-nDNFZhzirXY7QvMjfY1vlOS3uJ3uLg-3nb9jEr',
           channels: ['googlebusiness'],
           status: 'scheduled',
           ctaAction: 'BOOK',
@@ -133,7 +133,7 @@ Choosing the right technology partner drives sustainable business advantage. Our
 Call ${businessName} today to discuss your technical roadmap and receive a personalized technology consultation.
 
 CTA: CALL`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI3wnAqpHq0cKimHiHrJnUjBrYRTNqQmFmWl5pOfotl8-T68KMRGdDsJ-U0QSLgR2awlLEUcu6rRkwrVp2Mj8pGDaSxt7-Vuden49Vio5p92oYi4trs1aGlktajOgXwSYFj5ATvoVC6yhhtK2oxCqebcf4i6JtdXBtgpptVxUjc7mVwjgap5WTwnrMRAfPS_uiznTTykXw1dAR-5wlkLL-tfDTqJHWrTMbPnSZ_VyI',
           channels: ['googlebusiness'],
           status: 'scheduled',
           ctaAction: 'CALL',
@@ -156,7 +156,7 @@ Take advantage of our exclusive seasonal promotion to modernize your digital ass
 Call ${businessName} today to claim your software audit and explore custom digital solutions for your team.
 
 CTA: CALL`,
-          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
+          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCOxEnViAJQrejuvJPLrmQKlL0POPi07tsdXpXWF0RhHO36GFXIotNTnvampdUsFAzbpHsiwKas55rDyEIgn3lN3Wpm4FWuusq5toBDJ85hYMpNnGGmj4MwibxT7LAfwSjYSXX7pvahn7fXAA_RnwDPUM5iScT14_DnfPVgmhmyTLmQMUYZsBqtgKCkz-7-f2v7FV6PzMLNkFIqcpwfirm2YhPfsg_JItkjSiaLp8HC',
           channels: ['googlebusiness'],
           status: 'scheduled',
           ctaAction: 'CALL',
@@ -182,7 +182,7 @@ Local customer trust is earned through consistent quality and honest service. Ex
 Call ${businessName} today to check our availability, ask questions, or request an instant quote.
 
 CTA: CALL`,
-        imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB1YMuV18ClGNseXaiAYqfI8sjBj1364wHyqRGwf60X8yvhDNiQAz6Pu3Jv_RtDKx3VKkhT_lsUgSaORU_jgoh0hJPli40Dlgx9WM86UAFgWzw-4_pxNUVTCIkQxEZeoJeS9JCx2SGL3oMtbglHV5O-cfMR9d-6smGaJFgR3tVYWGEH7j3UvBHfpFH51iBaqXWGstWP0K49kIxJ0jPuaRL2ZabYOYTNLyV_n2p7t4Sk',
         channels: ['googlebusiness'],
         status: 'scheduled',
         ctaAction: 'CALL',
@@ -205,7 +205,7 @@ Don't miss out on this limited-time opportunity to get superior local service at
 Call ${businessName} today to book your session and claim this exclusive seasonal promotion.
 
 CTA: CALL`,
-        imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDdMN8XmF5Fo8u8bBWNnvL_0hrNxhnhBsnc5WLko9knKvHakttPIYm2weICqQGP1rj57SCh6iI_ceFKjVRU8hXgd6jAGebT00D2TdmAyQDflPGMVuLfp5oce414Gyh-5byH3JAEHT_NnDj9jV3ogERxFGcTEKuyPMwX3tkkR1VxbW4omeB07PpULVoECEq7Ig3TTKGIgh9C_Wy7Wi163p2iSzU3kzlIRs0J00dEXk9P',
         channels: ['googlebusiness'],
         status: 'scheduled',
         ctaAction: 'CALL',

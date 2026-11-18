@@ -28,6 +28,7 @@ import {
 import { getSeasonalOccasions } from '@/lib/designs/visual-query-builder';
 import { normalizeCategoryContext } from '@/lib/designs/category-taxonomy';
 import { generateCategoryBlueprints, getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
+import { generateStructuredLocalSeoPost } from '@/lib/gbp/seo-copy-generator';
 import { POSTER_TEMPLATES, type PosterTemplate } from '../../../../../../shared/poster-templates';
 import {
   getCuratedTemplatesForBusiness,
@@ -704,7 +705,15 @@ export async function GET(request: NextRequest) {
         { keyword: `${industry.toLowerCase()} in ${city}`, volume: 100 },
       ],
       estimatedViews: 45,
-      defaultCaption: `${businessName} provides verified ${industry.toLowerCase()} in ${city}.\n\n#${industry.toLowerCase().replace(/[^a-z0-9]/g, '')} #${city.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+      defaultCaption: generateStructuredLocalSeoPost({
+        businessName,
+        city,
+        topic: headline || industry,
+        categoryOrIndustry: industry,
+        phone,
+        ctaType: 'CALL',
+        angle: purpose === 'Promotion' ? 'promotion' : purpose === 'Trust-building' ? 'reviews' : 'service',
+      }).fullContent,
     };
   });
 

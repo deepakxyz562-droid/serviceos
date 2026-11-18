@@ -430,15 +430,21 @@ export async function publishPost(postId: string): Promise<void> {
 
 // ─── Single-target publish ─────────────────────────────────────────────────
 
-async function transcodeWebpUrlToJpeg(tenantId: string, webpUrl: string): Promise<string> {
+export async function transcodeWebpUrlToJpeg(tenantId: string, webpUrl: string): Promise<string> {
+  const { getAppUrl } = await import('@/lib/auth');
+  const baseUrl = getAppUrl().replace(/\/+$/, '');
+  const transcodeProxyUrl = `${baseUrl}/api/media/transcode?url=${encodeURIComponent(webpUrl)}&format=jpeg`;
+
   try {
     const { isS3Configured, isSupabaseStorageConfigured, uploadFile } = await import('@/lib/supabase-storage');
-    if (!isS3Configured() && !isSupabaseStorageConfigured()) return webpUrl;
+    if (!isS3Configured() && !isSupabaseStorageConfigured()) {
+      return transcodeProxyUrl;
+    }
 
     const res = await fetch(webpUrl, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return webpUrl;
+    if (!res.ok) return transcodeProxyUrl;
     const rawBytes = Buffer.from(await res.arrayBuffer());
-    if (!rawBytes.length) return webpUrl;
+    if (!rawBytes.length) return transcodeProxyUrl;
 
     const sharpModule = await import('sharp');
     const sharp = sharpModule.default || sharpModule;
@@ -458,10 +464,10 @@ async function transcodeWebpUrlToJpeg(tenantId: string, webpUrl: string): Promis
       file: jpegBytes,
       contentType: 'image/jpeg',
     });
-    return uploaded?.url || webpUrl;
+    return uploaded?.url || transcodeProxyUrl;
   } catch (err) {
-    console.warn('[social/publisher] WebP-to-JPEG conversion fallback:', err instanceof Error ? err.message : err);
-    return webpUrl;
+    console.warn('[social/publisher] WebP-to-JPEG conversion fallback to transcode proxy:', err instanceof Error ? err.message : err);
+    return transcodeProxyUrl;
   }
 }
 
@@ -558,19 +564,26 @@ async function publishSingleTarget(
       );
     }
 
-    // 4. Publish (transcode .webp images to JPEG for Instagram Graph API compatibility).
+    // 4. Publish (transcode .webp images to JPEG for Google Business Profile and Instagram compatibility).
     let effectiveParams = params;
     if (
-      target.platform === 'instagram' &&
+      (target.platform === 'googlebusiness' || target.platform === 'instagram') &&
       Array.isArray(params.mediaUrls) &&
-      params.mediaUrls.length > 0 &&
-      /\.webp(\?|$)/i.test(params.mediaUrls[0])
+      params.mediaUrls.length > 0
     ) {
-      const normalizedUrl = await transcodeWebpUrlToJpeg(tenantId, params.mediaUrls[0]);
-      if (normalizedUrl !== params.mediaUrls[0]) {
+      const normalizedMedia: string[] = [];
+      for (const mUrl of params.mediaUrls) {
+        if (typeof mUrl === 'string' && /\.webp(\?|$)/i.test(mUrl)) {
+          const transcoded = await transcodeWebpUrlToJpeg(tenantId, mUrl);
+          normalizedMedia.push(transcoded);
+        } else if (typeof mUrl === 'string') {
+          normalizedMedia.push(mUrl);
+        }
+      }
+      if (normalizedMedia.length > 0) {
         effectiveParams = {
           ...params,
-          mediaUrls: [normalizedUrl, ...params.mediaUrls.slice(1)],
+          mediaUrls: normalizedMedia,
         };
       }
     }
