@@ -585,7 +585,7 @@ export function MarketingCanvasStudio({
         data.caption ||
         `${activeTopic}\n\nExperience high-quality service at ${businessName}. Contact us today to learn more!\n\n#${businessName.replace(/\W+/g, '')} #LocalBusiness`;
       const finalImg =
-        attachedImageUrl || data.photoUrl || data.imageUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
+        attachedImageUrl || data.photoUrl || data.imageUrl || photoUrl || posterUrl || brandLogo || '';
 
       setAiGeneratedPost({
         headline: genHeadline,
@@ -596,8 +596,10 @@ export function MarketingCanvasStudio({
       });
       setCaption(genCaption);
       setHeadline(genHeadline);
-      setPhotoUrl(finalImg);
-      setPosterUrl(finalImg);
+      if (finalImg) {
+        setPhotoUrl(finalImg);
+        setPosterUrl(finalImg);
+      }
       toast.success('AI crafted your post & visual!');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'AI post generation failed');
@@ -617,12 +619,13 @@ export function MarketingCanvasStudio({
       const effHeadline = (aiGeneratedPost?.headline || headline || '').trim();
       const effCaption = (aiGeneratedPost?.caption || caption || effectiveCaption || '').trim();
       const fullContent = effHeadline ? `${effHeadline}\n\n${effCaption}` : effCaption;
-      const finalImage =
+      const rawImage =
         aiGeneratedPost?.imageUrl ||
         attachedImageUrl ||
         posterUrl ||
         photoUrl ||
-        '/images/fieseros-ai-assistant-poster.jpg?v=1';
+        '';
+      const finalImage = rawImage ? toAbsoluteUrl(rawImage) : '';
 
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
@@ -632,7 +635,9 @@ export function MarketingCanvasStudio({
           scheduledAt: isScheduled ? scheduledDateTime : null,
           content: fullContent.trim(),
           mediaUrls: finalImage ? [finalImage] : [],
-          isPoster: false,
+          isPoster: activeVisualFormat === 'poster',
+          isPreRendered: false,
+          design: activeVisualFormat === 'poster' ? design : undefined,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
           headline: effHeadline,
@@ -1394,8 +1399,8 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
-      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '');
+      const mediaList = isPosterMode && resolvedPosterUrl ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const requestBody=JSON.stringify({
           status: 'draft',
@@ -1403,7 +1408,7 @@ export function MarketingCanvasStudio({
           content: (caption || effectiveCaption).trim(),
           mediaUrls: mediaList,
           isPoster: isPosterMode,
-          isPreRendered: Boolean(mediaList.length > 0),
+          isPreRendered: false,
           design: design,
           linkUrl,
           platforms: selectedChannels,
@@ -1449,8 +1454,8 @@ export function MarketingCanvasStudio({
     try {
       const targets = getResolvedTargets();
       const isPosterMode = activeVisualFormat === 'poster';
-      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1');
-      const mediaList = isPosterMode ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
+      const resolvedPosterUrl = toAbsoluteUrl(posterUrl || photoUrl || '');
+      const mediaList = isPosterMode && resolvedPosterUrl ? [resolvedPosterUrl] : photoUrl ? [toAbsoluteUrl(photoUrl)] : [];
 
       const res = await authFetch('/api/social/posts', {
         method: 'POST',
@@ -1463,7 +1468,7 @@ export function MarketingCanvasStudio({
           content: (caption || effectiveCaption).trim(),
           mediaUrls: mediaList,
           isPoster: isPosterMode,
-          isPreRendered: Boolean(mediaList.length > 0),
+          isPreRendered: false,
           design: design,
           linkUrl,
           platforms: selectedChannels,
@@ -1734,7 +1739,9 @@ export function MarketingCanvasStudio({
                       aiGeneratedPost?.imageUrl ||
                       attachedImageUrl ||
                       photoUrl ||
-                      '/images/fieseros-ai-assistant-poster.jpg?v=1'
+                      posterUrl ||
+                      brandLogo ||
+                      ''
                     }
                     alt="Preview"
                     onError={(e) => {
@@ -2498,7 +2505,7 @@ export function MarketingCanvasStudio({
                       src={activePosterImage}
                       alt="Promotional marketing poster"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                        (e.currentTarget as HTMLElement).style.opacity = '0.5';
                       }}
                       className={`w-full h-full object-cover transition-all duration-500 ${isGenerating ? 'opacity-30 scale-95 blur-xs' : 'opacity-100 scale-100 group-hover:scale-[1.01]'}`}
                     />
@@ -2832,7 +2839,7 @@ export function MarketingCanvasStudio({
                       alt="Promotional marketing poster"
                       className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                        (e.currentTarget as HTMLElement).style.opacity = '0.5';
                       }}
                     />
                     {/* Top Scrim */}
@@ -3830,7 +3837,7 @@ export function MarketingCanvasStudio({
                     alt="Promotional marketing poster full screen"
                     draggable={false}
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/images/fieseros-ai-assistant-poster.jpg?v=1';
+                      (e.currentTarget as HTMLElement).style.opacity = '0.5';
                     }}
                     className="w-full h-full object-cover"
                   />

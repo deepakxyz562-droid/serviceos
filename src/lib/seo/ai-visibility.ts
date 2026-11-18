@@ -697,7 +697,6 @@ export async function runAiCompetitorGapAnalysis(params: {
     openai: [],
     anthropic: [],
     gemini: [],
-    zai: [],
   }));
   const geminiKey = keyChain.gemini?.[0]?.plaintext || process.env.GEMINI_API_KEY || '';
   const perplexityKey = process.env.PERPLEXITY_API_KEY || '';

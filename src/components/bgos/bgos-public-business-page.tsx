@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import type {
+  BgosPublicActivity,
   BgosPublicBusinessProfile,
   BgosPublicGalleryItem,
   BgosPublicService,
@@ -116,6 +117,8 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
   const [chatOpen, setChatOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [lightboxItem, setLightboxItem] = useState<BgosPublicGalleryItem | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<BgosPublicActivity | null>(null);
+  const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
   const [showMapEmbed, setShowMapEmbed] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -314,6 +317,51 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
     link.click();
   }, [qrDataUrl, profile.slug]);
 
+  const cleanWaDigits = useMemo(() => {
+    const raw = profile.whatsappDigits || profile.whatsappPhone || profile.phone || '';
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length === 10) return `91${digits}`;
+    return digits;
+  }, [profile.whatsappDigits, profile.whatsappPhone, profile.phone]);
+
+  const scrollToInquiry = useCallback((message?: string) => {
+    if (message) {
+      setInqMessage(message);
+    }
+    const el = document.getElementById('bgos-inquiry-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const textarea = el.querySelector('textarea') || el.querySelector('input');
+      if (textarea) textarea.focus();
+    }
+  }, []);
+
+  const scrollToProducts = useCallback(() => {
+    const el = document.getElementById('products');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  const isExternalValidUrl = useCallback(
+    (url: string | null | undefined): boolean => {
+      if (!url || typeof url !== 'string') return false;
+      const trimmed = url.trim();
+      if (!/^https?:\/\//i.test(trimmed)) return false;
+      try {
+        const parsed = new URL(trimmed);
+        const host = parsed.hostname.toLowerCase();
+        if (host.includes('fieseros.com') && (parsed.pathname === '/' || parsed.pathname === '')) return false;
+        if (host.includes('bgos.site') && (parsed.pathname === '/' || parsed.pathname === `/${profile.slug}`)) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [profile.slug],
+  );
+
   const openActionForService = useCallback(
     (svc: BgosPublicService) => {
       if (profile.bookingEnabled) {
@@ -323,14 +371,10 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
         setBookingOpen(true);
       } else {
         setInqServiceId(svc.id);
-        setInqMessage(`Hi, I would like a quote for ${svc.name}.`);
-        document.getElementById('bgos-inquiry-section')?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
+        scrollToInquiry(`Hi, I would like a quote for ${svc.name}.`);
       }
     },
-    [profile.bookingEnabled],
+    [profile.bookingEnabled, scrollToInquiry],
   );
 
   const handleInquirySubmit = async (e: React.FormEvent) => {
@@ -675,13 +719,14 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                     WhatsApp
                   </a>
                 ) : (
-                  <a
-                    href="#bgos-inquiry-section"
+                  <button
+                    type="button"
+                    onClick={() => scrollToInquiry()}
                     className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
                   >
                     <Send className="h-4 w-4" />
                     Request Callback
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
@@ -844,24 +889,40 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                               ? formatCurrency(prod.price, profile.currency, { compact: true })
                               : 'Price on inquiry'}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOrderProduct(prod);
-                              setOrderQty(1);
-                              setOrderFulfillment(
-                                profile.storeSettings?.deliveryEnabled && !profile.storeSettings?.pickupEnabled
-                                  ? 'delivery'
-                                  : 'pickup',
-                              );
-                              setOrderSuccess(null);
-                              setOrderError(null);
-                            }}
-                            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                            style={{ backgroundColor: accent }}
-                          >
-                            Order / Request
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {cleanWaDigits && (
+                              <a
+                                href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
+                                  `Hi ${profile.businessName}, I would like to order "${prod.name}"${prod.price ? ` (${formatCurrency(prod.price, profile.currency)})` : ''}. Please confirm availability and delivery.`,
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                title="Order via WhatsApp"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">WhatsApp</span>
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOrderProduct(prod);
+                                setOrderQty(1);
+                                setOrderFulfillment(
+                                  profile.storeSettings?.deliveryEnabled && !profile.storeSettings?.pickupEnabled
+                                    ? 'delivery'
+                                    : 'pickup',
+                                );
+                                setOrderSuccess(null);
+                                setOrderError(null);
+                              }}
+                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                              style={{ backgroundColor: accent }}
+                            >
+                              Order
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -979,6 +1040,8 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                         : act.type === 'event'
                           ? { label: 'Event', cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200/80' }
                           : { label: 'Update', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200/80' };
+                    const isOffer = act.type === 'offer' || act.actionType === 'ORDER';
+                    const hasValidExternalUrl = isExternalValidUrl(act.actionUrl);
                     const ctaLabel =
                       act.actionType === 'BOOK'
                         ? 'Book Now'
@@ -993,9 +1056,12 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                     return (
                       <div
                         key={act.id}
-                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 p-4"
+                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 p-4 transition-shadow hover:shadow-xs"
                       >
-                        <div className="space-y-2">
+                        <div
+                          className="space-y-2 cursor-pointer transition-opacity hover:opacity-95"
+                          onClick={() => setSelectedActivity(act)}
+                        >
                           {act.imageUrl ? (
                             <img
                               src={act.imageUrl}
@@ -1018,7 +1084,9 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                               </span>
                             )}
                           </div>
-                          <h3 className="text-sm font-bold text-slate-900">{act.title}</h3>
+                          <h3 className="text-sm font-bold text-slate-900 line-clamp-2 hover:text-emerald-700 transition-colors">
+                            {act.title}
+                          </h3>
                           {act.summary ? (
                             <p className="line-clamp-3 text-xs leading-relaxed text-slate-600">
                               {act.summary}
@@ -1032,7 +1100,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                           ) : null}
                         </div>
 
-                        <div className="pt-1">
+                        <div className="pt-1 flex flex-col gap-1.5">
                           {act.actionType === 'CALL' && profile.phone ? (
                             <a
                               href={`tel:${profile.phone}`}
@@ -1056,9 +1124,9 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                               <Calendar className="h-3.5 w-3.5" />
                               {ctaLabel}
                             </button>
-                          ) : act.actionUrl ? (
+                          ) : hasValidExternalUrl ? (
                             <a
-                              href={act.actionUrl}
+                              href={act.actionUrl!}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
@@ -1067,13 +1135,70 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                               {ctaLabel}
                               <ExternalLink className="h-3 w-3" />
                             </a>
+                          ) : isOffer ? (
+                            <div className="flex gap-1.5">
+                              {cleanWaDigits ? (
+                                <a
+                                  href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
+                                    `Hi ${profile.businessName}, I want to claim the offer: "${act.title}"${act.couponCode ? ` (Coupon: ${act.couponCode})` : ''}. Please share details and pricing.`,
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  <span>{ctaLabel}</span>
+                                </a>
+                              ) : profile.products?.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => scrollToProducts()}
+                                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                                  style={{ backgroundColor: accent }}
+                                >
+                                  <ShoppingBag className="h-3.5 w-3.5" />
+                                  <span>{ctaLabel}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedActivity(act)}
+                                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                                  style={{ backgroundColor: accent }}
+                                >
+                                  {ctaLabel}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedActivity(act)}
+                                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                title="View details"
+                              >
+                                Details
+                              </button>
+                            </div>
                           ) : (
-                            <a
-                              href="#bgos-inquiry-section"
+                            <button
+                              type="button"
+                              onClick={() => setSelectedActivity(act)}
                               className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                               style={{ backgroundColor: accent }}
                             >
                               {ctaLabel}
+                            </button>
+                          )}
+
+                          {act.searchUrl && (
+                            <a
+                              href={act.searchUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 transition-colors pt-0.5"
+                            >
+                              <Globe className="h-3 w-3 text-blue-500" />
+                              <span>View on Google</span>
+                              <ExternalLink className="h-2.5 w-2.5" />
                             </a>
                           )}
                         </div>
@@ -1668,14 +1793,15 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
               Book Now
             </button>
           ) : (
-            <a
-              href="#bgos-inquiry-section"
+            <button
+              type="button"
+              onClick={() => scrollToInquiry()}
               className="flex flex-[1.3] flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold text-white"
               style={{ backgroundColor: accent }}
             >
               <Send className="h-4 w-4" />
               Inquire
-            </a>
+            </button>
           )}
 
           <button
@@ -1688,6 +1814,165 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
           </button>
         </div>
       </div>
+
+      {/* Activity / Post Details Modal */}
+      {selectedActivity && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4 backdrop-blur-xs"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ${
+                    selectedActivity.type === 'offer'
+                      ? 'bg-amber-50 text-amber-800 ring-amber-200/80'
+                      : selectedActivity.type === 'event'
+                        ? 'bg-indigo-50 text-indigo-700 ring-indigo-200/80'
+                        : 'bg-emerald-50 text-emerald-700 ring-emerald-200/80'
+                  }`}
+                >
+                  <Tag className="h-3 w-3" />
+                  {selectedActivity.type === 'offer'
+                    ? 'Special Offer'
+                    : selectedActivity.type === 'event'
+                      ? 'Event'
+                      : 'Business Update'}
+                </span>
+                {(selectedActivity.startDate || selectedActivity.endDate) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    <Calendar className="h-3 w-3 text-slate-400" />
+                    {selectedActivity.startDate || 'Now'}
+                    {selectedActivity.endDate && selectedActivity.endDate !== selectedActivity.startDate
+                      ? ` → ${selectedActivity.endDate}`
+                      : ''}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedActivity(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close details"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {selectedActivity.imageUrl && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <img
+                  src={selectedActivity.imageUrl}
+                  alt={selectedActivity.title}
+                  className="max-h-64 w-full object-cover"
+                />
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              <h3 className="text-lg font-bold text-slate-900 leading-snug">
+                {selectedActivity.title}
+              </h3>
+
+              {selectedActivity.couponCode && (
+                <div className="flex items-center justify-between rounded-xl border border-dashed border-amber-300 bg-amber-50/90 p-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                      Promo / Coupon Code
+                    </p>
+                    <p className="font-mono text-base font-bold text-amber-950">
+                      {selectedActivity.couponCode}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedActivity.couponCode) {
+                        navigator.clipboard.writeText(selectedActivity.couponCode);
+                        setCopiedCoupon(selectedActivity.couponCode);
+                        setTimeout(() => setCopiedCoupon(null), 2500);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-amber-200/80 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-300/80 transition-colors"
+                  >
+                    {copiedCoupon === selectedActivity.couponCode ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-700" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Code
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {selectedActivity.summary && (
+                <div className="text-sm leading-relaxed text-slate-700 whitespace-pre-line pt-1">
+                  {selectedActivity.summary}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 border-t border-slate-200 pt-4 space-y-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                {cleanWaDigits && (
+                  <a
+                    href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
+                      selectedActivity.type === 'offer' || selectedActivity.actionType === 'ORDER'
+                        ? `Hi ${profile.businessName}, I would like to claim the offer: "${selectedActivity.title}"${selectedActivity.couponCode ? ` (Coupon: ${selectedActivity.couponCode})` : ''}. Please share details and pricing.`
+                        : `Hi ${profile.businessName}, I would like to learn more about: "${selectedActivity.title}".`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    {selectedActivity.type === 'offer' || selectedActivity.actionType === 'ORDER'
+                      ? 'Order / Claim via WhatsApp'
+                      : 'Chat on WhatsApp'}
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const title = selectedActivity.title;
+                    setSelectedActivity(null);
+                    scrollToInquiry(`Hi, I would like more information regarding: "${title}".`);
+                  }}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+                >
+                  <Send className="h-4 w-4" />
+                  Inquire Online
+                </button>
+              </div>
+
+              {(selectedActivity.searchUrl || profile.mapsUrl || profile.googlePlaceId) && (
+                <a
+                  href={
+                    selectedActivity.searchUrl ||
+                    profile.mapsUrl ||
+                    `https://www.google.com/maps/place/?q=place_id:${profile.googlePlaceId}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <Globe className="h-3.5 w-3.5 text-blue-600" />
+                  <span>View Post on Google Maps &amp; Search</span>
+                  <ExternalLink className="h-3 w-3 text-slate-400" />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Appointment Booking Modal */}
       {bookingOpen && (

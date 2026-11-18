@@ -109,20 +109,6 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
 }
 `;
 
-    const aiRes = await callAI({
-      messages: [
-        {
-          role: 'system',
-          content: 'You generate high-converting social media marketing content. Always output pure valid JSON without markdown fences.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.7,
-    });
-
     let generated: {
       ctaText?: string;
       title?: string;
@@ -135,20 +121,35 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
     } = {};
 
     try {
+      const aiRes = await callAI({
+        messages: [
+          {
+            role: 'system',
+            content: 'You generate high-converting social media marketing content. Always output pure valid JSON without markdown fences.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+      });
+
       const cleanContent = aiRes.content
         .replace(/```json/gi, '')
         .replace(/```/gi, '')
         .trim();
       generated = JSON.parse(cleanContent);
-    } catch {
-      // Fallback if model output wasn't pure JSON
+    } catch (aiErr) {
+      console.warn('[ai-generate-post] callAI failed or returned non-JSON, using high-quality local fallback:', aiErr);
+      const safeTag = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
       generated = {
-        title: `${businessName} Special Update`,
-        headline: 'Quality Service You Can Trust',
-        subtitle: `Experience top-rated care and service at ${businessName}.`,
+        title: `${businessName} Announcement`,
+        headline: topic.length > 50 ? topic.slice(0, 48) + '...' : topic || 'Quality Service You Can Trust',
+        subtitle: `Experience top-rated care, verified quality, and trusted service at ${businessName}.`,
         badge: 'SPECIAL OFFER',
-        caption: `${topic}\n\n✨ Top-rated professional service\n✨ Personalized care & rapid booking\n📍 ${location}\n\nCall us today at ${phone} or book online!`,
-        hashtags: ['#business', '#localservice', '#quality', '#toprated', '#offer'],
+        caption: `Is your business ready to level up? At ${businessName}, our dedicated team is committed to delivering high-performance results.\n\n✓ Verified local expertise in ${location}\n✓ Prompt, dependable service designed for rapid growth\n✓ Transparent pricing with dedicated customer support\n✓ Custom solutions tailored for your business needs\n\nCall us today at ${phone} or visit our page to get started!`,
+        hashtags: [safeTag ? `#${safeTag}` : '#business', '#localservice', '#quality', '#toprated', '#growth'],
       };
     }
 

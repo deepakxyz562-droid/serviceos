@@ -102,12 +102,12 @@ const REQUEST_TIMEOUT_MS = 10_000
 const DEFAULT_CALL_AI_BUDGET_MS = 28_000
 
 /** Provider order — Google Gemini is tried first as requested for maximum quality,
- *  followed by OpenRouter, then OpenAI/Anthropic/ZAI. */
-const PROVIDER_ORDER = ['gemini', 'openrouter', 'openai', 'anthropic', 'zai'] as const
+ *  followed by OpenRouter, then OpenAI and Anthropic. */
+const PROVIDER_ORDER = ['gemini', 'openrouter', 'openai', 'anthropic'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
-  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini' || s === 'zai'
+  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini'
 }
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
@@ -120,7 +120,6 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
     'gemini-3.5-flash',
     'gemini-flash-latest',
   ],
-  zai: ['glm-4-plus'],
 }
 
 const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
@@ -128,7 +127,6 @@ const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
-  zai: 'ZAI_API_KEY',
 }
 
 // ─── Key chain loader ───────────────────────────────────────────────────────
@@ -167,7 +165,6 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
     openai: [],
     anthropic: [],
     gemini: [],
-    zai: [],
   }
 
   try {
@@ -224,20 +221,6 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
     }
   }
 
-  // ZAI SDK fallback: the z-ai-web-dev-sdk auto-configures from a built-in
-  // sandbox key, so it always provides one "key" entry even when no env var
-  // or DB key is set. This is the last-resort provider for dev/sandbox — in
-  // production, superadmin-managed keys are tried first and ZAI is never
-  // reached.
-  if (chain.zai.length === 0) {
-    chain.zai.push({
-      id: 'sdk:zai',
-      provider: 'zai',
-      plaintext: '',
-      priority: 999,
-      source: 'sdk',
-    })
-  }
 
   keyChainCache = {
     data: chain,
@@ -697,115 +680,11 @@ const geminiAdapter: AiProviderAdapter = {
   },
 }
 
-// ── ZAI SDK adapter (last-resort fallback) ──────────────────────────────────
-// Uses z-ai-web-dev-sdk which auto-configures from a built-in sandbox key.
-// The `apiKey` param is ignored — the SDK handles auth internally.
-// Only reached when all superadmin-managed providers + env vars are exhausted.
-
-let zaiSdkInstance: unknown | null = null
-async function getZaiSdk() {
-  if (zaiSdkInstance) return zaiSdkInstance
-  try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    zaiSdkInstance = await ZAI.create()
-    return zaiSdkInstance
-  } catch (err) {
-    console.warn('[ai-client] ZAI SDK init failed:', err instanceof Error ? err.message : String(err))
-    return null
-  }
-}
-
-const zaiAdapter: AiProviderAdapter = {
-  name: 'zai',
-  async request({ messages, temperature, maxTokens, json, signal }) {
-    try {
-      const zai = await getZaiSdk()
-      if (!zai) {
-        return {
-          ok: false,
-          status: 503,
-          error: 'ZAI SDK not available',
-          shouldRotateKey: false,
-          shouldSwitchProvider: true,
-        }
-      }
-      // The ZAI SDK respects an AbortSignal via a timeout, not a signal param.
-      // We rely on the outer AbortController (60s) + the SDK's own timeout.
-      const zaiInstance = zai as {
-        chat: {
-          completions: {
-            create: (body: Record<string, unknown>) => Promise<{
-              choices?: Array<{ message?: { content?: string } }>
-              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-              model?: string
-            }>
-          }
-        }
-      }
-      if (signal.aborted) {
-        return {
-          ok: false,
-          status: 408,
-          error: 'Aborted before ZAI SDK call',
-          shouldRotateKey: false,
-          shouldSwitchProvider: true,
-        }
-      }
-      const response = await new Promise<Awaited<ReturnType<typeof zaiInstance.chat.completions.create>>>(
-        (resolve, reject) => {
-          const onAbort = () => reject(new Error('ZAI SDK request timed out'))
-          signal.addEventListener('abort', onAbort, { once: true })
-          zaiInstance.chat.completions
-            .create({
-              messages,
-              temperature,
-              maxTokens,
-              ...(json ? { response_format: { type: 'json_object' } } : {}),
-            })
-            .then(resolve, reject)
-            .finally(() => {
-              signal.removeEventListener('abort', onAbort)
-            })
-        },
-      )
-      const content = response.choices?.[0]?.message?.content || ''
-      if (!content || content.trim().length < 1) {
-        return {
-          ok: false,
-          status: 200,
-          error: 'Empty content from ZAI SDK',
-          shouldRotateKey: false,
-          shouldSwitchProvider: true,
-        }
-      }
-      return {
-        ok: true,
-        content,
-        usage: {
-          promptTokens: response.usage?.prompt_tokens,
-          completionTokens: response.usage?.completion_tokens,
-        },
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      // If the SDK is unavailable (e.g. not installed), don't retry — switch.
-      return {
-        ok: false,
-        status: 0,
-        error: msg,
-        shouldRotateKey: false,
-        shouldSwitchProvider: true,
-      }
-    }
-  },
-}
-
 const ADAPTERS: Record<ProviderName, AiProviderAdapter> = {
   openrouter: openRouterAdapter,
   openai: openAiAdapter,
   anthropic: anthropicAdapter,
   gemini: geminiAdapter,
-  zai: zaiAdapter,
 }
 
 // ─── DB update helpers (fire-and-forget) ────────────────────────────────────
@@ -1060,9 +939,7 @@ export async function* callAIStream(options: {
       for (const model of models) {
         try {
           // Try streaming via fetch SSE
-          const endpoint = provider === 'zai'
-            ? 'https://api.z.ai/api/paas/v4/chat/completions'
-            : provider === 'openrouter'
+          const endpoint = provider === 'openrouter'
             ? 'https://openrouter.ai/api/v1/chat/completions'
             : provider === 'openai'
             ? 'https://api.openai.com/v1/chat/completions'

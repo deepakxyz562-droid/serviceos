@@ -70,6 +70,7 @@ export interface BgosPublicActivity {
   couponCode: string | null;
   actionType: 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL';
   actionUrl: string | null;
+  searchUrl?: string | null;
   publishedAt: string | null;
 }
 
@@ -780,6 +781,15 @@ export async function getBgosPublicBusinessProfileUncached(
             : rawType === 'event'
               ? 'BOOK'
               : 'LEARN_MORE';
+        const targets = safeJsonArray(post.publishTargets);
+        const gbpTarget = targets.find(
+          (t: any) => t && (t.platform === 'googlebusiness' || t.platform === 'gbp' || t.platform === 'google_business'),
+        );
+        const searchUrl =
+          typeof gbpTarget?.permalink === 'string' && /^https?:\/\//i.test(gbpTarget.permalink.trim())
+            ? gbpTarget.permalink.trim()
+            : null;
+
         return {
           id: String(post.id),
           type: rawType,
@@ -803,6 +813,7 @@ export async function getBgosPublicBusinessProfileUncached(
             (typeof post.linkUrl === 'string' && /^https?:\/\//i.test(post.linkUrl.trim())
               ? post.linkUrl.trim()
               : null),
+          searchUrl,
           publishedAt: post.publishedAt
             ? new Date(post.publishedAt).toISOString()
             : post.scheduledAt
