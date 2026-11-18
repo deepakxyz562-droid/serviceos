@@ -151,7 +151,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'reviews', label: 'Reviews', icon: Star },
+      { view: 'reviews', label: 'Reviews & Feedback', icon: Star },
     ],
   },
   {
@@ -191,7 +191,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       // Social Media — consolidated into one tabbed page (Accounts, Create Post, Posts, Analytics)
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
-      { view: 'gbpAI', label: 'GBP Autopilot', icon: Sparkles },
+      { view: 'gbpAI', label: 'Google Business Profile', icon: Sparkles, badge: 'AUTOPILOT' },
     ],
   },
   {
@@ -420,7 +420,7 @@ const superadminNavSections: NavSection[] = [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
-      { view: 'gbpAI', label: 'GBP Autopilot', icon: Sparkles },
+      { view: 'gbpAI', label: 'Google Business Profile', icon: Sparkles, badge: 'AUTOPILOT' },
     ],
   },
   {

@@ -347,7 +347,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!body || !body.content || !body.content.trim()) {
+    let content = (body?.content || '').trim();
+
+    if (!content) {
+      if (body?.headline && typeof body.headline === 'string' && body.headline.trim()) {
+        content = body.headline.trim();
+      } else if (body?.design && typeof body.design === 'object') {
+        const d = body.design as Record<string, any>;
+        content = (d.headline || d.subtitle || '').trim();
+      }
+
+      if (!content) {
+        try {
+          const tenant = await db.tenant.findUnique({
+            where: { id: tenantId },
+            include: { brandProfile: true },
+          });
+          const bName = tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
+          const city = tenant?.brandProfile?.location || tenant?.city || 'Local Area';
+          const industry = tenant?.brandProfile?.industry || 'Professional Services';
+          const { generateStructuredLocalSeoPost } = await import('@/lib/gbp/seo-copy-generator');
+          const structured = generateStructuredLocalSeoPost({
+            businessName: bName,
+            city,
+            categoryOrIndustry: industry,
+            topic: body?.headline || industry,
+            ctaType: 'CALL',
+          });
+          content = structured.fullContent;
+        } catch (genErr) {
+          console.warn('[social/posts] Auto-content fallback warning:', genErr);
+        }
+      }
+    }
+
+    if (!content) {
       return NextResponse.json(
         { error: 'Post content is required.' },
         { status: 400 },
@@ -464,7 +498,7 @@ export async function POST(request: NextRequest) {
     const forbiddenPhrases = safeJsonArray(tenantRecord?.brandProfile?.forbiddenPhrases ?? null) as string[];
     const competitors = safeJsonArray(tenantRecord?.brandProfile?.competitors ?? null) as string[];
 
-    const safetyCheck = validateBrandSafety(body.content, {
+    const safetyCheck = validateBrandSafety(content, {
       tenantId,
       activeBusinessName,
       forbiddenPhrases,
@@ -546,7 +580,7 @@ export async function POST(request: NextRequest) {
         tenantId,
         status: initialStatus,
         approvalStatus: body.approvalStatus || null,
-        content: body.content,
+        content: content,
         designJson: design ? JSON.stringify(design) : null,
         mediaUrls: JSON.stringify(body.mediaUrls || []),
         linkUrl: body.linkUrl || null,

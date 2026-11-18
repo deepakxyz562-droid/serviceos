@@ -446,8 +446,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 7. Complete Service Details & Categories (300-500 char localized descriptions)
-    if (!hasServices || !hasCategories || seoPendingFixes.length > 0) {
+    // 7. Complete Service Details (300-500 char localized descriptions)
+    const servicesStep = seoActions.find((a) => a.id === 'services');
+    const servicesNeedingCount =
+      typeof (servicesStep?.previewData as any)?.needingUpgradeCount === 'number'
+        ? (servicesStep!.previewData as any).needingUpgradeCount
+        : hasServices
+          ? 0
+          : 3;
+    const isServicesOptimal = servicesStep ? servicesStep.alreadyOptimal : hasServices;
+
+    if (!isServicesOptimal || servicesNeedingCount > 0 || !hasServices) {
       autopilotActions.push({
         id: 'categories_and_services',
         category: 'P0_foundation',
@@ -457,7 +466,7 @@ export async function GET(request: NextRequest) {
         confidence: 5,
         effort: 2,
         title: 'Auto-Write 300–500 Char Localized Service Descriptions',
-        finding: `${seoPendingFixes.length || 2} services need 300-500 char localized SEO descriptions.`,
+        finding: `${servicesNeedingCount || 2} services need 300-500 char localized SEO descriptions.`,
         evidence: 'Targeted service descriptions with your city name index your profile for high-intent local customer searches.',
         status: 'ready_for_review',
         executionMode: 'automatic_preparation',
@@ -465,6 +474,30 @@ export async function GET(request: NextRequest) {
         phaseDays: 'Days 1–7',
         cta: 'Auto-Write All Services',
         actionType: 'add_services',
+      });
+    }
+
+    // 7b. Secondary Categories Optimization (Competitor-backed)
+    const categoriesStep = seoActions.find((a) => a.id === 'categories');
+    const isCategoriesOptimal = categoriesStep ? categoriesStep.alreadyOptimal : hasCategories;
+    if (!isCategoriesOptimal) {
+      autopilotActions.push({
+        id: 'secondary_categories',
+        category: 'P0_foundation',
+        priorityLevel: 'P0',
+        priorityScore: (4 * 4) / 1, // 16
+        impact: 4,
+        confidence: 4,
+        effort: 1,
+        title: 'Add Competitor-Backed Secondary Categories',
+        finding: 'Add 2-5 secondary categories so Google indexes you for related nearby searches.',
+        evidence: 'Secondary categories expand your profile discovery across adjacent high-intent search terms.',
+        status: 'ready_for_review',
+        executionMode: 'automatic_preparation',
+        phase: 'foundation',
+        phaseDays: 'Days 1–7',
+        cta: 'Add Categories',
+        actionType: 'auto_optimize_seo',
       });
     }
 

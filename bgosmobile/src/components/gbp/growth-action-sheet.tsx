@@ -435,8 +435,9 @@ export function GrowthActionSheet({
     }
   };
 
-  const handleAutoWriteAllServices = async () => {
-    setApproving('auto_write_all_services');
+  const handleAutoWriteAllServices = async (actionId?: string) => {
+    const key = actionId || 'auto_write_all_services';
+    setApproving(key);
     try {
       const res = await apiRequest<{ success: boolean; services: any[]; syncedToGoogle: boolean; message: string }>('/api/gbp/growth-actions', {
         method: 'POST',
@@ -503,7 +504,7 @@ export function GrowthActionSheet({
         await handleRunSeoStep('description');
         break;
       case 'add_services':
-        await handleAutoWriteAllServices();
+        await handleAutoWriteAllServices(action.id);
         break;
       case 'upload_photos':
         onClose();
@@ -540,8 +541,24 @@ export function GrowthActionSheet({
           </View>
 
           {/* Header */}
-          <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 14 }]}>
-            <View style={[ui.row, { gap: 10 }]}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 14,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                flex: 1,
+                minWidth: 0,
+                marginRight: 12,
+              }}
+            >
               <View
                 style={{
                   width: 40,
@@ -550,21 +567,41 @@ export function GrowthActionSheet({
                   backgroundColor: '#FEF3C7',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 <Text style={{ fontSize: 20 }}>⚡</Text>
               </View>
-              <View>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}
+                  numberOfLines={1}
+                >
                   Google Growth Autopilot
                 </Text>
-                <Text style={{ fontSize: 11, color: colors.muted }}>
+                <Text
+                  style={{ fontSize: 11, color: colors.muted, lineHeight: 15 }}
+                  numberOfLines={2}
+                >
                   AI-managed local visibility, reviews &amp; conversion actions
                 </Text>
               </View>
             </View>
-            <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close modal">
-              <MaterialIcons name="close" size={22} color={colors.muted} />
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityLabel="Close modal"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: '#F1F5F9',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <MaterialIcons name="close" size={20} color={colors.ink} />
             </Pressable>
           </View>
 
@@ -804,7 +841,9 @@ export function GrowthActionSheet({
                   autopilotActions.map((action) => {
                     const isP0 = action.priorityLevel === 'P0';
                     const isCompleted = action.status === 'completed';
-                    const isApprovingThis = approving === action.id;
+                    const isApprovingThis =
+                      approving === action.id ||
+                      (action.actionType === 'add_services' && approving === 'auto_write_all_services');
 
                     return (
                       <View
@@ -910,7 +949,7 @@ export function GrowthActionSheet({
                         {!isCompleted && (
                           <Pressable
                             onPress={() => handleExecuteAction(action)}
-                            disabled={isApprovingThis}
+                            disabled={Boolean(approving)}
                             style={{
                               backgroundColor: isP0 ? colors.brand : '#0F172A',
                               paddingVertical: 10,
@@ -920,10 +959,16 @@ export function GrowthActionSheet({
                               flexDirection: 'row',
                               gap: 6,
                               marginTop: 2,
+                              opacity: Boolean(approving) && !isApprovingThis ? 0.6 : 1,
                             }}
                           >
                             {isApprovingThis ? (
-                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                                  {action.actionType === 'add_services' ? 'Writing & Syncing SEO Copy…' : 'Processing…'}
+                                </Text>
+                              </View>
                             ) : (
                               <>
                                 <MaterialIcons name="bolt" size={16} color="#FFFFFF" />
@@ -1109,19 +1154,28 @@ export function GrowthActionSheet({
                                     } else if (task.actionType === 'auto_optimize_seo') {
                                       handleRunSeoStep('description');
                                     } else if (task.actionType === 'add_services') {
-                                      handleAutoWriteAllServices();
+                                      handleAutoWriteAllServices(task.id);
                                     }
                                   }}
+                                  disabled={Boolean(approving)}
                                   style={{
                                     backgroundColor: '#EFF6FF',
                                     paddingHorizontal: 8,
                                     paddingVertical: 3,
                                     borderRadius: 6,
+                                    opacity: Boolean(approving) && approving !== task.id ? 0.6 : 1,
                                   }}
                                 >
-                                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#2563EB' }}>
-                                    {task.cta}
-                                  </Text>
+                                  {approving === task.id || (task.actionType === 'add_services' && approving === 'auto_write_all_services') ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <ActivityIndicator size="small" color="#2563EB" />
+                                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#2563EB' }}>Writing…</Text>
+                                    </View>
+                                  ) : (
+                                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#2563EB' }}>
+                                      {task.cta}
+                                    </Text>
+                                  )}
                                 </Pressable>
                               )}
                             </View>
@@ -1502,16 +1556,37 @@ export function GrowthActionSheet({
                   elevation: 10,
                 }}
               >
-                <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Text
+                    style={{ fontSize: 16, fontWeight: '800', color: colors.ink, flex: 1, minWidth: 0, marginRight: 10 }}
+                    numberOfLines={1}
+                  >
                     {quickInputType === 'address'
                       ? '📍 Add Storefront Address'
                       : quickInputType === 'phone'
                         ? '📞 Add Primary Phone Number'
                         : '🌐 Add Website or Store URL'}
                   </Text>
-                  <Pressable onPress={() => setQuickInputType(null)} hitSlop={10}>
-                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  <Pressable
+                    onPress={() => setQuickInputType(null)}
+                    hitSlop={12}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#F1F5F9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <MaterialIcons name="close" size={18} color={colors.ink} />
                   </Pressable>
                 </View>
 
@@ -1625,8 +1700,23 @@ export function GrowthActionSheet({
                   elevation: 10,
                 }}
               >
-                <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      flex: 1,
+                      minWidth: 0,
+                      marginRight: 10,
+                    }}
+                  >
                     <View
                       style={{
                         width: 32,
@@ -1635,16 +1725,32 @@ export function GrowthActionSheet({
                         backgroundColor: '#DCFCE7',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        flexShrink: 0,
                       }}
                     >
                       <MaterialIcons name="chat" size={18} color="#16A34A" />
                     </View>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                    <Text
+                      style={{ fontSize: 16, fontWeight: '800', color: colors.ink, flex: 1, minWidth: 0 }}
+                      numberOfLines={1}
+                    >
                       Google Maps WhatsApp Button
                     </Text>
                   </View>
-                  <Pressable onPress={() => setWhatsappModalOpen(false)} hitSlop={10}>
-                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  <Pressable
+                    onPress={() => setWhatsappModalOpen(false)}
+                    hitSlop={12}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#F1F5F9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <MaterialIcons name="close" size={18} color={colors.ink} />
                   </Pressable>
                 </View>
 
@@ -1796,8 +1902,23 @@ export function GrowthActionSheet({
                   elevation: 10,
                 }}
               >
-                <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      flex: 1,
+                      minWidth: 0,
+                      marginRight: 10,
+                    }}
+                  >
                     <View
                       style={{
                         width: 32,
@@ -1806,16 +1927,32 @@ export function GrowthActionSheet({
                         backgroundColor: '#EFF6FF',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        flexShrink: 0,
                       }}
                     >
                       <MaterialIcons name="event-available" size={18} color="#2563EB" />
                     </View>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink }}>
+                    <Text
+                      style={{ fontSize: 16, fontWeight: '800', color: colors.ink, flex: 1, minWidth: 0 }}
+                      numberOfLines={1}
+                    >
                       Google Maps Booking Button
                     </Text>
                   </View>
-                  <Pressable onPress={() => setBookingModalOpen(false)} hitSlop={10}>
-                    <MaterialIcons name="close" size={20} color={colors.muted} />
+                  <Pressable
+                    onPress={() => setBookingModalOpen(false)}
+                    hitSlop={12}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#F1F5F9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <MaterialIcons name="close" size={18} color={colors.ink} />
                   </Pressable>
                 </View>
 

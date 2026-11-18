@@ -506,6 +506,9 @@ function HubHeader({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-lg font-semibold text-foreground md:text-xl">{name}</h1>
+              <Badge className="rounded-full bg-blue-50 text-blue-700 border-blue-200 text-[11px] font-semibold">
+                Google Business Profile (GBP)
+              </Badge>
               {isConnected ? (
                 isPendingApproval ? (
                   <Badge className="rounded-full border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-50">

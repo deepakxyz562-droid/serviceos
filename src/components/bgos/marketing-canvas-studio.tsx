@@ -1182,7 +1182,7 @@ export function MarketingCanvasStudio({
       const requestBody=JSON.stringify({
           status: 'draft',
           expectedUpdatedAt: draftRevision,
-          content: caption,
+          content: (caption || effectiveCaption).trim(),
           mediaUrls: mediaList,
           isPoster: isPosterMode,
           isPreRendered: false,
@@ -1242,7 +1242,7 @@ export function MarketingCanvasStudio({
           expectedUpdatedAt: draftRevision,
           status: publishMode === 'schedule' ? 'scheduled' : 'published',
           scheduledAt: publishMode === 'schedule' ? scheduledDateTime : null,
-          content: caption,
+          content: (caption || effectiveCaption).trim(),
           mediaUrls: mediaList,
           isPoster: isPosterMode,
           isPreRendered: false,

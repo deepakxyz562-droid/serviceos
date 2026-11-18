@@ -1970,22 +1970,22 @@ export function ReviewsView({
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Google Business &amp; Reviews
+                Customer Reviews &amp; Reputation
               </h1>
               {isGbpConnected ? (
                 <span className="px-2.5 py-0.5 rounded-full bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50] dark:text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-[#ccebd9] dark:border-emerald-800/50">
                   <span className="size-1.5 rounded-full bg-[#009F50] animate-pulse" />
-                  {connectedPlace?.title ? `Connected: ${connectedPlace.title}` : 'Connected'}
+                  {connectedPlace?.title ? `Google Sync: ${connectedPlace.title}` : 'Google Connected'}
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-200 dark:border-amber-800/50">
                   <span className="size-1.5 rounded-full bg-amber-500" />
-                  Not Connected
+                  Google Not Connected
                 </span>
               )}
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Manage your Google Business profile, read and respond to reviews, and grow your reputation.
+              Read and reply to Google reviews, send 1-tap WhatsApp review requests, and build your 5-star reputation.
             </p>
           </div>
         </div>

@@ -7,6 +7,7 @@ import {
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
 import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
+import { getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
 
 export interface ServiceOptimizeItemInput {
   id?: string;
@@ -132,7 +133,31 @@ export async function generateLocalizedServiceDescriptions(params: {
 
   const city = ctx.city || ctx.serviceAreas[0] || 'Local Area';
   const priorityKeywords = ctx.priorityKeywords;
-  const targets = params.services
+
+  let servicesInput = Array.isArray(params.services) && params.services.length > 0 ? params.services : [];
+  if (servicesInput.length === 0) {
+    // If services not explicitly provided, load existing catalog services needing 300-500 char upgrade
+    servicesInput = (ctx.seoServices || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      targetKeyword: s.targetKeyword,
+      existingDescription: s.description,
+      category: s.category,
+    }));
+  }
+
+  // If still empty, seed recommendations from verified master category catalog
+  if (servicesInput.length === 0) {
+    const masterCat = getGbpCategoryByNameOrAlias(ctx.category || 'Local Services');
+    if (masterCat && masterCat.coreProducts.length > 0) {
+      servicesInput = masterCat.coreProducts.slice(0, 8).map((p) => ({
+        name: p,
+        category: masterCat.displayName,
+      }));
+    }
+  }
+
+  const targets = servicesInput
     .map((s) => ({
       id: s.id,
       name: String(s.name || '').trim(),

@@ -458,12 +458,14 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
       return { platform: acc.platform, socialAccountId: acc.id };
     });
 
-    // For branded graphic format, ensure caption includes headline if caption is blank
+    // Ensure caption is never an empty string if caption is blank
     const effectiveContent = content.trim()
       ? content
       : brandHeadline
-        ? `${brandHeadline}\n\n${brandSubtitle}`
-        : '';
+        ? `${brandHeadline}\n\n${brandSubtitle}`.trim()
+        : displayBrandName
+          ? `Discover what's new at ${displayBrandName}! Contact us today to learn more.`
+          : 'Check out our latest update! Contact us today to learn more.';
 
     const payload: Record<string, unknown> = {
       content: effectiveContent,
