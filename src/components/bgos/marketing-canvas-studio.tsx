@@ -62,6 +62,7 @@ import {
   MessageCircle,
   Bookmark,
   LayoutGrid,
+  LayoutTemplate,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -464,8 +465,201 @@ export function MarketingCanvasStudio({
     });
   }, []);
 
+  // ─── AI-First Post Creator (matching mobile app UX) ──────────────────────
+  const [entryView, setEntryView] = useState<'ai' | 'gallery' | 'studio'>('ai');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [attachedImageUrl, setAttachedImageUrl] = useState<string | null>(null);
+  const [isUploadingAttachedPhoto, setIsUploadingAttachedPhoto] = useState(false);
+  const [isGeneratingAiPost, setIsGeneratingAiPost] = useState(false);
+  const [isAiPublishing, setIsAiPublishing] = useState(false);
+  const [aiGeneratedPost, setAiGeneratedPost] = useState<{
+    headline: string;
+    caption: string;
+    imageUrl?: string;
+    postType: string;
+    ctaAction?: string;
+  } | null>(null);
+
+  const dynamicInspirationIdeas = useMemo(() => {
+    const cat = ((category || '') + ' ' + (businessName || '')).toLowerCase();
+    if (cat.includes('it') || cat.includes('tech') || cat.includes('software') || cat.includes('consult')) {
+      return [
+        `Discover verified IT Strategy & Consulting services at ${businessName}`,
+        'Strategic IT roadmaps to scale your enterprise and reduce operational risk',
+        'Book an IT architecture and infrastructure audit with our senior consultants',
+        'High-impact digital transformation and technology governance for modern business',
+      ];
+    }
+    if (cat.includes('farm') || cat.includes('pool') || cat.includes('resort') || cat.includes('stay') || cat.includes('villa')) {
+      return [
+        'Perfect venue for your next family pool party',
+        'Create unforgettable memories at our private farmhouse pool',
+        'Weekend getaway destination with private swimming & dining',
+        'Safe and fun swimming for kids and families of all ages',
+      ];
+    }
+    if (cat.includes('salon') || cat.includes('spa') || cat.includes('beauty') || cat.includes('hair')) {
+      return [
+        'Weekend relaxation: Treat yourself to our signature spa care',
+        'Special 20% off all hair styling & treatments this Thursday',
+        'Bridal glow packages now open for booking',
+        'Expert skin care routines tailored for you',
+      ];
+    }
+    if (cat.includes('restaurant') || cat.includes('cafe') || cat.includes('food') || cat.includes('dine')) {
+      return [
+        'Weekend chef special: Freshly crafted seasonal delicacies',
+        'Reserve your table for tonight’s family dinner experience',
+        'Midweek lunch combo with complimentary refreshing beverages',
+        'Celebrate your special occasions with our private dining',
+      ];
+    }
+    if (cat.includes('car') || cat.includes('auto') || cat.includes('mechanic') || cat.includes('repair')) {
+      return [
+        'Complete multi-point vehicle inspection before your road trip',
+        'Fast turnaround oil change & brake service by certified pros',
+        'Special seasonal maintenance package for worry-free driving',
+        'Genuine parts, transparent pricing, and 100% satisfaction guaranteed',
+      ];
+    }
+    return [
+      `Discover why local customers rate ${businessName} 5 stars on Google`,
+      'Exclusive limited-time promotional offer for our valued community',
+      'Behind the scenes: Dedicated craftsmanship and authentic care',
+      'Book your appointment early to secure your preferred slot',
+    ];
+  }, [businessName, category]);
+
+  const handleAiImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingAttachedPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await authFetch('/api/omnichannel/upload', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.url) {
+        setAttachedImageUrl(data.url);
+        setPhotoUrl(data.url);
+        toast.success('Photo uploaded to cloud storage!');
+      } else {
+        toast.error(data?.error || 'Failed to upload photo');
+      }
+    } catch {
+      toast.error('Network error uploading image');
+    } finally {
+      setIsUploadingAttachedPhoto(false);
+    }
+  };
+
+  const handleGenerateAiPost = async (customPrompt?: string) => {
+    const activeTopic = (customPrompt || aiPrompt).trim() || dynamicInspirationIdeas[0];
+    setIsGeneratingAiPost(true);
+    try {
+      const res = await authFetch('/api/social/ai-generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: activeTopic,
+          photoUrl: attachedImageUrl || undefined,
+          referenceImageUrl: attachedImageUrl || undefined,
+          attachedImageUrl: attachedImageUrl || undefined,
+          targetKeyword: category || 'local services',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'AI generation failed');
+
+      const genHeadline = data.headline || data.title || activeTopic;
+      const genCaption =
+        data.caption ||
+        `${activeTopic}\n\nExperience high-quality service at ${businessName}. Contact us today to learn more!\n\n#${businessName.replace(/\W+/g, '')} #LocalBusiness`;
+      const finalImg =
+        attachedImageUrl || data.photoUrl || data.imageUrl || '/images/fieseros-ai-assistant-poster.jpg?v=1';
+
+      setAiGeneratedPost({
+        headline: genHeadline,
+        caption: genCaption,
+        imageUrl: finalImg,
+        postType: data.gbpPostType || 'standard',
+        ctaAction: data.gbpCtaAction || 'CALL',
+      });
+      setCaption(genCaption);
+      setHeadline(genHeadline);
+      setPhotoUrl(finalImg);
+      setPosterUrl(finalImg);
+      toast.success('AI crafted your post & visual!');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'AI post generation failed');
+    } finally {
+      setIsGeneratingAiPost(false);
+    }
+  };
+
+  const handleAiDirectPublish = async (isScheduled = false) => {
+    if (!aiGeneratedPost && !headline && !caption) {
+      toast.error('Please generate or enter post content before publishing');
+      return;
+    }
+    setIsAiPublishing(true);
+    try {
+      const targets = getResolvedTargets();
+      const effHeadline = (aiGeneratedPost?.headline || headline || '').trim();
+      const effCaption = (aiGeneratedPost?.caption || caption || effectiveCaption || '').trim();
+      const fullContent = effHeadline ? `${effHeadline}\n\n${effCaption}` : effCaption;
+      const finalImage =
+        aiGeneratedPost?.imageUrl ||
+        attachedImageUrl ||
+        posterUrl ||
+        photoUrl ||
+        '/images/fieseros-ai-assistant-poster.jpg?v=1';
+
+      const res = await authFetch('/api/social/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: isScheduled ? 'scheduled' : 'published',
+          scheduledAt: isScheduled ? scheduledDateTime : null,
+          content: fullContent.trim(),
+          mediaUrls: finalImage ? [finalImage] : [],
+          isPoster: false,
+          platforms: selectedChannels,
+          targets: targets.length > 0 ? targets : undefined,
+          headline: effHeadline,
+          gbpPostType: aiGeneratedPost?.postType === 'offer' ? 'offer' : 'standard',
+          gbpOfferData: {
+            title: effHeadline,
+            couponCode: badgeText.replace(/[^A-Za-z0-9]/g, '') || undefined,
+            redeemUrl: linkUrl || undefined,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        toast.success(
+          isScheduled
+            ? 'Post scheduled successfully!'
+            : 'Post published to connected channels! Checking delivery status...'
+        );
+        if (onNavigateToPosts) {
+          onNavigateToPosts();
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson?.error || 'Failed to publish post. Please check connected channels.');
+      }
+    } catch {
+      toast.error('Network error during publishing');
+    } finally {
+      setIsAiPublishing(false);
+    }
+  };
+
   // ─── Template Gallery entry (Flyer-Maker-style one-tap posters) ───────────
-  const [entryView, setEntryView] = useState<'gallery' | 'studio'>('gallery');
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [isExportingHd, setIsExportingHd] = useState(false);
   const activeTemplateBgPrompt = activeTemplateId
@@ -616,16 +810,34 @@ export function MarketingCanvasStudio({
     void fetchSuggestions(false);
   }, [fetchSuggestions]);
 
-  const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await authFetch('/api/omnichannel/upload', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.url) {
+        setPosterUrl(data.url);
+        setPhotoUrl(data.url);
+        setActiveVisualFormat('poster');
+        toast.success('Custom graphic uploaded to cloud!');
+        return;
+      }
+    } catch {}
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
       if (result) {
         setPosterUrl(result);
+        setPhotoUrl(result);
         setActiveVisualFormat('poster');
-        toast.success('Custom promotional graphic uploaded!');
+        toast.success('Custom promotional graphic loaded!');
       }
     };
     reader.readAsDataURL(file);
@@ -1291,10 +1503,359 @@ export function MarketingCanvasStudio({
     return ()=>clearTimeout(timer);
   },[currentDesignSnapshot,editingDraftId,isSavingDraft,isPublishing,draftSaveError]);
 
-  // ─── Gallery-first entry: Flyer-Maker-style template picker ────────────────
+  // ─── Mode Switcher Bar ──────────────────────────────────────────────────
+  const renderModeSwitcher = () => (
+    <div className="flex items-center justify-between flex-wrap gap-2.5 pb-2 border-b border-border/70">
+      <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setEntryView('ai')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+            entryView === 'ai'
+              ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+          )}
+        >
+          <Sparkles className="size-3.5 text-[#009F50]" />
+          <span>AI Post Creator</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-[#009F50] font-semibold">
+            Default
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setEntryView('gallery')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+            entryView === 'gallery'
+              ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+          )}
+        >
+          <LayoutTemplate className="size-3.5" />
+          <span>Flyer Templates</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setEntryView('studio')}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+            entryView === 'studio'
+              ? 'bg-white dark:bg-slate-900 text-[#009F50] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+          )}
+        >
+          <Palette className="size-3.5" />
+          <span>Canvas Studio</span>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground hidden sm:inline">
+          {entryView === 'ai'
+            ? 'AI-generated localized post copy & multi-channel dispatch'
+            : entryView === 'gallery'
+            ? 'One-tap business flyer templates'
+            : 'Multi-layer graphic canvas designer'}
+        </span>
+      </div>
+    </div>
+  );
+
+  // ─── AI-First Post Creator (matching mobile app UX) ──────────────────────
+  if (entryView === 'ai') {
+    return (
+      <div className="w-full space-y-5">
+        {renderModeSwitcher()}
+
+        {/* AI Creator Card */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Topic Prompt + Photo Upload + Suggestions */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="size-7 rounded-lg bg-emerald-500/10 text-[#009F50] flex items-center justify-center">
+                    <Sparkles className="size-4" />
+                  </div>
+                  <h2 className="text-sm font-bold text-foreground">
+                    Create Post with AI (Google Business, Facebook &amp; Instagram)
+                  </h2>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border-emerald-300/40">
+                  AI + Photo Upload
+                </Badge>
+              </div>
+
+              {/* Prompt Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>What would you like to post about today?</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Describe your offer, update, or pick an idea below
+                  </span>
+                </label>
+                <Textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g. Verified IT Strategy & Consulting services for growing businesses in Patna with free 30-min architecture consultation..."
+                  className="text-xs resize-none h-24 bg-background leading-relaxed"
+                />
+              </div>
+
+              {/* Inspiration Chips */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="size-3 text-[#009F50]" />
+                  Inspiration Ideas for {effectiveBusinessName}:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {dynamicInspirationIdeas.map((idea, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setAiPrompt(idea)}
+                      className={cn(
+                        'text-left text-[11px] py-1 px-2.5 rounded-lg border transition-all',
+                        aiPrompt === idea
+                          ? 'bg-[#E8F8EF] dark:bg-emerald-950/40 border-[#009F50] text-[#009F50] font-bold'
+                          : 'bg-background hover:bg-muted text-slate-700 dark:text-slate-300 border-border'
+                      )}
+                    >
+                      {idea}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Upload Photo Section */}
+              <div className="space-y-2 pt-2 border-t border-border/70">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="size-3.5 text-[#009F50]" />
+                    Attach Post Photo (Optional)
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Upload your real photo, or leave empty for AI generation
+                  </span>
+                </label>
+
+                {attachedImageUrl ? (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={attachedImageUrl}
+                        alt="Attached"
+                        className="size-12 rounded-lg object-cover border border-emerald-300/40"
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-foreground">Custom Photo Attached</p>
+                        <p className="text-[11px] text-muted-foreground">Will be published directly with your post</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAttachedImageUrl(null)}
+                      className="size-8 p-0 text-slate-500 hover:text-rose-600"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border hover:border-[#009F50] bg-muted/30 hover:bg-[#E8F8EF]/30 cursor-pointer transition-colors">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      onChange={handleAiImageUpload}
+                      disabled={isUploadingAttachedPhoto}
+                      className="hidden"
+                    />
+                    {isUploadingAttachedPhoto ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin text-[#009F50]" />
+                        <span className="text-xs font-medium text-muted-foreground">Uploading photo to cloud storage...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="size-4 text-[#009F50]" />
+                        <span className="text-xs font-medium text-foreground">
+                          Click to upload an authentic image (PNG, JPG, WebP)
+                        </span>
+                      </>
+                    )}
+                  </label>
+                )}
+              </div>
+
+              {/* Generate Action Button */}
+              <Button
+                type="button"
+                onClick={() => handleGenerateAiPost()}
+                disabled={isGeneratingAiPost || isUploadingAttachedPhoto}
+                className="w-full h-10 gap-2 bg-[#009F50] hover:bg-[#008A45] text-white font-bold text-xs rounded-xl shadow-xs"
+              >
+                {isGeneratingAiPost ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>AI Crafting Local SEO Copy &amp; Visual...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" />
+                    <span>Generate Post &amp; Visual with AI</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Column: Live Visual Preview & Instant Publishing */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">Post Preview &amp; Publishing</span>
+                <span className="text-[10px] text-muted-foreground">Ready to review</span>
+              </div>
+
+              {/* Post Creative Card */}
+              <div className="border border-border/80 rounded-xl overflow-hidden bg-background shadow-2xs">
+                <div className="aspect-video w-full bg-muted/40 relative overflow-hidden">
+                  <img
+                    src={
+                      aiGeneratedPost?.imageUrl ||
+                      attachedImageUrl ||
+                      photoUrl ||
+                      '/images/fieseros-ai-assistant-poster.jpg?v=1'
+                    }
+                    alt="Preview"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2">
+                    <Badge className="bg-black/70 text-white text-[10px] border-none font-semibold">
+                      {effectiveBusinessName}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-3.5 space-y-2">
+                  <input
+                    type="text"
+                    value={aiGeneratedPost?.headline || headline || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setHeadline(val);
+                      if (aiGeneratedPost) setAiGeneratedPost({ ...aiGeneratedPost, headline: val });
+                    }}
+                    placeholder="Post Headline (Catchy & Local Search Friendly)"
+                    className="w-full text-xs font-bold text-foreground bg-transparent border-b border-border/60 pb-1 focus:outline-none focus:border-[#009F50]"
+                  />
+                  <Textarea
+                    rows={4}
+                    value={aiGeneratedPost?.caption || caption || effectiveCaption || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCaption(val);
+                      if (aiGeneratedPost) setAiGeneratedPost({ ...aiGeneratedPost, caption: val });
+                    }}
+                    placeholder="Post caption and localized SEO copy..."
+                    className="text-xs resize-none bg-background leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Publishing Channels Picker */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Target Channels</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'googlebusiness', label: 'Google Business Profile' },
+                    { id: 'facebook', label: 'Facebook Page' },
+                    { id: 'instagram', label: 'Instagram' },
+                  ].map((ch) => {
+                    const isSelected = selectedChannels.includes(ch.id);
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => toggleChannel(ch.id)}
+                        className={cn(
+                          'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all',
+                          isSelected
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-[#009F50] text-[#009F50]'
+                            : 'bg-background border-border text-muted-foreground'
+                        )}
+                      >
+                        <span className={cn('size-2 rounded-full', isSelected ? 'bg-[#009F50]' : 'bg-slate-300')} />
+                        {ch.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Publish Actions */}
+              <div className="pt-2 border-t border-border/70 space-y-2">
+                <Button
+                  type="button"
+                  onClick={() => handleAiDirectPublish(false)}
+                  disabled={isAiPublishing || isGeneratingAiPost}
+                  className="w-full h-10 gap-2 bg-[#009F50] hover:bg-[#008A45] text-white font-bold text-xs rounded-xl shadow-xs"
+                >
+                  {isAiPublishing ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Publishing to Connected Channels...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-3.5" />
+                      <span>Publish to Channels Now</span>
+                    </>
+                  )}
+                </Button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAiDirectPublish(true)}
+                    disabled={isAiPublishing || isGeneratingAiPost}
+                    className="h-8 text-xs font-semibold gap-1.5"
+                  >
+                    <Calendar className="size-3.5" />
+                    <span>Schedule</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEntryView('studio')}
+                    className="h-8 text-xs font-semibold gap-1.5 text-primary"
+                  >
+                    <Palette className="size-3.5" />
+                    <span>Canvas Studio</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Gallery entry: Flyer-Maker-style template picker ────────────────
   if (entryView === 'gallery') {
     return (
       <div className="w-full space-y-4">
+        {renderModeSwitcher()}
         <PosterTemplateGallery
           business={{
             businessName: effectiveBusinessName,
@@ -1313,6 +1874,7 @@ export function MarketingCanvasStudio({
 
   return (
     <div className="w-full space-y-6">
+      {renderModeSwitcher()}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className="rounded border px-3 py-2" disabled={isSavingDraft||isPublishing} onClick={()=>loadDesignDrafts()}>Open saved design</button>
         {moreDrafts&&<button type="button" onClick={()=>loadDesignDrafts(draftPage+1)}>Load more drafts</button>}

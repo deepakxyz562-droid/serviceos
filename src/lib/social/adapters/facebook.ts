@@ -108,13 +108,19 @@ async function graphFetch<T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  if (options.body && !isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
-      ...(options.headers || {}),
-    },
+    signal: options.signal || AbortSignal.timeout(25_000),
+    headers,
   });
 
   if (!res.ok) {
@@ -203,22 +209,45 @@ const facebookAdapter: PlatformAdapter = {
       }
 
       // Photo post via /{pageId}/photos
-      const body = new URLSearchParams();
-      body.set('url', mediaUrl);
-      body.set('access_token', account.accessToken);
-      if (message) body.set('caption', message);
-      // `published=true` (default) creates the photo as a Page post
-      // immediately. Setting `published=false` would stage it for a
-      // later /feed publish — we want the post live now.
-      body.set('published', 'true');
+      let photoRes: { id: string; post_id?: string };
 
-      const photoRes = await graphFetch<{
-        id: string;
-        post_id?: string;
-      }>(`${GRAPH_API_BASE}/${pageId}/photos`, {
-        method: 'POST',
-        body,
-      });
+      if (mediaUrl.startsWith('data:')) {
+        const match = mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          const mimeType = match[1] || 'image/jpeg';
+          const buffer = Buffer.from(match[2], 'base64');
+          const formData = new FormData();
+          formData.append('access_token', account.accessToken);
+          if (message) formData.append('caption', message);
+          formData.append('published', 'true');
+          const blob = new Blob([buffer], { type: mimeType });
+          formData.append('source', blob, 'post.jpg');
+
+          photoRes = await graphFetch<{
+            id: string;
+            post_id?: string;
+          }>(`${GRAPH_API_BASE}/${pageId}/photos`, {
+            method: 'POST',
+            body: formData,
+          });
+        } else {
+          throw new Error('[facebook adapter] Malformed data URI for photo upload');
+        }
+      } else {
+        const body = new URLSearchParams();
+        body.set('url', mediaUrl);
+        body.set('access_token', account.accessToken);
+        if (message) body.set('caption', message);
+        body.set('published', 'true');
+
+        photoRes = await graphFetch<{
+          id: string;
+          post_id?: string;
+        }>(`${GRAPH_API_BASE}/${pageId}/photos`, {
+          method: 'POST',
+          body,
+        });
+      }
 
       // Prefer post_id (composite, suitable for /insights) over the bare
       // photoId. If only photoId is returned, we synthesize the composite

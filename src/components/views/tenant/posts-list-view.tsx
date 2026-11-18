@@ -158,6 +158,45 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: 'bg-zinc-900',
 };
 
+function PostThumbnail({
+  mediaUrl,
+  content,
+}: {
+  mediaUrl?: string | null;
+  content: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!mediaUrl || failed) {
+    return (
+      <div className="w-full h-full p-4 bg-gradient-to-br from-emerald-500/10 via-background to-muted flex flex-col justify-between">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-extrabold text-[#009F50] tracking-widest uppercase">
+            Social Creative
+          </span>
+          <div className="size-6 rounded-md bg-emerald-500/10 flex items-center justify-center text-[#009F50]">
+            <ImageIcon className="size-3.5" />
+          </div>
+        </div>
+        <p className="text-xs font-semibold text-foreground line-clamp-3 mt-1">
+          {content || 'Social Post'}
+        </p>
+        <span className="text-[10px] text-muted-foreground">Ready to view</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={mediaUrl}
+      alt="Creative"
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+    />
+  );
+}
+
 export function PostsListView({
   embedded = false,
   focusedPostId = null,
@@ -243,6 +282,22 @@ export function PostsListView({
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
+
+  // Auto-poll every 3.5s when any post is actively publishing
+  useEffect(() => {
+    const isAnyPublishing = posts.some(
+      (p) =>
+        p.status === 'publishing' ||
+        (Array.isArray(p.publishTargets) && p.publishTargets.some((t) => t.status === 'publishing'))
+    );
+    if (!isAnyPublishing) return;
+
+    const timer = setInterval(() => {
+      void loadPosts();
+    }, 3500);
+
+    return () => clearInterval(timer);
+  }, [posts, loadPosts]);
 
   const onSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -492,22 +547,7 @@ export function PostsListView({
                 <div>
                   {/* Thumbnail / Creative Header */}
                   <div className="relative h-44 bg-muted/40 overflow-hidden">
-                    {mediaUrl ? (
-                      <img
-                        src={mediaUrl}
-                        alt="Creative"
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full p-5 bg-gradient-to-br from-primary/10 via-background to-muted flex flex-col justify-center">
-                        <span className="text-[10px] font-extrabold text-primary tracking-widest uppercase">
-                          AI Creative Post
-                        </span>
-                        <p className="text-xs font-serif font-bold text-foreground line-clamp-3 mt-1">
-                          {post.content || 'Marketing offer'}
-                        </p>
-                      </div>
-                    )}
+                    <PostThumbnail mediaUrl={mediaUrl} content={post.content} />
 
                     {/* Status Badge Overlay */}
                     <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap">
@@ -697,6 +737,9 @@ export function PostsListView({
                             <img
                               src={post.mediaUrls[0]}
                               alt=""
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                              }}
                               className="size-10 rounded-lg object-cover border border-border shrink-0"
                             />
                           )}
@@ -767,8 +810,15 @@ export function PostsListView({
               </DialogHeader>
 
               {viewPost.mediaUrls?.[0] && (
-                <div className="w-full aspect-video rounded-xl overflow-hidden border border-border">
-                  <img src={viewPost.mediaUrls[0]} alt="" className="w-full h-full object-cover" />
+                <div className="w-full aspect-video rounded-xl overflow-hidden border border-border bg-muted/40">
+                  <img
+                    src={viewPost.mediaUrls[0]}
+                    alt=""
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               )}
 

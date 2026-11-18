@@ -471,6 +471,35 @@ export async function transcodeWebpUrlToJpeg(tenantId: string, webpUrl: string):
   }
 }
 
+export async function persistDataUriToStorage(tenantId: string, dataUri: string): Promise<string> {
+  try {
+    const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return dataUri;
+    const mimeType = match[1] || 'image/jpeg';
+    const buffer = Buffer.from(match[2], 'base64');
+    const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+
+    const { isS3Configured, isSupabaseStorageConfigured, uploadFile } = await import('@/lib/supabase-storage');
+    if (!isS3Configured() && !isSupabaseStorageConfigured()) {
+      return dataUri;
+    }
+
+    const { randomUUID } = await import('crypto');
+    const uploaded = await uploadFile({
+      bucket: 'campaign-assets',
+      companyId: tenantId,
+      folder: 'social-uploads',
+      fileName: `${randomUUID()}.${ext}`,
+      file: buffer,
+      contentType: mimeType,
+    });
+    return uploaded?.url || dataUri;
+  } catch (err) {
+    console.warn('[social/publisher] Data URI persistence fallback:', err instanceof Error ? err.message : err);
+    return dataUri;
+  }
+}
+
 /**
  * Publish to ONE target platform. Isolated — never throws.
  *
@@ -564,16 +593,22 @@ async function publishSingleTarget(
       );
     }
 
-    // 4. Publish (transcode .webp images to JPEG for Google Business Profile, Instagram, and Facebook compatibility).
+    // 4. Publish (transcode .webp images to JPEG for Google Business Profile, Instagram, and Facebook compatibility; persist data URIs).
     let effectiveParams = params;
     if (
-      (target.platform === 'googlebusiness' || target.platform === 'instagram' || target.platform === 'facebook') &&
       Array.isArray(params.mediaUrls) &&
       params.mediaUrls.length > 0
     ) {
       const normalizedMedia: string[] = [];
       for (const mUrl of params.mediaUrls) {
-        if (typeof mUrl === 'string' && /\.webp(\?|$)/i.test(mUrl)) {
+        if (typeof mUrl === 'string' && mUrl.startsWith('data:')) {
+          const persisted = await persistDataUriToStorage(tenantId, mUrl);
+          normalizedMedia.push(persisted);
+        } else if (
+          (target.platform === 'googlebusiness' || target.platform === 'instagram' || target.platform === 'facebook') &&
+          typeof mUrl === 'string' &&
+          /\.webp(\?|$)/i.test(mUrl)
+        ) {
           const transcoded = await transcodeWebpUrlToJpeg(tenantId, mUrl);
           normalizedMedia.push(transcoded);
         } else if (typeof mUrl === 'string') {
