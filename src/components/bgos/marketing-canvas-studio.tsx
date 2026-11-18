@@ -78,6 +78,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch, authFetchWithRetry } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 // ─── Visual Direction Types ─────────────────────────────────────────────────
 
@@ -269,6 +270,11 @@ export function MarketingCanvasStudio({
   const [offerStartDate, setOfferStartDate] = useState('6 Nov');
   const [offerEndDate, setOfferEndDate] = useState('8 Nov');
   const [selectedChannels, setSelectedChannels] = useState<string[]>(['googlebusiness', 'instagram', 'facebook']);
+  const toggleChannel = useCallback((channelId: string) => {
+    setSelectedChannels((prev) =>
+      prev.includes(channelId) ? prev.filter((c) => c !== channelId) : [...prev, channelId]
+    );
+  }, []);
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now');
   const [scheduledDateTime, setScheduledDateTime] = useState('');
 
