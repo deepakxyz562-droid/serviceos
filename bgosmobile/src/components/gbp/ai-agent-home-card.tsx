@@ -49,7 +49,7 @@ export function HomeStoryBubblesStrip({
       color: '#4F46E5',
       ringColor: '#C7D2FE',
       shadowColor: '#4F46E5',
-      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=posters')),
+      onPress: onOpenPosters || (() => router.push('/photos?mode=studio')),
     },
     {
       id: 's_ranking',
@@ -168,7 +168,7 @@ export function GbpAiAgentHomeCard({
       icon: 'auto-awesome' as const,
       iconColor: '#7C3AED',
       iconBg: '#F3E8FF',
-      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=posters')),
+      onPress: onOpenPosters || (() => router.push('/photos?mode=studio')),
     },
     {
       id: 'agent_review',

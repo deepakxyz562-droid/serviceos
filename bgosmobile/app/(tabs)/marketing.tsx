@@ -671,11 +671,7 @@ export default function MarketingScreen() {
   const saving = useRef(false);
 
   const [activeMode, setActiveMode] = useState<'studio' | 'autopilot' | 'posts'>(
-    params.mode === 'posters' || params.mode === 'studio'
-      ? 'studio'
-      : params.mode === 'autopilot'
-        ? 'autopilot'
-        : 'posts'
+    params.mode === 'autopilot' ? 'autopilot' : 'posts'
   );
   const [createPostModalOpen, setCreatePostModalOpen] = useState(false);
   const [reviewPostModalOpen, setReviewPostModalOpen] = useState(false);
@@ -3112,20 +3108,26 @@ export default function MarketingScreen() {
               gbpPlace.data?.place?.website ||
               ''
             }
+            refreshTrigger={boardRefresh}
             onCreateWithAi={() => setCreatePostModalOpen(true)}
             onViewPost={(post) => {
-              setActiveReviewPost({
+              const row: SocialPostRow = {
                 id: post.id,
+                content: `${post.headline}\n\n${post.caption}`,
                 title: post.headline,
-                headline: post.headline,
-                caption: post.caption,
-                imageUrl: post.imageUrl,
-                postType: (post.type as any) || 'Standard Post',
+                status: (post.status as any) || 'scheduled',
+                scheduledAt: post.scheduledTime,
+                mediaUrls: post.imageUrl ? [post.imageUrl] : [],
+                gbpPostType: post.type?.toLowerCase().includes('offer')
+                  ? 'offer'
+                  : post.type?.toLowerCase().includes('event')
+                    ? 'event'
+                    : 'standard',
                 ctaAction: post.ctaAction || 'CALL',
                 ctaUrl: post.ctaUrl,
-                scheduledTime: post.scheduledTime,
-              });
-              setReviewPostModalOpen(true);
+                businessName: effectiveBusinessName,
+              };
+              setSelectedAiPostForDetail(row);
             }}
             onPostPublished={() => setBoardRefresh((k) => k + 1)}
           />
@@ -6265,12 +6267,14 @@ export default function MarketingScreen() {
           onClose={() => setSelectedAiPostForDetail(null)}
           onDelete={(postToDelete) => {
             setLocalAiPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
+            setBoardRefresh((k) => k + 1);
             setSelectedAiPostForDetail(null);
           }}
           onEditSave={(updated) => {
             setLocalAiPosts((prev) =>
               prev.map((p) => (p.id === updated.id ? { ...p, content: updated.content } : p))
             );
+            setBoardRefresh((k) => k + 1);
             setSelectedAiPostForDetail(null);
           }}
         />

@@ -187,7 +187,7 @@ export function usePillPosts(pill: PostPill, platform?: string) {
     }, [load])
   );
 
-  return { rows, loading, error, reload: load };
+  return { rows, setRows, loading, error, reload: load };
 }
 
 function statusBadge(post: SocialPostRow): {
@@ -637,17 +637,19 @@ export function PostDetailModal({
       <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         {/* ── App Bar Header (Back Arrow, Title "Post", 3-dots Menu) ── */}
         <View style={[styles.postNavHeader, { paddingTop: headerPaddingTop, height: 52 + headerPaddingTop }]}>
-          <Pressable
-            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-            onPress={onClose}
-            style={styles.navIconBtn}
-            accessibilityLabel="Back"
-            accessibilityRole="button"
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Pressable
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              onPress={onClose}
+              style={styles.navIconBtn}
+              accessibilityLabel="Back"
+              accessibilityRole="button"
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+            </Pressable>
 
-          <Text style={styles.navTitle}>Post</Text>
+            <Text style={styles.navTitle}>Post</Text>
+          </View>
 
           <Pressable
             hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
@@ -799,48 +801,34 @@ export function PostDetailModal({
           ) : (
             /* ── VIEW POST MODE (Matching Screenshots 1 & 3) ── */
             <>
-              {/* Full Hero Image */}
+              {/* Full Hero Image (Matching Screenshot - clean, rounded corners, no dark overlay badge) */}
               {media ? (
                 <View style={styles.heroImageWrap}>
                   <Image source={{ uri: media }} style={styles.heroImage} resizeMode="cover" />
-                  {(post.logoUrl || post.businessName) && (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: 14,
-                        left: 14,
-                        backgroundColor: 'rgba(15, 23, 42, 0.82)',
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 18,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 7,
-                        maxWidth: '75%',
-                      }}
-                    >
-                      {post.logoUrl ? (
-                        <Image
-                          source={{ uri: post.logoUrl }}
-                          style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF' }}
-                          resizeMode="contain"
-                        />
-                      ) : (
-                        <MaterialIcons name="storefront" size={16} color="#009F50" />
-                      )}
-                      <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
-                        {post.businessName || 'Verified Business'}
-                      </Text>
-                    </View>
-                  )}
                 </View>
               ) : null}
 
-              <View style={{ paddingHorizontal: 18, paddingTop: 14, gap: 16 }}>
-                {/* Standard Post Badge */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 16 }}>
+                {/* Standard Post / Offer / Event Badge */}
                 <View style={styles.standardPostBadge}>
-                  <MaterialIcons name="description" size={15} color="#9A3412" />
-                  <Text style={styles.standardPostBadgeText}>Standard Post</Text>
+                  <MaterialIcons
+                    name={
+                      post.gbpPostType === 'offer' || post.title?.toLowerCase().includes('offer')
+                        ? 'local-offer'
+                        : post.gbpPostType === 'event' || post.title?.toLowerCase().includes('event')
+                          ? 'event'
+                          : 'article'
+                    }
+                    size={14}
+                    color="#9A3412"
+                  />
+                  <Text style={styles.standardPostBadgeText}>
+                    {post.gbpPostType === 'offer' || post.title?.toLowerCase().includes('offer')
+                      ? 'Offer Post'
+                      : post.gbpPostType === 'event' || post.title?.toLowerCase().includes('event')
+                        ? 'Event Post'
+                        : 'Standard Post'}
+                  </Text>
                 </View>
 
                 {/* Bold SEO Headline (H1) */}
@@ -1176,6 +1164,19 @@ export function PostsBoard({
           onApprove={(p) => void moderate(p, 'approved')}
           onReject={(p) => void moderate(p, 'rejected')}
           onRetry={(p) => void retry(p)}
+          onDelete={(p) => {
+            board.setRows((prev) => (prev ? prev.filter((r) => r.id !== p.id) : null));
+            if (p.id && !p.id.startsWith('ai_post_')) {
+              apiRequest(`/api/social/posts/${p.id}`, { method: 'DELETE' }).catch(() => {});
+            }
+            setInspectPost(null);
+          }}
+          onEditSave={(updatedPost) => {
+            board.setRows((prev) =>
+              prev ? prev.map((r) => (r.id === updatedPost.id ? updatedPost : r)) : null,
+            );
+            setInspectPost(null);
+          }}
         />
       ) : null}
     </View>
@@ -1587,13 +1588,17 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   heroImageWrap: {
-    width: '100%',
-    height: 280,
-    backgroundColor: '#0F172A',
+    marginHorizontal: 16,
+    marginTop: 12,
+    height: 250,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
   },
   heroImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 16,
   },
   standardPostBadge: {
     alignSelf: 'flex-start',

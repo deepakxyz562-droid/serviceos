@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +35,7 @@ interface UpcomingPostsCarouselProps {
   businessCategory?: string;
   defaultWebsiteUrl?: string;
   onPostPublished?: () => void;
+  refreshTrigger?: number;
 }
 
 export function UpcomingPostsCarousel({
@@ -44,6 +45,7 @@ export function UpcomingPostsCarousel({
   businessCategory = '',
   defaultWebsiteUrl = '',
   onPostPublished,
+  refreshTrigger,
 }: UpcomingPostsCarouselProps) {
   const [posts, setPosts] = useState<UpcomingPostItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,53 +53,99 @@ export function UpcomingPostsCarousel({
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedEditPost, setSelectedEditPost] = useState<GeneratedPostData | null>(null);
 
+  const isTech = /software|it|tech|comput|web|app/i.test(businessCategory);
+  const isFarmStay = /resort|farm|hotel|stay|villa|pool/i.test(businessCategory);
+
   // Dynamic fallback posts tailored to business
-  const fallbackPosts: UpcomingPostItem[] = [
-    {
-      id: 'up-1',
-      type: 'Standard Post',
-      scheduledTime: 'Tomorrow, 09:00 AM',
-      headline: `Plan the Perfect Multi-Generational Family Reunion at ${businessName}`,
-      caption: `Planning a getaway from the city's hustle? At ${businessName}, we offer scenic views, serene open spaces, and premium comfort. Book your weekend retreat today!`,
-      imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/salon_spa/salon_spa-001.webp',
-      channels: ['googlebusiness'],
-      status: 'scheduled',
-      ctaAction: 'CALL',
-    },
-    {
-      id: 'up-2',
-      type: 'Offer Post',
-      scheduledTime: 'In 3 days, 11:30 AM',
-      headline: `Exclusive Seasonal Promotion: 20% Off Packages at ${businessName}`,
-      caption: `Upgrade your weekdays with our exclusive promotion. Enjoy peaceful luxury, personalized dining, and refreshing outdoor experiences.`,
-      imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
-      channels: ['googlebusiness'],
-      status: 'scheduled',
-      ctaAction: 'GET_OFFER',
-    },
-    {
-      id: 'up-3',
-      type: 'Event Post',
-      scheduledTime: 'This Saturday, 05:00 PM',
-      headline: `Host Your Celebrations & Private Gatherings With Us`,
-      caption: `Looking for the perfect venue for family reunions, birthdays, or team celebrations? Discover lush lawns, dedicated hospitality, and unforgettable memories at ${businessName}.`,
-      imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/restaurant_dining/restaurant_dining-001.webp',
-      channels: ['googlebusiness'],
-      status: 'scheduled',
-      ctaAction: 'BOOK',
-    },
-    {
-      id: 'up-4',
-      type: 'Standard Post',
-      scheduledTime: 'Next Monday, 09:00 AM',
-      headline: `Fresh Air, Green Lawns & Unmatched Hospitality at ${businessName}`,
-      caption: `Take a breath of fresh air. From relaxing poolside afternoons to starry evening bonfires, discover what makes ${businessName} the top-rated local retreat.`,
-      imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
-      channels: ['googlebusiness'],
-      status: 'scheduled',
-      ctaAction: 'LEARN_MORE',
-    },
-  ];
+  const fallbackPosts: UpcomingPostItem[] = useMemo(() => {
+    if (isTech) {
+      return [
+        {
+          id: 'up-1',
+          type: 'Standard Post',
+          scheduledTime: 'Tomorrow, 09:00 AM',
+          headline: `Smart IT Support & Scalable Solutions for Growing Businesses`,
+          caption: `Looking to automate operations and secure your cloud infrastructure? At ${businessName}, we build robust digital systems designed to accelerate your growth. Contact our expert team today!`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+        {
+          id: 'up-2',
+          type: 'Offer Post',
+          scheduledTime: 'In 3 days, 11:30 AM',
+          headline: `Exclusive Seasonal Promotion: Custom Software Audit at ${businessName}`,
+          caption: `Upgrade your workflows with our end-to-end digital audit. Get actionable recommendations, faster turnaround, and dedicated technical maintenance.`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+        {
+          id: 'up-3',
+          type: 'Event Post',
+          scheduledTime: 'This Saturday, 05:00 PM',
+          headline: `Product Demo & Tech Consultation Session With ${businessName}`,
+          caption: `Join our live walkthrough and discover how modern AI automation tools can cut operational costs by up to 40%. Reserve your slot today.`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-003.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+      ];
+    }
+    if (isFarmStay) {
+      return [
+        {
+          id: 'up-1',
+          type: 'Standard Post',
+          scheduledTime: 'Tomorrow, 09:00 AM',
+          headline: `How clean pool facilities enhance guest comfort and trust at ${businessName}`,
+          caption: `A refreshing swim feels better when the surroundings are clean, comfortable and welcoming. At ${businessName}, we put the focus on what matters: a relaxing setting where guest comfort comes first.`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/salon_spa/salon_spa-001.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+        {
+          id: 'up-2',
+          type: 'Offer Post',
+          scheduledTime: 'In 3 days, 11:30 AM',
+          headline: `Exclusive Seasonal Promotion: 20% Off Packages at ${businessName}`,
+          caption: `Upgrade your weekdays with our exclusive promotion. Enjoy peaceful luxury, personalized hospitality, and refreshing outdoor experiences.`,
+          imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/restaurant_dining/restaurant_dining-001.webp',
+          channels: ['googlebusiness'],
+          status: 'scheduled',
+          ctaAction: 'CALL',
+        },
+      ];
+    }
+    return [
+      {
+        id: 'up-1',
+        type: 'Standard Post',
+        scheduledTime: 'Tomorrow, 09:00 AM',
+        headline: `Trusted Quality & Certified Excellence You Can Rely On at ${businessName}`,
+        caption: `We take pride in delivering top-tier service tailored to your exact needs. Experience high reliability, fast response times, and five-star customer care with ${businessName}.`,
+        imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+        channels: ['googlebusiness'],
+        status: 'scheduled',
+        ctaAction: 'CALL',
+      },
+      {
+        id: 'up-2',
+        type: 'Offer Post',
+        scheduledTime: 'In 3 days, 11:30 AM',
+        headline: `Special Seasonal Offer: Get Started With ${businessName} Today`,
+        caption: `Take advantage of our exclusive seasonal package. Dedicated service, premium quality, and personalized support for your complete peace of mind.`,
+        imageUrl: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-002.webp',
+        channels: ['googlebusiness'],
+        status: 'scheduled',
+        ctaAction: 'CALL',
+      },
+    ];
+  }, [businessName, businessCategory, isTech, isFarmStay]);
 
   const fetchScheduled = async () => {
     try {
@@ -137,7 +185,7 @@ export function UpcomingPostsCarousel({
 
   useEffect(() => {
     void fetchScheduled();
-  }, [businessName]);
+  }, [businessName, refreshTrigger]);
 
   const activePosts = posts.length > 0 ? posts : fallbackPosts;
 
@@ -214,7 +262,16 @@ export function UpcomingPostsCarousel({
         contentContainerStyle={styles.carouselTrack}
       >
         {activePosts.map((post) => (
-          <View key={post.id} style={styles.postCard}>
+          <Pressable
+            key={post.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Open post: ${post.headline}`}
+            onPress={() => handleOpenPost(post)}
+            style={({ pressed }) => [
+              styles.postCard,
+              pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+            ]}
+          >
             {/* Top Badge: Standard Post / Offer Post */}
             <View style={styles.badgeRow}>
               <View style={styles.postTypeBadge}>
@@ -245,15 +302,10 @@ export function UpcomingPostsCarousel({
             <View style={styles.divider} />
 
             {/* View Post Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View post ${post.headline}`}
-              onPress={() => handleOpenPost(post)}
-              style={({ pressed }) => [styles.viewPostBtn, pressed && { opacity: 0.7 }]}
-            >
+            <View style={styles.viewPostBtn}>
               <Text style={styles.viewPostText}>View Post</Text>
-            </Pressable>
-          </View>
+            </View>
+          </Pressable>
         ))}
       </ScrollView>
 

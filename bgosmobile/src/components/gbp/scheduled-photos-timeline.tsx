@@ -74,6 +74,20 @@ export function ScheduledPhotosTimeline({
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<GbpPhoto | null>(null);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  const effectivePhotos = useMemo(
+    () => photos.filter((p) => !deletedIds.has(p.id) && !deletedIds.has(p.postId || '')),
+    [photos, deletedIds],
+  );
+  const effectiveScheduledPhotos = useMemo(
+    () => scheduledPhotos.filter((p) => !deletedIds.has(p.id) && !deletedIds.has(p.postId || '')),
+    [scheduledPhotos, deletedIds],
+  );
+  const effectiveDraftPhotos = useMemo(
+    () => draftPhotos.filter((p) => !deletedIds.has(p.id) && !deletedIds.has(p.postId || '')),
+    [draftPhotos, deletedIds],
+  );
 
   // Ready templates state (Top 50 Matrix)
   const [readyTemplates, setReadyTemplates] = useState<any[]>([]);
@@ -130,11 +144,19 @@ export function ScheduledPhotosTimeline({
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          // Optimistic deletion
+          setDeletedIds((prev) => new Set([...prev, targetId, item.id]));
           setBusyActionId(`del:${targetId}`);
           try {
             await apiRequest(`/api/social/photos?id=${encodeURIComponent(targetId)}`, { method: 'DELETE' });
             await onRefreshNeeded?.();
           } catch (err: unknown) {
+            setDeletedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(targetId);
+              next.delete(item.id);
+              return next;
+            });
             Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not remove item.');
           } finally {
             setBusyActionId(null);
@@ -159,16 +181,16 @@ export function ScheduledPhotosTimeline({
           p.postId === focusedMediaId ||
           p.url === focusedMediaId,
       );
-    const inSched = matchIn(scheduledPhotos);
-    const inLive = matchIn(photos);
-    const inDraft = matchIn(draftPhotos);
+    const inSched = matchIn(effectiveScheduledPhotos);
+    const inLive = matchIn(effectivePhotos);
+    const inDraft = matchIn(effectiveDraftPhotos);
     const found = inSched || inLive || inDraft;
     if (found) {
       setActiveTab(inSched ? 'scheduled' : inLive ? 'uploaded' : 'unposted');
       setPreviewItem(found);
       onClearFocus?.();
     }
-  }, [focusedMediaId, scheduledPhotos, photos, draftPhotos, onClearFocus]);
+  }, [focusedMediaId, effectiveScheduledPhotos, effectivePhotos, effectiveDraftPhotos, onClearFocus]);
 
   const detectedTz = detectDeviceCountryAndTimezone().timeZone;
   const activeTimeZone = timeZone || detectedTz;
@@ -188,20 +210,20 @@ export function ScheduledPhotosTimeline({
   }, [activeLocale, activeTimeZone]);
 
   const galleryPhotos = useMemo(() => {
-    return photos.length > 0 ? photos : [...scheduledPhotos, ...draftPhotos];
-  }, [photos, scheduledPhotos, draftPhotos]);
+    return effectivePhotos.length > 0 ? effectivePhotos : [...effectiveScheduledPhotos, ...effectiveDraftPhotos];
+  }, [effectivePhotos, effectiveScheduledPhotos, effectiveDraftPhotos]);
 
   const tabItems =
     activeTab === 'scheduled'
-      ? scheduledPhotos
+      ? effectiveScheduledPhotos
       : activeTab === 'uploaded'
-        ? photos
-        : draftPhotos;
+        ? effectivePhotos
+        : effectiveDraftPhotos;
 
   const tabs: { key: MediaTabKey; label: string; count: number; icon: React.ComponentProps<typeof MaterialIcons>['name'] }[] = [
-    { key: 'scheduled', label: 'Scheduled', count: scheduledPhotos.length, icon: 'event-available' },
-    { key: 'uploaded', label: 'Uploaded', count: photos.length, icon: 'cloud-done' },
-    { key: 'unposted', label: 'Not Posted', count: draftPhotos.length, icon: 'info-outline' },
+    { key: 'scheduled', label: 'Scheduled', count: effectiveScheduledPhotos.length, icon: 'event-available' },
+    { key: 'uploaded', label: 'Uploaded', count: effectivePhotos.length, icon: 'cloud-done' },
+    { key: 'unposted', label: 'Not Posted', count: effectiveDraftPhotos.length, icon: 'info-outline' },
   ];
 
   const connectionMessage =
@@ -296,7 +318,7 @@ export function ScheduledPhotosTimeline({
         <View>
           <Text style={styles.sectionTitle}>Your Photos &amp; Videos</Text>
           <Text style={styles.sectionSubtitle}>
-            {photos.length} live on Google · {scheduledPhotos.length} scheduled
+            {effectivePhotos.length} live on Google · {effectiveScheduledPhotos.length} scheduled
           </Text>
         </View>
         {galleryPhotos.length > 0 ? (

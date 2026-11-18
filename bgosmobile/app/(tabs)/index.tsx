@@ -1518,7 +1518,7 @@ export default function HomeScreen() {
         onOpenPosts={() => router.push('/(tabs)/marketing')}
         onOpenReviews={() => router.push('/(tabs)/reviews')}
         onOpenSeo={() => setSeoUpdatesSheetOpen(true)}
-        onOpenPosters={() => router.push('/(tabs)/marketing?mode=posters')}
+        onOpenPosters={() => router.push('/photos?mode=studio')}
       />
 
       {/* Four Autonomous AI Marketing Agents Hub */}
@@ -1538,7 +1538,7 @@ export default function HomeScreen() {
         onAddPhotos={() => router.push('/(tabs)/photos')}
         onOpenReviews={() => router.push('/(tabs)/reviews')}
         onOpenPosts={() => router.push('/(tabs)/marketing')}
-        onOpenPosters={() => router.push('/(tabs)/marketing?mode=posters')}
+        onOpenPosters={() => router.push('/photos?mode=studio')}
       />
 
       {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
@@ -1590,13 +1590,13 @@ export default function HomeScreen() {
           lastUpdated: gbpAnalytics.data?.lastUpdated,
           last30Days: perf?.last30Days
             ? {
-                views: perf.last30Days.totalViews,
-                searchImpressions: perf.last30Days.searchImpressions,
-                mapsImpressions: perf.last30Days.mapsImpressions,
-                calls: perf.last30Days.callClicks,
-                directions: perf.last30Days.directionRequests,
-                websiteClicks: perf.last30Days.websiteClicks,
-                bookings: perf.last30Days.bookings,
+                views: (perf.last30Days as any).views ?? perf.last30Days.totalViews ?? 0,
+                searchImpressions: (perf.last30Days as any).searches ?? perf.last30Days.searchImpressions ?? 0,
+                mapsImpressions: perf.last30Days.mapsImpressions ?? 0,
+                calls: (perf.last30Days as any).calls ?? perf.last30Days.callClicks ?? 0,
+                directions: (perf.last30Days as any).directions ?? perf.last30Days.directionRequests ?? 0,
+                websiteClicks: (perf.last30Days as any).website ?? perf.last30Days.websiteClicks ?? 0,
+                bookings: perf.last30Days.bookings ?? 0,
               }
             : null,
           monthlyTrends:

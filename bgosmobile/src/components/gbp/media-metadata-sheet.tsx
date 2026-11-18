@@ -487,6 +487,9 @@ export function MediaMetadataSheet({
 
       if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
         setCelebrationMessage(res?.message || 'Post scheduled successfully for best Google visibility!');
+        try {
+          await onSaved(res?.message || 'Post scheduled successfully for best Google visibility!');
+        } catch {}
         setScheduledCelebration(true);
       } else {
         await onSaved(res?.message || 'Published to Google Business Profile successfully.');
