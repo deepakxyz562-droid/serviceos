@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen, Action, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { PendingUpdateBanner } from '../src/components/gbp/pending-update-banner';
 import type { GbpPlaceResult, StructuredSeoService } from '../src/components/gbp/types';
 
 type KeywordPlanSearchTermsResponse = {
@@ -33,9 +34,9 @@ function formatServiceTitleFromKeyword(keyword: string): string {
 }
 
 function getCharHealth(len: number): { label: string; color: string; bg: string } {
-  if (len === 0) return { label: 'Missing description · target 300–500 chars', color: '#64748B', bg: '#F1F5F9' };
-  if (len < 300) return { label: `${len}/500 chars · add ${300 - len} more for SEO`, color: '#B45309', bg: '#FEF3C7' };
-  if (len <= 500) return { label: `${len}/500 chars · SEO Optimal ✓`, color: '#047857', bg: '#ECFDF5' };
+  if (len === 0) return { label: 'Empty · target 300–500 chars', color: '#64748B', bg: '#F1F5F9' };
+  if (len < 300) return { label: `${len}/500 chars · add ${300 - len} for SEO`, color: '#B45309', bg: '#FEF3C7' };
+  if (len <= 500) return { label: `${len}/500 chars · Optimal SEO ✓`, color: '#047857', bg: '#ECFDF5' };
   return { label: `${len}/500 chars · trim ${len - 500} chars`, color: '#B91C1C', bg: '#FEE2E2' };
 }
 
@@ -53,13 +54,13 @@ export default function ServicesManagementScreen() {
     'My Business';
   const cityLabel = (place?.city || '').trim() || 'Your City';
 
+  const [activeTab, setActiveTab] = useState<'my-services' | 'explore'>('my-services');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [descriptionsByName, setDescriptionsByName] = useState<Record<string, string>>({});
   const [keywordsByName, setKeywordsByName] = useState<Record<string, string>>({});
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [aiSuggested, setAiSuggested] = useState<string[]>([]);
   const [serviceQuery, setServiceQuery] = useState('');
-  const [expandedService, setExpandedService] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [optimizingTarget, setOptimizingTarget] = useState<string | null>(null);
   const [suggestingServices, setSuggestingServices] = useState(false);
@@ -70,6 +71,18 @@ export default function ServicesManagementScreen() {
 
   const autoFetchedKeyRef = useRef<string | null>(null);
   const suggestReqIdRef = useRef(0);
+
+  const handleSafeBack = useCallback(() => {
+    try {
+      if (router.canGoBack?.()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch {
+      router.replace('/(tabs)');
+    }
+  }, [router]);
 
   useEffect(() => {
     if (placeRes.loading && !place) return;
@@ -83,11 +96,9 @@ export default function ServicesManagementScreen() {
 
     if (place?.services && Array.isArray(place.services) && place.services.length > 0) {
       setSelectedServices(place.services);
-      setExpandedService((prev) => prev || place.services?.[0] || null);
     } else if (seoList.length > 0) {
       const names = seoList.map((s) => s.name);
       setSelectedServices(names);
-      setExpandedService((prev) => prev || names[0] || null);
     } else {
       setSelectedServices([]);
     }
@@ -128,7 +139,6 @@ export default function ServicesManagementScreen() {
     [category, businessName],
   );
 
-  // Auto-load authentic category + Search Term suggestions once profile loads (no hardcoded catalog)
   useEffect(() => {
     if (placeRes.loading) return;
     const key = `${category}::${businessName}`;
@@ -137,7 +147,6 @@ export default function ServicesManagementScreen() {
     void fetchDynamicSuggestions('', false);
   }, [placeRes.loading, category, businessName, fetchDynamicSuggestions]);
 
-  // Debounced dynamic search-as-you-type against /api/gbp/services/suggest
   useEffect(() => {
     const cleanQuery = serviceQuery.trim();
     if (placeRes.loading || cleanQuery.length < 2) return;
@@ -150,7 +159,7 @@ export default function ServicesManagementScreen() {
   const searchTerms = useMemo(
     () =>
       Array.isArray(keywordPlanRes.data?.searchTerms)
-        ? keywordPlanRes.data.searchTerms.filter((t) => t?.keyword).slice(0, 8)
+        ? keywordPlanRes.data.searchTerms.filter((t) => t?.keyword).slice(0, 10)
         : [],
     [keywordPlanRes.data?.searchTerms],
   );
@@ -182,7 +191,6 @@ export default function ServicesManagementScreen() {
     if (keyword && keyword.trim()) {
       setKeywordsByName((prev) => (prev[trimmed] ? prev : { ...prev, [trimmed]: keyword.trim() }));
     }
-    setExpandedService(trimmed);
   }
 
   function toggleService(service: string) {
@@ -190,7 +198,6 @@ export default function ServicesManagementScreen() {
       if (prev.includes(service)) {
         return prev.filter((s) => s !== service);
       }
-      setExpandedService(service);
       return [...prev, service];
     });
   }
@@ -198,7 +205,7 @@ export default function ServicesManagementScreen() {
   function confirmRemoveService(service: string) {
     Alert.alert(
       'Remove service?',
-      `Remove "${service}" from your active services? Save or Push to Google afterward to update your live profile and Business Page.`,
+      `Remove "${service}" from your active services?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -207,9 +214,6 @@ export default function ServicesManagementScreen() {
           onPress: () => {
             setSelectedServices((prev) => prev.filter((s) => s !== service));
             setCustomServices((prev) => prev.filter((s) => s !== service));
-            if (expandedService === service) {
-              setExpandedService(null);
-            }
           },
         },
       ],
@@ -223,19 +227,23 @@ export default function ServicesManagementScreen() {
     setCustomInput('');
     setCustomKeyword('');
     setAddCustomModalOpen(false);
+    setActiveTab('my-services');
   }
 
-  async function handleSuggestAiServices() {
-    await fetchDynamicSuggestions(serviceQuery.trim(), true);
-  }
-
-  async function handleOptimizeWithAi(singleServiceName?: string, pushToGoogleAfter = true) {
-    const targets = singleServiceName
-      ? [singleServiceName]
-      : selectedServices;
+  async function handleOptimizeWithAi(singleServiceName?: string, pushToGoogleAfter = false) {
+    const targets = singleServiceName ? [singleServiceName] : selectedServices;
     if (targets.length === 0) {
-      Alert.alert('Select a Service', 'Select at least one service first.');
+      Alert.alert('No Services', 'Please add or select at least one service first.');
       return;
+    }
+
+    const pending = placeRes.data?.place?.pendingGoogleUpdate;
+    if (pending?.status === 'PENDING' || pending?.status === 'VERIFICATION_REQUIRED') {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pending?.label || 'Profile edit'}) is currently under review by Google. To protect your listing, changes will save to draft only.`,
+      );
+      pushToGoogleAfter = false;
     }
 
     setOptimizingTarget(singleServiceName || '__ALL__');
@@ -266,7 +274,6 @@ export default function ServicesManagementScreen() {
       }
       setDescriptionsByName(nextDesc);
       setKeywordsByName(nextKw);
-      if (singleServiceName) setExpandedService(singleServiceName);
 
       await placeRes.refresh();
       const warnNote =
@@ -274,10 +281,10 @@ export default function ServicesManagementScreen() {
           ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
           : '';
       Alert.alert(
-        res.syncedToGoogle ? 'Synced to Google!' : 'Saved to Profile',
+        res.syncedToGoogle ? 'Synced to Google!' : 'AI Description Generated',
         res.syncedToGoogle
-          ? `Generated 300–500 char localized SEO descriptions and synced ${targets.length} service(s) to Google Maps.${warnNote}`
-          : `Generated 300–500 char localized SEO descriptions and saved to your profile.${warnNote}`,
+          ? `Generated localized 300–500 char SEO descriptions for ${targets.length} service(s) and synced to Google.${warnNote}`
+          : `Generated localized 300–500 char SEO descriptions for ${targets.length} service(s). Review and tap Save & Sync below.${warnNote}`,
       );
     } catch (err: unknown) {
       Alert.alert('AI Writer Error', err instanceof Error ? err.message : 'Could not optimize descriptions.');
@@ -287,47 +294,18 @@ export default function ServicesManagementScreen() {
   }
 
   async function handleSave(pushToGoogle: boolean) {
+    const pending = placeRes.data?.place?.pendingGoogleUpdate;
+    if (pushToGoogle && (pending?.status === 'PENDING' || pending?.status === 'VERIFICATION_REQUIRED')) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pending?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicting edits, you cannot submit new changes until the pending update completes.`,
+      );
+      return;
+    }
     setSaving(true);
     try {
-      // Auto-generate 300-500 char localized SEO copy for any service that lacks it before saving
-      const unoptimized = selectedServices.filter(
-        (name) => (descriptionsByName[name] || '').trim().length < 300
-      );
-
       const activeDescriptions = { ...descriptionsByName };
       const activeKeywords = { ...keywordsByName };
-
-      if (unoptimized.length > 0) {
-        try {
-          const optRes = await apiRequest<{
-            services: StructuredSeoService[];
-          }>('/api/gbp/services/optimize', {
-            method: 'POST',
-            body: {
-              services: unoptimized.map((name) => ({
-                name,
-                targetKeyword: activeKeywords[name] || undefined,
-                existingDescription: activeDescriptions[name] || undefined,
-                category,
-              })),
-              save: false,
-            },
-          });
-
-          if (optRes?.services && Array.isArray(optRes.services)) {
-            for (const s of optRes.services) {
-              if (s?.name && s?.description) {
-                activeDescriptions[s.name] = s.description;
-                if (s.targetKeyword) activeKeywords[s.name] = s.targetKeyword;
-              }
-            }
-            setDescriptionsByName(activeDescriptions);
-            setKeywordsByName(activeKeywords);
-          }
-        } catch (genErr) {
-          console.warn('[services-management] Pre-save auto-write notice:', genErr);
-        }
-      }
 
       const structuredPayload: StructuredSeoService[] = selectedServices.map((name) => ({
         name,
@@ -335,6 +313,7 @@ export default function ServicesManagementScreen() {
         targetKeyword: activeKeywords[name] || undefined,
         category,
       }));
+
       const res = await apiRequest<{
         syncedToGoogle?: boolean;
         googleWarnings?: string[];
@@ -360,7 +339,7 @@ export default function ServicesManagementScreen() {
           ? `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) and synced to Google Business Profile.${warningMsg}`
           : `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) to your workspace.${warningMsg}`,
       );
-      router.back();
+      handleSafeBack();
     } catch (err: unknown) {
       Alert.alert('Save Failed', err instanceof Error ? err.message : 'Could not save services.');
     } finally {
@@ -373,620 +352,669 @@ export default function ServicesManagementScreen() {
       title="Services & Local SEO"
       subtitle={`${category} · ${cityLabel}`}
       showBack
-      onBack={() => router.back()}
+      showClose
+      onBack={handleSafeBack}
+      onClose={handleSafeBack}
+      scrollable={false}
     >
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 110, gap: 16 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Top Strategy Prompt + Dynamic Search + Batch AI Optimizer */}
-        <View style={styles.promptCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.categoryHeading}>
-                {rawCategory ? `${category} Services` : 'Your Business Services'}
-              </Text>
-              <Text style={styles.promptSub}>
-                Google ranks listings higher when each service includes a 300–500 character description targeting a real Search Term + {cityLabel}.
-              </Text>
-            </View>
-          </View>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <PendingUpdateBanner
+          pending={placeRes.data?.place?.pendingGoogleUpdate}
+          onRefresh={async () => {
+            await placeRes.refresh();
+          }}
+        />
 
-          <View style={styles.searchBox}>
-            <MaterialIcons name="search" size={18} color="#64748B" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={`Search or generate services for ${rawCategory || 'your business'}...`}
-              placeholderTextColor="#94A3B8"
-              value={serviceQuery}
-              onChangeText={setServiceQuery}
-              returnKeyType="search"
-              onSubmitEditing={() => {
-                if (serviceQuery.trim()) void fetchDynamicSuggestions(serviceQuery.trim(), true);
-              }}
+        {/* ── Segmented Tab Bar ── */}
+        <View style={styles.tabContainer}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'my-services' }}
+            onPress={() => setActiveTab('my-services')}
+            style={[styles.tabButton, activeTab === 'my-services' && styles.tabButtonActive]}
+          >
+            <MaterialIcons
+              name="check-circle-outline"
+              size={17}
+              color={activeTab === 'my-services' ? '#047857' : '#64748B'}
             />
-            {serviceQuery.length > 0 && (
-              <Pressable onPress={() => setServiceQuery('')} hitSlop={8}>
-                <MaterialIcons name="close" size={18} color="#64748B" />
-              </Pressable>
-            )}
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-            <Pressable
-              onPress={handleSuggestAiServices}
-              disabled={suggestingServices}
-              style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.8 : 1 }]}
-            >
-              {suggestingServices ? (
-                <ActivityIndicator size="small" color="#0F172A" />
-              ) : (
-                <MaterialIcons name="auto-awesome" size={16} color="#0F172A" />
-              )}
-              <Text style={styles.secondaryBtnText}>
-                {serviceQuery.trim() ? 'AI Search Ideas' : 'Refresh AI Ideas'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleOptimizeWithAi(undefined, true)}
-              disabled={Boolean(optimizingTarget)}
-              style={({ pressed }) => [styles.primaryAiBtn, { opacity: pressed ? 0.85 : 1 }]}
-            >
-              {optimizingTarget === '__ALL__' ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <MaterialIcons name="bolt" size={16} color="#FFFFFF" />
-              )}
-              <Text style={styles.primaryAiBtnText}>AI Write All &amp; Sync</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Real Google Search Terms -> 1-Tap Service (Video 1 & 4) */}
-        {searchTerms.length > 0 && (
-          <View style={styles.searchTermsCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View>
-                <Text style={styles.searchTermsTitle}>🔥 Google Performance Search Keywords</Text>
-                <Text style={styles.searchTermsHint}>Actual keywords local customers search to find you</Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  let addedCount = 0;
-                  for (const term of searchTerms) {
-                    const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
-                    addOrSelectService(serviceTitle, term.keyword);
-                    addedCount++;
-                  }
-                  Alert.alert(
-                    'Search Keywords Added',
-                    `Added ${addedCount} customer search keywords to your service list. Tap "AI Write All & Sync" to generate localized 300–500 char SEO descriptions for Google.`,
-                  );
-                }}
-                hitSlop={8}
-                style={{
-                  backgroundColor: '#E0F2FE',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 6,
-                }}
-              >
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0369A1' }}>+ Add All</Text>
-              </Pressable>
-            </View>
-            <View style={styles.chipsContainer}>
-              {searchTerms.map((term) => {
-                const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
-                const alreadySelected = selectedServices.some(
-                  (s) => s.toLowerCase() === serviceTitle.toLowerCase(),
-                );
-                return (
-                  <Pressable
-                    key={term.keyword}
-                    accessibilityRole="button"
-                    onPress={() => addOrSelectService(serviceTitle, term.keyword)}
-                    style={({ pressed }) => [
-                      styles.searchTermPill,
-                      alreadySelected && styles.searchTermPillActive,
-                      { opacity: pressed ? 0.75 : 1 },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={alreadySelected ? 'check-circle' : 'trending-up'}
-                      size={14}
-                      color={alreadySelected ? '#047857' : '#0369A1'}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text
-                      style={[
-                        styles.searchTermText,
-                        alreadySelected && { color: '#047857', fontWeight: '700' },
-                      ]}
-                    >
-                      {term.keyword}
-                      {term.count > 0 ? ` (${term.count})` : ''}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* Dynamic Service Pills Grid */}
-        {suggestingServices && visibleServices.length === 0 ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="small" color="#059669" />
-            <Text style={styles.loadingText}>
-              Loading {rawCategory ? `${category} ` : ''}service ideas from AI & Search Terms…
+            <Text style={[styles.tabText, activeTab === 'my-services' && styles.tabTextActive]}>
+              My Services ({selectedServices.length})
             </Text>
-          </View>
-        ) : visibleServices.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <MaterialIcons name="home-repair-service" size={22} color="#64748B" />
-            <Text style={styles.emptyTitle}>
-              {serviceQuery.trim()
-                ? `No matching suggestions for "${serviceQuery.trim()}"`
-                : 'No services saved yet'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {serviceQuery.trim()
-                ? 'Tap below to add it as a service or search AI ideas.'
-                : `Tap Refresh AI Ideas for tailored ${category} services or add a custom service.`}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.chipsContainer}>
-          {visibleServices.map((item) => {
-            const isSelected = selectedServices.includes(item);
-            return (
-              <Pressable
-                key={item}
-                accessibilityRole="button"
-                onPress={() => toggleService(item)}
-                style={({ pressed }) => [
-                  styles.servicePill,
-                  isSelected && styles.servicePillSelected,
-                  { opacity: pressed ? 0.75 : 1 },
-                ]}
-              >
-                <MaterialIcons
-                  name={isSelected ? 'check' : 'add'}
-                  size={16}
-                  color={isSelected ? '#047857' : '#475569'}
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={[styles.servicePillText, isSelected && styles.servicePillTextSelected]}>
-                  {item}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {serviceQuery.trim().length > 0 &&
-            !visibleServices.some((s) => s.toLowerCase() === serviceQuery.trim().toLowerCase()) && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  addOrSelectService(serviceQuery.trim(), serviceQuery.trim().toLowerCase());
-                  setServiceQuery('');
-                }}
-                style={({ pressed }) => [styles.addCustomPill, { opacity: pressed ? 0.75 : 1 }]}
-              >
-                <MaterialIcons name="add" size={16} color="#0B9042" style={{ marginRight: 4 }} />
-                <Text style={styles.addCustomPillText}>Add &ldquo;{serviceQuery.trim()}&rdquo;</Text>
-              </Pressable>
-            )}
+          </Pressable>
 
           <Pressable
-            accessibilityRole="button"
-            onPress={() => setAddCustomModalOpen(true)}
-            style={({ pressed }) => [styles.addCustomPill, { opacity: pressed ? 0.75 : 1 }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'explore' }}
+            onPress={() => setActiveTab('explore')}
+            style={[styles.tabButton, activeTab === 'explore' && styles.tabButtonActive]}
           >
-            <MaterialIcons name="add" size={16} color="#0B9042" style={{ marginRight: 4 }} />
-            <Text style={styles.addCustomPillText}>Add custom service</Text>
+            <MaterialIcons
+              name="add-circle-outline"
+              size={17}
+              color={activeTab === 'explore' ? '#047857' : '#64748B'}
+            />
+            <Text style={[styles.tabText, activeTab === 'explore' && styles.tabTextActive]}>
+              + Explore & Add
+            </Text>
           </Pressable>
         </View>
 
-        {/* SEO Counter Summary */}
-        <View style={styles.counterCard}>
-          <MaterialIcons name="verified" size={18} color="#0284C7" />
-          <Text style={styles.counterText}>
-            <Text style={{ fontWeight: '800' }}>
-              {selectedServices.length} selected · {seoReadyCount}/{selectedServices.length} have optimal 300–500 char SEO descriptions.
-            </Text>{' '}
-            Tap any service below to edit or generate keyword + {cityLabel} copy.
-          </Text>
-        </View>
-
-        {/* Expandable 300–500 Char Localized SEO Editor per Selected Service */}
-        <View style={{ gap: 10 }}>
-          {selectedServices.map((name) => {
-            const desc = descriptionsByName[name] || '';
-            const kw = keywordsByName[name] || '';
-            const isOpen = expandedService === name;
-            const health = getCharHealth(desc.length);
-            const isBusy = optimizingTarget === name;
-
-            return (
-              <View key={name} style={styles.serviceSeoCard}>
-                <View style={styles.serviceSeoHeader}>
-                  <Pressable
-                    onPress={() => setExpandedService(isOpen ? null : name)}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-                  >
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={styles.serviceSeoTitle}>{name}</Text>
-                      <View style={[styles.healthPill, { backgroundColor: health.bg }]}>
-                        <Text style={[styles.healthText, { color: health.color }]}>{health.label}</Text>
-                      </View>
-                    </View>
-                    <MaterialIcons
-                      name={isOpen ? 'expand-less' : 'expand-more'}
-                      size={22}
-                      color="#64748B"
-                    />
-                  </Pressable>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`AI Write description for ${name}`}
-                      onPress={() => handleOptimizeWithAi(name, true)}
-                      disabled={isBusy}
-                      hitSlop={8}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 3,
-                        backgroundColor: '#ECFDF5',
-                        borderWidth: 1,
-                        borderColor: '#A7F3D0',
-                        paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        borderRadius: 8,
-                        opacity: isBusy ? 0.6 : pressed ? 0.7 : 1,
-                      })}
-                    >
-                      {isBusy ? (
-                        <ActivityIndicator size="small" color="#047857" />
-                      ) : (
-                        <MaterialIcons name="auto-awesome" size={13} color="#047857" />
-                      )}
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#047857' }}>AI</Text>
-                    </Pressable>
-
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete ${name}`}
-                      onPress={() => confirmRemoveService(name)}
-                      hitSlop={8}
-                      style={({ pressed }) => ({
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: '#FEF2F2',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.7 : 1,
-                      })}
-                    >
-                      <MaterialIcons name="delete-outline" size={18} color="#DC2626" />
-                    </Pressable>
+        {/* ── Main Tab Content ── */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 100,
+            gap: 14,
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {activeTab === 'my-services' ? (
+            /* ═══════════════════════════════════════════ */
+            /* TAB 1: MY SERVICES (Active & Inline Edit)   */
+            /* ═══════════════════════════════════════════ */
+            selectedServices.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialIcons name="inventory-2" size={36} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Services Added Yet</Text>
+                <Text style={styles.emptySub}>
+                  Add the services {businessName} provides so local customers in {cityLabel} find you on Google Search and Maps.
+                </Text>
+                <Pressable
+                  onPress={() => setActiveTab('explore')}
+                  style={({ pressed }) => [styles.primaryAiBtn, { marginTop: 8, paddingHorizontal: 20, opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <MaterialIcons name="add" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryAiBtnText}>Explore & Add Services</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ gap: 14 }}>
+                {/* Header Summary + AI Polish All */}
+                <View style={styles.summaryBar}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.summaryTitle}>Active Services</Text>
+                    <Text style={styles.summarySub}>
+                      {seoReadyCount}/{selectedServices.length} SEO optimized (300–500 chars)
+                    </Text>
                   </View>
+                  <Pressable
+                    onPress={() => handleOptimizeWithAi(undefined, false)}
+                    disabled={Boolean(optimizingTarget)}
+                    style={({ pressed }) => [
+                      styles.aiPolishAllBtn,
+                      { opacity: Boolean(optimizingTarget) ? 0.6 : pressed ? 0.8 : 1 },
+                    ]}
+                  >
+                    {optimizingTarget === '__ALL__' ? (
+                      <ActivityIndicator size="small" color="#047857" />
+                    ) : (
+                      <MaterialIcons name="auto-awesome" size={15} color="#047857" />
+                    )}
+                    <Text style={styles.aiPolishAllText}>AI Polish All</Text>
+                  </Pressable>
                 </View>
 
-                {isOpen && (
-                  <View style={{ gap: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                    <View style={{ gap: 4 }}>
-                      <Text style={styles.fieldLabel}>Target Search Keyword</Text>
-                      <TextInput
-                        style={styles.smallInput}
-                        placeholder={`e.g. ${name.toLowerCase()} in ${cityLabel}`}
-                        placeholderTextColor="#94A3B8"
-                        value={kw}
-                        onChangeText={(val) =>
-                          setKeywordsByName((prev) => ({ ...prev, [name]: val }))
-                        }
-                      />
-                    </View>
+                {/* Direct Visible Service Cards with Inline Descriptions */}
+                {selectedServices.map((name) => {
+                  const desc = descriptionsByName[name] || '';
+                  const kw = keywordsByName[name] || '';
+                  const health = getCharHealth(desc.length);
+                  const isBusy = optimizingTarget === name;
 
-                    <View style={{ gap: 4 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={styles.fieldLabel}>Localized Description (300–500 chars)</Text>
-                        <Pressable
-                          onPress={() => handleOptimizeWithAi(name, true)}
-                          disabled={isBusy}
-                          style={styles.miniAiBtn}
-                        >
-                          {isBusy ? (
-                            <ActivityIndicator size="small" color="#047857" />
-                          ) : (
-                            <MaterialIcons name="auto-awesome" size={14} color="#047857" />
-                          )}
-                          <Text style={styles.miniAiBtnText}>AI Write &amp; Sync</Text>
-                        </Pressable>
+                  return (
+                    <View key={name} style={styles.serviceCard}>
+                      {/* Service Header Row */}
+                      <View style={styles.serviceCardHeader}>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={styles.serviceName}>{name}</Text>
+                          {kw ? (
+                            <View style={styles.keywordTag}>
+                              <MaterialIcons name="saved-search" size={13} color="#0284C7" />
+                              <Text style={styles.keywordTagText} numberOfLines={1}>
+                                {kw}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`AI Polish ${name}`}
+                            onPress={() => handleOptimizeWithAi(name, false)}
+                            disabled={isBusy}
+                            hitSlop={8}
+                            style={({ pressed }) => [
+                              styles.singleAiBtn,
+                              { opacity: isBusy ? 0.6 : pressed ? 0.75 : 1 },
+                            ]}
+                          >
+                            {isBusy ? (
+                              <ActivityIndicator size="small" color="#047857" />
+                            ) : (
+                              <MaterialIcons name="auto-awesome" size={13} color="#047857" />
+                            )}
+                            <Text style={styles.singleAiBtnText}>AI Polish</Text>
+                          </Pressable>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${name}`}
+                            onPress={() => confirmRemoveService(name)}
+                            hitSlop={8}
+                            style={({ pressed }) => [
+                              styles.deleteBtn,
+                              { opacity: pressed ? 0.65 : 1 },
+                            ]}
+                          >
+                            <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
+                          </Pressable>
+                        </View>
                       </View>
 
-                      <TextInput
-                        style={styles.descInput}
-                        multiline
-                        maxLength={500}
-                        textAlignVertical="top"
-                        placeholder={`Describe ${name} for customers searching in ${cityLabel} (aim for 300–500 characters)...`}
-                        placeholderTextColor="#94A3B8"
-                        value={desc}
-                        onChangeText={(val) =>
-                          setDescriptionsByName((prev) => ({ ...prev, [name]: val }))
+                      {/* Character Count Health Indicator */}
+                      <View style={[styles.healthBadge, { backgroundColor: health.bg }]}>
+                        <MaterialIcons
+                          name={desc.length >= 300 && desc.length <= 500 ? 'check-circle' : 'info'}
+                          size={13}
+                          color={health.color}
+                        />
+                        <Text style={[styles.healthBadgeText, { color: health.color }]}>
+                          {health.label}
+                        </Text>
+                      </View>
+
+                      {/* Direct Inline Editable Description */}
+                      <View style={{ gap: 4 }}>
+                        <Text style={styles.inputLabel}>Service Description (Google Local SEO)</Text>
+                        <TextInput
+                          style={styles.inlineDescInput}
+                          multiline
+                          maxLength={500}
+                          textAlignVertical="top"
+                          placeholder={`Describe ${name} targeting ${kw || category} in ${cityLabel}... (aim for 300–500 characters for top Google ranking)`}
+                          placeholderTextColor="#94A3B8"
+                          value={desc}
+                          onChangeText={(val) =>
+                            setDescriptionsByName((prev) => ({ ...prev, [name]: val }))
+                          }
+                        />
+                      </View>
+
+                      {/* Target Keyword Tweaker */}
+                      <View style={{ gap: 4 }}>
+                        <Text style={styles.inputLabel}>Target Search Keyword</Text>
+                        <TextInput
+                          style={styles.keywordInput}
+                          placeholder={`e.g. ${name.toLowerCase()} in ${cityLabel}`}
+                          placeholderTextColor="#94A3B8"
+                          value={kw}
+                          onChangeText={(val) =>
+                            setKeywordsByName((prev) => ({ ...prev, [name]: val }))
+                          }
+                        />
+                      </View>
+
+                      {/* Booking link shortcut */}
+                      <View style={styles.cardFooter}>
+                        <Pressable
+                          onPress={() => router.push('/booking-page?tab=services')}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <MaterialIcons name="payments" size={13} color="#0284C7" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7' }}>
+                            Configure Price & Duration
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )
+          ) : (
+            /* ═══════════════════════════════════════════ */
+            /* TAB 2: EXPLORE & ADD (Keywords & Ideas)     */
+            /* ═══════════════════════════════════════════ */
+            <View style={{ gap: 14 }}>
+              {/* Search Bar + Dynamic Fetch */}
+              <View style={styles.searchCard}>
+                <View style={styles.searchBox}>
+                  <MaterialIcons name="search" size={19} color="#64748B" />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder={`Search or add services for ${rawCategory || 'your business'}...`}
+                    placeholderTextColor="#94A3B8"
+                    value={serviceQuery}
+                    onChangeText={setServiceQuery}
+                    returnKeyType="search"
+                    onSubmitEditing={() => {
+                      if (serviceQuery.trim()) void fetchDynamicSuggestions(serviceQuery.trim(), true);
+                    }}
+                  />
+                  {serviceQuery.length > 0 && (
+                    <Pressable onPress={() => setServiceQuery('')} hitSlop={8}>
+                      <MaterialIcons name="close" size={18} color="#64748B" />
+                    </Pressable>
+                  )}
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <Pressable
+                    onPress={() => void fetchDynamicSuggestions(serviceQuery.trim(), true)}
+                    disabled={suggestingServices}
+                    style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.8 : 1 }]}
+                  >
+                    {suggestingServices ? (
+                      <ActivityIndicator size="small" color="#0F172A" />
+                    ) : (
+                      <MaterialIcons name="auto-awesome" size={15} color="#0F172A" />
+                    )}
+                    <Text style={styles.secondaryBtnText}>
+                      {serviceQuery.trim() ? 'AI Search Ideas' : 'Refresh AI Ideas'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setAddCustomModalOpen(true)}
+                    style={({ pressed }) => [styles.addCustomBtn, { opacity: pressed ? 0.8 : 1 }]}
+                  >
+                    <MaterialIcons name="add" size={16} color="#0B9042" />
+                    <Text style={styles.addCustomBtnText}>Custom Service</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Real Google Search Terms Section */}
+              {searchTerms.length > 0 && (
+                <View style={styles.searchTermsCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.searchTermsTitle}>🔥 Google Performance Search Keywords</Text>
+                      <Text style={styles.searchTermsHint}>
+                        Real search terms customers in {cityLabel} use to find {category}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => {
+                        let addedCount = 0;
+                        for (const term of searchTerms) {
+                          const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
+                          addOrSelectService(serviceTitle, term.keyword);
+                          addedCount++;
                         }
-                      />
-                    </View>
-
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 }}>
-                      <Pressable
-                        onPress={() => router.push('/booking-page?tab=services')}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                      >
-                        <MaterialIcons name="payments" size={14} color="#0284C7" />
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7' }}>
-                          Set Price & Duration
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => confirmRemoveService(name)}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                      >
-                        <MaterialIcons name="delete-outline" size={15} color="#DC2626" />
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>
-                          Remove Service
-                        </Text>
-                      </Pressable>
-                    </View>
+                        setActiveTab('my-services');
+                        Alert.alert(
+                          'Keywords Added',
+                          `Added ${addedCount} customer search keywords to My Services with pre-filled target keywords.`,
+                        );
+                      }}
+                      hitSlop={8}
+                      style={styles.addAllBtn}
+                    >
+                      <Text style={styles.addAllBtnText}>+ Add All</Text>
+                    </Pressable>
                   </View>
-                )}
+                  <View style={styles.chipsContainer}>
+                    {searchTerms.map((term) => {
+                      const serviceTitle = formatServiceTitleFromKeyword(term.keyword);
+                      const alreadySelected = selectedServices.some(
+                        (s) => s.toLowerCase() === serviceTitle.toLowerCase(),
+                      );
+                      return (
+                        <Pressable
+                          key={term.keyword}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            addOrSelectService(serviceTitle, term.keyword);
+                            setActiveTab('my-services');
+                          }}
+                          style={({ pressed }) => [
+                            styles.searchTermPill,
+                            alreadySelected && styles.searchTermPillActive,
+                            { opacity: pressed ? 0.75 : 1 },
+                          ]}
+                        >
+                          <MaterialIcons
+                            name={alreadySelected ? 'check-circle' : 'trending-up'}
+                            size={14}
+                            color={alreadySelected ? '#047857' : '#0369A1'}
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text
+                            style={[
+                              styles.searchTermText,
+                              alreadySelected && { color: '#047857', fontWeight: '700' },
+                            ]}
+                          >
+                            {term.keyword}
+                            {term.count > 0 ? ` (${term.count})` : ''}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Suggestions Grid */}
+              <View style={styles.suggestionsContainer}>
+                <Text style={styles.sectionHeading}>
+                  {rawCategory ? `Popular for ${category}` : 'Recommended Services'}
+                </Text>
+                {suggestingServices && visibleServices.length === 0 ? (
+                  <View style={styles.loadingBox}>
+                    <ActivityIndicator size="small" color="#059669" />
+                    <Text style={styles.loadingText}>Fetching AI service suggestions…</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.chipsContainer}>
+                  {visibleServices.map((item) => {
+                    const isSelected = selectedServices.includes(item);
+                    return (
+                      <Pressable
+                        key={item}
+                        accessibilityRole="button"
+                        onPress={() => toggleService(item)}
+                        style={({ pressed }) => [
+                          styles.servicePill,
+                          isSelected && styles.servicePillSelected,
+                          { opacity: pressed ? 0.75 : 1 },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={isSelected ? 'check' : 'add'}
+                          size={15}
+                          color={isSelected ? '#047857' : '#475569'}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={[
+                            styles.servicePillText,
+                            isSelected && styles.servicePillTextSelected,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
-            );
-          })}
-        </View>
-      </ScrollView>
+            </View>
+          )}
+        </ScrollView>
 
-      {/* Bottom Save & Sync Bar */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <Action
-              label={saving ? 'Saving…' : 'Save Draft'}
-              secondary
-              disabled={saving}
-              onPress={() => handleSave(false)}
-            />
-          </View>
-          <View style={{ flex: 1.4 }}>
-            <Action
-              label={saving ? 'Syncing…' : 'Save & Push to Google'}
-              disabled={saving}
-              onPress={() => handleSave(true)}
-            />
+        {/* ── Sticky Bottom Action Bar ── */}
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Action
+                label={saving ? 'Saving…' : 'Save Draft'}
+                secondary
+                disabled={saving}
+                onPress={() => handleSave(false)}
+              />
+            </View>
+            <View style={{ flex: 1.4 }}>
+              <Action
+                label={saving ? 'Syncing…' : 'Save & Sync to Google'}
+                disabled={saving}
+                onPress={() => handleSave(true)}
+              />
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Modal: Add Custom Service */}
-      <Modal
-        visible={addCustomModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAddCustomModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>
-                Add Service From Search Term
+        {/* ── Modal: Add Custom Service ── */}
+        <Modal
+          visible={addCustomModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAddCustomModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
+                  Add Custom Service
+                </Text>
+                <Pressable onPress={() => setAddCustomModalOpen(false)} hitSlop={8}>
+                  <MaterialIcons name="close" size={20} color={colors.muted} />
+                </Pressable>
+              </View>
+
+              <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
+                Enter a service provided by {businessName} and optionally the Google Search Term you want it to rank for.
               </Text>
-              <Pressable onPress={() => setAddCustomModalOpen(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
 
-            <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
-              Enter a service offered by {businessName} and optionally the exact Google Search Term you want it to rank for.
-            </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Service name (e.g. Birthday Party Decoration)"
+                placeholderTextColor="#94A3B8"
+                value={customInput}
+                onChangeText={setCustomInput}
+                autoFocus
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Service name (e.g. Custom Mobile App Development)"
-              placeholderTextColor="#94A3B8"
-              value={customInput}
-              onChangeText={setCustomInput}
-              autoFocus
-            />
+              <TextInput
+                style={styles.modalInput}
+                placeholder={`Target search keyword (e.g. party decorator ${cityLabel})`}
+                placeholderTextColor="#94A3B8"
+                value={customKeyword}
+                onChangeText={setCustomKeyword}
+              />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder={`Target search term (optional, e.g. app developer ${cityLabel})`}
-              placeholderTextColor="#94A3B8"
-              value={customKeyword}
-              onChangeText={setCustomKeyword}
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-              <View style={{ flex: 1 }}>
-                <Action label="Cancel" secondary onPress={() => setAddCustomModalOpen(false)} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Action label="Add" onPress={handleAddCustomService} />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                <View style={{ flex: 1 }}>
+                  <Action label="Cancel" secondary onPress={() => setAddCustomModalOpen(false)} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Action label="Add Service" onPress={handleAddCustomService} />
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  promptCard: {
+  tabContainer: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  tabButtonActive: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#047857',
+    fontWeight: '800',
+  },
+  summaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 6,
   },
-  categoryHeading: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  promptSub: { fontSize: 13, color: '#64748B', lineHeight: 18 },
-  secondaryBtn: {
-    flex: 1,
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  summarySub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  aiPolishAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  secondaryBtnText: { fontSize: 12, fontWeight: '700', color: '#0F172A' },
-  primaryAiBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    borderColor: '#A7F3D0',
     paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: '#059669',
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  primaryAiBtnText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  servicePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  aiPolishAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  serviceCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  servicePillSelected: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
-  servicePillText: { fontSize: 13, fontWeight: '600', color: '#334155' },
-  servicePillTextSelected: { fontWeight: '700', color: '#047857' },
-  addCustomPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    borderStyle: 'dashed',
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  addCustomPillText: { fontSize: 13, fontWeight: '700', color: '#0B9042' },
-  counterCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#E2E8F0',
+    gap: 10,
   },
-  counterText: { flex: 1, fontSize: 12.5, color: '#0369A1', lineHeight: 18 },
-  serviceSeoCard: {
+  serviceCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  serviceName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  keywordTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  keywordTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  singleAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  singleAiBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  deleteBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  healthBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  inputLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  inlineDescInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    minHeight: 85,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  keywordInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12.5,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+  },
+  searchCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     gap: 8,
-  },
-  serviceSeoHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  serviceSeoTitle: { fontSize: 14.5, fontWeight: '800', color: '#0F172A' },
-  healthPill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-  healthText: { fontSize: 11, fontWeight: '700' },
-  fieldLabel: { fontSize: 11.5, fontWeight: '700', color: '#475569' },
-  smallInput: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-  },
-  miniAiBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  miniAiBtnText: { fontSize: 11.5, fontWeight: '700', color: '#047857' },
-  descInput: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 13,
-    lineHeight: 19,
-    minHeight: 110,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    gap: 12,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -1000,6 +1028,39 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     paddingVertical: 2,
   },
+  secondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  secondaryBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  addCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  addCustomBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0B9042',
+  },
   searchTermsCard: {
     backgroundColor: '#F8FAFC',
     borderRadius: 14,
@@ -1008,8 +1069,32 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     gap: 10,
   },
-  searchTermsTitle: { fontSize: 13.5, fontWeight: '800', color: '#0F172A' },
-  searchTermsHint: { fontSize: 11.5, fontWeight: '600', color: '#0369A1' },
+  searchTermsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  searchTermsHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  addAllBtn: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  addAllBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   searchTermPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1024,29 +1109,127 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
     borderColor: '#86EFAC',
   },
-  searchTermText: { fontSize: 12, fontWeight: '600', color: '#0369A1' },
-  loadingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  searchTermText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0369A1',
+  },
+  suggestionsContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    gap: 10,
   },
-  loadingText: { flex: 1, fontSize: 13, color: '#475569', fontWeight: '600' },
+  sectionHeading: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  servicePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  servicePillSelected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  servicePillText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  servicePillTextSelected: {
+    fontWeight: '700',
+    color: '#047857',
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  loadingText: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
   emptyCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 18,
+    padding: 24,
     borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#CBD5E1',
-    gap: 6,
+    borderColor: '#E2E8F0',
+    gap: 8,
+    marginTop: 10,
   },
-  emptyTitle: { fontSize: 14, fontWeight: '800', color: '#334155', textAlign: 'center' },
-  emptySub: { fontSize: 12.5, color: '#64748B', textAlign: 'center', lineHeight: 18 },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  emptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  primaryAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#059669',
+  },
+  primaryAiBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13.5,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
 });

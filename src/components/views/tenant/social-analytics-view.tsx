@@ -12,6 +12,9 @@ import {
   Loader2,
   RefreshCw,
   BarChart3,
+  Facebook,
+  ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -149,6 +152,14 @@ function ChartSkeleton() {
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+interface AccountInfo {
+  id: string;
+  platform: string;
+  accountId: string;
+  accountName: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 interface AnalyticsData {
   totals: {
     posts: number;
@@ -172,9 +183,26 @@ interface AnalyticsData {
       mediaUrls: string[];
       publishedAt: string;
       platforms: string[];
+      publishTargets?: Array<{
+        platform: string;
+        permalink?: string;
+        externalPostId?: string;
+      }>;
     };
     totalEngagement: number;
+    metrics?: Record<
+      string,
+      {
+        likes: number;
+        comments: number;
+        shares: number;
+        impressions: number;
+        reach: number;
+        clicks: number;
+      }
+    >;
   }>;
+  accounts?: AccountInfo[];
 }
 
 // ─── KPI card ──────────────────────────────────────────────────────────────
@@ -206,8 +234,20 @@ function KpiCard({ label, value, icon: Icon, hint }: KpiProps) {
 export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [selectedPageId, setSelectedPageId] = useState<string>('all');
+
+  const facebookAccounts = useMemo(
+    () => data?.accounts?.filter((a) => a.platform === 'facebook') || [],
+    [data],
+  );
+
+  const selectedPage = useMemo(() => {
+    if (selectedPageId === 'all') return facebookAccounts[0] || null;
+    return facebookAccounts.find((a) => a.accountId === selectedPageId) || facebookAccounts[0] || null;
+  }, [facebookAccounts, selectedPageId]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -228,6 +268,25 @@ export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean }
       setIsLoading(false);
     }
   }, [dateRange, platformFilter]);
+
+  const handleSyncMetrics = async () => {
+    setIsSyncing(true);
+    try {
+      toast.loading('Fetching live engagement from Meta Graph API...');
+      const res = await authFetch('/api/social/metrics-sync', { method: 'POST' });
+      if (res.ok) {
+        const json = await res.json();
+        toast.success(`Updated engagement metrics for ${json.processedTargets || 0} post(s)!`);
+        await load();
+      } else {
+        toast.error('Failed to sync metrics from Meta API');
+      }
+    } catch {
+      toast.error('Network error during metrics sync');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -454,11 +513,90 @@ export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean }
         </CardContent>
       </Card>
 
+      {/* Facebook Page Content & Engagement Section (pages_read_engagement compliance) */}
+      {facebookAccounts.length > 0 && (platformFilter === 'all' || platformFilter === 'facebook') && (
+        <Card className="border-blue-200 dark:border-blue-900/60 bg-gradient-to-br from-blue-50/50 via-background to-background dark:from-blue-950/20">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                  <Facebook className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base font-semibold">
+                      Facebook Page Engagement & Content
+                    </CardTitle>
+                    <Badge variant="outline" className="border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300 text-[10px] h-5">
+                      Live Graph API
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-xs mt-0.5">
+                    Select a Facebook Page to view published Page content and real-time audience engagement (likes, comments, reach).
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {facebookAccounts.length > 1 && (
+                  <Select value={selectedPageId} onValueChange={setSelectedPageId}>
+                    <SelectTrigger className="w-48 h-8 text-xs bg-background">
+                      <SelectValue placeholder="Select Facebook Page" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Connected Pages</SelectItem>
+                      {facebookAccounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.accountId}>
+                          {acc.accountName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <Button
+                  size="sm"
+                  className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5 font-medium"
+                  onClick={handleSyncMetrics}
+                  disabled={isSyncing || isLoading}
+                >
+                  <RefreshCw className={cn('size-3.5', isSyncing && 'animate-spin')} />
+                  {isSyncing ? 'Fetching from Meta…' : 'Sync Page Engagement'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Page Identity Display */}
+            {selectedPage ? (
+              <div className="mt-3 p-3 rounded-xl bg-blue-100/70 dark:bg-blue-900/30 border border-blue-200/80 dark:border-blue-800 flex flex-wrap items-center justify-between gap-2 text-xs text-blue-950 dark:text-blue-100">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="font-bold">Active Page:</span>
+                  <span className="font-semibold underline decoration-blue-400">{selectedPage.accountName}</span>
+                  <span className="text-muted-foreground font-mono text-[11px] bg-background/60 px-1.5 py-0.5 rounded">
+                    Page ID: {selectedPage.accountId}
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  Authorization: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active & Scoped</span>
+                </span>
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Connect a Facebook Page in the Accounts tab to view Page-level engagement and posts.
+              </div>
+            )}
+          </CardHeader>
+        </Card>
+      )}
+
       {/* Top posts */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Top performing posts</CardTitle>
-          <CardDescription>Sorted by total engagement (likes + comments + shares).</CardDescription>
+          <CardTitle className="text-base">Top performing posts & Page Content</CardTitle>
+          <CardDescription>
+            Live engagement metrics (likes, comments, reach, impressions) retrieved from Meta.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
@@ -478,12 +616,12 @@ export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean }
               </div>
             ) : (
               data.topPosts.map((tp, idx) => (
-                <div key={tp.post.id} className="p-3 flex gap-3 hover:bg-muted/30">
-                  <div className="text-lg font-bold text-muted-foreground w-6 text-center">
+                <div key={tp.post.id} className="p-3.5 flex flex-col sm:flex-row gap-3 hover:bg-muted/30 transition-colors">
+                  <div className="text-lg font-bold text-muted-foreground w-6 text-center shrink-0">
                     {idx + 1}
                   </div>
                   {tp.post.mediaUrls[0] && (
-                    <div className="size-12 rounded border overflow-hidden bg-muted shrink-0">
+                    <div className="size-14 rounded-lg border overflow-hidden bg-muted shrink-0">
                       <img
                         src={tp.post.mediaUrls[0]}
                         alt=""
@@ -491,22 +629,61 @@ export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean }
                       />
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="line-clamp-2 text-sm">{tp.post.content}</div>
-                    <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="text-sm font-medium leading-snug">{tp.post.content}</div>
+                    <div className="flex flex-wrap items-center gap-2">
                       {tp.post.platforms.map((p) => (
-                        <Badge key={p} variant="secondary" className="text-xs capitalize">
+                        <Badge key={p} variant="secondary" className="text-[11px] capitalize">
                           {p}
                         </Badge>
                       ))}
                       <span className="text-xs text-muted-foreground">
                         {new Date(tp.post.publishedAt).toLocaleDateString()}
                       </span>
+
+                      {/* Rendered engagement metrics breakdown */}
+                      {tp.metrics &&
+                        Object.entries(tp.metrics).map(([plat, m]) => (
+                          <div
+                            key={plat}
+                            className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/60 px-2 py-0.5 rounded-md"
+                          >
+                            <span className="capitalize font-semibold text-foreground">{plat}:</span>
+                            <span>👍 {m.likes} likes</span>
+                            <span>💬 {m.comments} comments</span>
+                            <span>🔁 {m.shares} shares</span>
+                            {m.reach > 0 && <span>👥 {m.reach} reach</span>}
+                            {m.impressions > 0 && <span>👁️ {m.impressions} impr</span>}
+                          </div>
+                        ))}
+
+                      {/* Direct links to view the live post */}
+                      {Array.isArray(tp.post.publishTargets) &&
+                        tp.post.publishTargets.map((target, tIdx) => {
+                          const url =
+                            target.permalink ||
+                            (target.platform === 'facebook' && target.externalPostId
+                              ? `https://www.facebook.com/${target.externalPostId}`
+                              : null);
+                          if (!url) return null;
+                          return (
+                            <a
+                              key={tIdx}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline ml-1"
+                            >
+                              <span>View on {target.platform === 'facebook' ? 'Facebook' : target.platform === 'instagram' ? 'Instagram' : target.platform}</span>
+                              <ExternalLink className="size-3" />
+                            </a>
+                          );
+                        })}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold">{formatNumber(tp.totalEngagement)}</div>
-                    <div className="text-xs text-muted-foreground">engagements</div>
+                  <div className="text-right shrink-0 sm:self-center">
+                    <div className="text-base font-bold">{formatNumber(tp.totalEngagement)}</div>
+                    <div className="text-[11px] text-muted-foreground">total engagements</div>
                   </div>
                 </div>
               ))

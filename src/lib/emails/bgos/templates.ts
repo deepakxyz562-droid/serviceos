@@ -21,7 +21,8 @@ export type BgosEmailKey =
   | 'bgos_post_trial_winback_14d'
   | 'bgos_promo_broadcast'
   | 'bgos_weekly_digest'
-  | 'bgos_daily_action_checklist';
+  | 'bgos_daily_action_checklist'
+  | 'bgos_gbp_update_pending';
 
 export interface RenderedBgosEmail {
   subject: string;
@@ -980,6 +981,113 @@ Here is your daily action checklist to keep ${biz} winning nearby customers on G
    Open Business Dashboard: ${dashboardUrl}
 
 Unsubscribe: {{unsubscribe_url}}`;
+
+  return { subject, html, text };
+}
+
+// ─── 15. Google Business Profile Update Pending / Verification Needed ───────
+
+export function renderBgosGbpUpdatePendingEmail(params: {
+  businessName: string;
+  updateLabel: string;
+  updateType: string;
+  requiresVerification?: boolean;
+  googleVerificationUrl?: string;
+  appUrl?: string;
+}): RenderedBgosEmail {
+  const appUrl = resolveBgosBaseUrl(params.appUrl);
+  const biz = (params.businessName || 'your business').trim();
+  const label = params.updateLabel || 'Profile Update';
+  const requiresVerification = Boolean(params.requiresVerification);
+  const verifyUrl = params.googleVerificationUrl || 'https://business.google.com/';
+
+  const subject = requiresVerification
+    ? `[Action Required] Verify your Google Business Profile update for ${biz}`
+    : `[Google Business Profile] Your update for ${biz} is being processed by Google`;
+
+  const preheader = requiresVerification
+    ? `Google requires manual confirmation before your changes go live on Google Maps.`
+    : `Your ${label} has been submitted to Google and is currently under review.`;
+
+  const headline = requiresVerification
+    ? 'Verification Required by Google'
+    : 'Google Business Profile Update Submitted';
+
+  const subheadline = requiresVerification
+    ? `Google has placed your recent changes on hold pending manual verification.`
+    : `Your update "${label}" was received by Google and is under review.`;
+
+  const bodyHtml = `
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:20px;">
+      <p style="margin:0;font-weight:700;color:#b45309;font-size:15px;">
+        ${requiresVerification ? '⚠️ Manual Step Required on Google' : '⏳ Review in Progress by Google'}
+      </p>
+      <p style="margin:6px 0 0;font-size:13px;color:#78350f;line-height:1.5;">
+        ${
+          requiresVerification
+            ? `Google flagged this update for security or location verification. You must confirm this change directly in the Google Business Profile manager before it appears on Google Maps.`
+            : `Google typically reviews business edits within 15 minutes to 24–48 hours. To prevent conflicting edits, new submissions in BGOS are temporarily paused until Google completes processing.`
+        }
+      </p>
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e2e8f0;margin-bottom:20px;">
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#64748b;width:35%;">Business:</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#0f172a;">${escapeHtml(biz)}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#64748b;">Update Type:</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:600;color:#0f172a;">${escapeHtml(label)}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;font-size:13px;color:#64748b;">Status:</td>
+        <td style="padding:6px 0;font-size:14px;font-weight:700;color:${requiresVerification ? '#dc2626' : '#d97706'};">
+          ${requiresVerification ? 'Verification Required' : 'Under Review by Google'}
+        </td>
+      </tr>
+    </table>
+
+    ${
+      requiresVerification
+        ? `
+        <p style="margin:0 0 16px;">Please click below to open Google Business Profile and complete the required verification:</p>
+        ${renderPrimaryButton('Verify on Google Business Profile', verifyUrl, '#2563eb')}
+      `
+        : `
+        <p style="margin:0 0 16px;">You can track status and manage your business from the BGOS dashboard:</p>
+        ${renderPrimaryButton('Open BGOS Dashboard', appUrl, '#009F50')}
+      `
+    }
+
+    <p style="margin:20px 0 0;font-size:12px;color:#64748b;line-height:1.5;">
+      Note: While this update is pending, any duplicate submission attempts in the BGOS mobile app will remain locked to protect your listing from accidental suspension.
+    </p>
+  `;
+
+  const html = renderBgosEmailShell({
+    title: subject,
+    preheader,
+    eyebrow: 'Google Business Profile',
+    headline,
+    subheadline,
+    appUrl,
+    includeUnsubscribe: false,
+    bodyHtml,
+  });
+
+  const text = `${headline} — ${biz}
+
+Update: ${label}
+Status: ${requiresVerification ? 'Verification Required by Google' : 'Under Review by Google'}
+
+${
+  requiresVerification
+    ? `Google requires manual confirmation for this update.\nVerify on Google: ${verifyUrl}`
+    : `Your update is being processed by Google (typically 15 minutes to 48 hours).\nDashboard: ${appUrl}`
+}
+
+Note: To protect your listing, new submissions in BGOS are locked until Google completes this review.`;
 
   return { subject, html, text };
 }

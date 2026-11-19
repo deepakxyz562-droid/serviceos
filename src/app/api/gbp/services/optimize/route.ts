@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { getTenantSeoContext } from '@/lib/gbp/seo-context';
 import { generateLocalizedServiceDescriptions } from '@/lib/gbp/service-optimizer';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
+import {
+  setPendingGoogleUpdate,
+  checkAndEnforcePendingLock,
+  type PendingGoogleUpdate,
+} from '@/lib/gbp/pending-update';
+import { sendBgosGbpUpdatePendingEmail } from '@/lib/emails/bgos/sender';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +70,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (body.pushToGoogle) {
+      const currentTenant = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      const lockCheck = checkAndEnforcePendingLock(currentTenant?.settingsJson);
+      if (lockCheck.locked) {
+        return NextResponse.json(
+          {
+            error: lockCheck.reason,
+            locked: true,
+            pending: lockCheck.pending,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const result = await generateLocalizedServiceDescriptions({
       tenantId: user.tenantId,
       services: servicesInput,
@@ -70,6 +95,24 @@ export async function POST(request: NextRequest) {
       pushToGoogle: Boolean(body.pushToGoogle),
       locationId: typeof body.locationId === 'string' ? body.locationId : undefined,
     });
+
+    if (result.syncedToGoogle) {
+      const newPending: PendingGoogleUpdate = {
+        status: 'PENDING',
+        type: 'services',
+        label: 'Optimized Services',
+        submittedAt: new Date().toISOString(),
+        targetFields: ['serviceItems'],
+        hasPendingEdits: true,
+      };
+      await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+      sendBgosGbpUpdatePendingEmail({
+        tenantId: user.tenantId,
+        updateLabel: 'Optimized Services',
+        updateType: 'services',
+        requiresVerification: false,
+      }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
+    }
 
     if (body.save || body.pushToGoogle) {
       invalidateBootstrapCache(user.tenantId);

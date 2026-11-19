@@ -17,6 +17,13 @@ import {
   resolveTenantPublicUrls,
 } from '@/lib/gbp/place-actions-sync';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
+import {
+  getPendingGoogleUpdate,
+  setPendingGoogleUpdate,
+  checkAndEnforcePendingLock,
+  type PendingGoogleUpdate,
+} from '@/lib/gbp/pending-update';
+import { sendBgosGbpUpdatePendingEmail } from '@/lib/emails/bgos/sender';
 
 export const dynamic = 'force-dynamic';
 
@@ -769,6 +776,33 @@ export async function POST(request: NextRequest) {
     const action = String(body?.action || '');
     const segment = String(body?.segment || '');
 
+    const GOOGLE_WRITE_ACTIONS = new Set([
+      'update_booking_button',
+      'update_whatsapp_chat',
+      'create_service_from_term',
+      'save_services',
+      'update_business_info',
+      'auto_write_all_services',
+    ]);
+
+    if (GOOGLE_WRITE_ACTIONS.has(action)) {
+      const tenantForLock = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      const lockCheck = checkAndEnforcePendingLock(tenantForLock?.settingsJson);
+      if (lockCheck.locked) {
+        return NextResponse.json(
+          {
+            error: lockCheck.reason,
+            locked: true,
+            pending: lockCheck.pending,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     // ─── 1. Segmented Bulk Approval ───────────────────────────────────────────
     if (action === 'approve_segment') {
       if (segment === 'posts') {
@@ -1044,6 +1078,24 @@ export async function POST(request: NextRequest) {
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
       });
 
+      if (svcRes.syncedToGoogle) {
+        const newPending: PendingGoogleUpdate = {
+          status: 'PENDING',
+          type: 'services',
+          label: `Service: ${serviceName}`,
+          submittedAt: new Date().toISOString(),
+          targetFields: ['serviceItems'],
+          hasPendingEdits: true,
+        };
+        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+        sendBgosGbpUpdatePendingEmail({
+          tenantId: user.tenantId,
+          updateLabel: `Service: ${serviceName}`,
+          updateType: 'services',
+          requiresVerification: false,
+        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
+      }
+
       invalidateBootstrapCache(user.tenantId);
 
       return NextResponse.json({
@@ -1185,6 +1237,24 @@ export async function POST(request: NextRequest) {
         googleWarnings.push(err instanceof Error ? err.message : 'Google WhatsApp sync notice');
       }
 
+      if (syncedToGoogle) {
+        const newPending: PendingGoogleUpdate = {
+          status: 'PENDING',
+          type: 'whatsapp',
+          label: 'WhatsApp Chat Button',
+          submittedAt: new Date().toISOString(),
+          targetFields: ['attributes/url_whatsapp'],
+          hasPendingEdits: true,
+        };
+        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+        sendBgosGbpUpdatePendingEmail({
+          tenantId: user.tenantId,
+          updateLabel: 'WhatsApp Chat Button',
+          updateType: 'whatsapp',
+          requiresVerification: false,
+        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
+      }
+
       invalidateBootstrapCache(user.tenantId);
 
       return NextResponse.json({
@@ -1244,11 +1314,30 @@ export async function POST(request: NextRequest) {
         includeAppointment: true,
       }).catch(() => null);
 
+      const syncedToGoogle = Boolean(syncRes?.syncedActions?.includes('APPOINTMENT'));
+      if (syncedToGoogle) {
+        const newPending: PendingGoogleUpdate = {
+          status: 'PENDING',
+          type: 'booking',
+          label: 'Booking / Appointment Link',
+          submittedAt: new Date().toISOString(),
+          targetFields: ['placeActions/APPOINTMENT'],
+          hasPendingEdits: true,
+        };
+        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+        sendBgosGbpUpdatePendingEmail({
+          tenantId: user.tenantId,
+          updateLabel: 'Booking / Appointment Link',
+          updateType: 'booking',
+          requiresVerification: false,
+        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
+      }
+
       return NextResponse.json({
         success: true,
         bookingUrl: selectedBookingUrl,
-        syncedToGoogle: Boolean(syncRes?.syncedActions?.includes('APPOINTMENT')),
-        message: syncRes?.syncedActions?.includes('APPOINTMENT')
+        syncedToGoogle,
+        message: syncedToGoogle
           ? `Booking button synced to Google Maps (${selectedBookingUrl}).`
           : `Booking URL saved (${selectedBookingUrl}).`,
       });
@@ -1263,6 +1352,25 @@ export async function POST(request: NextRequest) {
         pushToGoogle: body?.pushToGoogle !== false,
         locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
       });
+
+      if (svcRes.syncedToGoogle) {
+        const newPending: PendingGoogleUpdate = {
+          status: 'PENDING',
+          type: 'services',
+          label: 'Google Profile Services',
+          submittedAt: new Date().toISOString(),
+          targetFields: ['serviceItems'],
+          hasPendingEdits: true,
+        };
+        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+        sendBgosGbpUpdatePendingEmail({
+          tenantId: user.tenantId,
+          updateLabel: 'Google Profile Services',
+          updateType: 'services',
+          requiresVerification: false,
+        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
+      }
+
       invalidateBootstrapCache(user.tenantId);
       return NextResponse.json({
         success: true,

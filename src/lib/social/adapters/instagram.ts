@@ -261,7 +261,17 @@ const instagramAdapter: PlatformAdapter = {
       throw new Error('[instagram adapter] media_publish returned no ID');
     }
 
-    return { externalPostId: publishRes.id };
+    let permalink: string | undefined;
+    try {
+      const mediaInfo = await graphFetch<{ permalink?: string }>(
+        `${GRAPH_API_BASE}/${publishRes.id}?fields=permalink&access_token=${account.accessToken}`,
+      );
+      if (mediaInfo?.permalink) {
+        permalink = mediaInfo.permalink;
+      }
+    } catch {}
+
+    return { externalPostId: publishRes.id, permalink };
   },
 
   /**

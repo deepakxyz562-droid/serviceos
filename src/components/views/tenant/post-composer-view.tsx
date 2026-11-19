@@ -26,6 +26,7 @@ import {
   LayoutTemplate,
   CheckCircle2,
   Share2,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -200,7 +201,16 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
   // Submit
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [publishResult, setPublishResult] = useState<{ status: string; failureReason?: string | null } | null>(null);
+  const [publishResult, setPublishResult] = useState<{
+    status: string;
+    failureReason?: string | null;
+    publishTargets?: Array<{
+      platform: string;
+      permalink?: string;
+      externalPostId?: string;
+      status: string;
+    }>;
+  } | null>(null);
 
   // ── Load connected accounts ──
   const loadAccounts = useCallback(async () => {
@@ -1248,13 +1258,45 @@ export function PostComposerView({ embedded = false }: { embedded?: boolean } = 
               )}
 
               {publishResult && publishResult.status === 'published' && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 space-y-1">
-                  <div className="font-bold flex items-center gap-1">
-                    <CheckCircle2 className="size-3.5" /> Published Successfully
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 space-y-2">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    Published Successfully!
                   </div>
-                  <div className="text-[11px]">
-                    Your post is now live across your selected channels!
+                  <div className="text-[11px] leading-relaxed">
+                    Your post is now live across your selected channels.
                   </div>
+                  {Array.isArray(publishResult.publishTargets) && (
+                    <div className="pt-1 flex flex-wrap gap-1.5">
+                      {publishResult.publishTargets.map((target, idx) => {
+                        if (target.status !== 'published') return null;
+                        const url =
+                          target.permalink ||
+                          (target.platform === 'facebook' && target.externalPostId
+                            ? `https://www.facebook.com/${target.externalPostId}`
+                            : null);
+                        if (!url) return null;
+                        const label =
+                          target.platform === 'facebook'
+                            ? 'Facebook'
+                            : target.platform === 'instagram'
+                            ? 'Instagram'
+                            : target.platform;
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 hover:text-emerald-950 dark:hover:text-white bg-emerald-100/80 dark:bg-emerald-900/60 px-2 py-0.5 rounded-md border border-emerald-300 dark:border-emerald-700 transition-colors"
+                          >
+                            <span>Open on {label}</span>
+                            <ExternalLink className="size-3" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -205,7 +205,14 @@ const facebookAdapter: PlatformAdapter = {
         }
 
         const externalPostId = `${pageId}_${videoRes.id}`;
-        return { externalPostId };
+        let permalink = `https://www.facebook.com/${externalPostId}`;
+        try {
+          const postInfo = await graphFetch<{ permalink_url?: string }>(
+            `${GRAPH_API_BASE}/${externalPostId}?fields=permalink_url&access_token=${account.accessToken}`,
+          );
+          if (postInfo?.permalink_url) permalink = postInfo.permalink_url;
+        } catch {}
+        return { externalPostId, permalink };
       }
 
       // Photo post via /{pageId}/photos
@@ -253,7 +260,14 @@ const facebookAdapter: PlatformAdapter = {
       // photoId. If only photoId is returned, we synthesize the composite
       // form so callers can treat both shapes uniformly.
       const externalPostId = photoRes.post_id || `${pageId}_${photoRes.id}`;
-      return { externalPostId };
+      let permalink = `https://www.facebook.com/${externalPostId}`;
+      try {
+        const postInfo = await graphFetch<{ permalink_url?: string }>(
+          `${GRAPH_API_BASE}/${externalPostId}?fields=permalink_url&access_token=${account.accessToken}`,
+        );
+        if (postInfo?.permalink_url) permalink = postInfo.permalink_url;
+      } catch {}
+      return { externalPostId, permalink };
     }
 
     // ─── Text + optional link post ───
@@ -279,7 +293,14 @@ const facebookAdapter: PlatformAdapter = {
     if (!feedRes.id) {
       throw new Error('[facebook adapter] Graph API returned no post ID');
     }
-    return { externalPostId: feedRes.id };
+    let permalink = `https://www.facebook.com/${feedRes.id}`;
+    try {
+      const postInfo = await graphFetch<{ permalink_url?: string }>(
+        `${GRAPH_API_BASE}/${feedRes.id}?fields=permalink_url&access_token=${account.accessToken}`,
+      );
+      if (postInfo?.permalink_url) permalink = postInfo.permalink_url;
+    } catch {}
+    return { externalPostId: feedRes.id, permalink };
   },
 
   /**

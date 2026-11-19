@@ -26,6 +26,7 @@ import { AiAgentUpdatesSheet } from '../../src/components/gbp/ai-agent-updates-s
 import { QuickAddCustomerModal } from '../../src/components/gbp/quick-add-customer-modal';
 import { TutorialVideoModal, type TutorialVideoId } from '../../src/components/gbp/tutorial-video-modal';
 import { GrowthActionSheet, type AutopilotGrowthActionItem, type RoadmapPhase } from '../../src/components/gbp/growth-action-sheet';
+import { PendingUpdateBanner } from '../../src/components/gbp/pending-update-banner';
 import type { AnalyticsResult, GbpPlaceResult } from '../../src/components/gbp/types';
 import type { BgosConversation, BgosWorkspace } from '../../src/types/bgos-contracts';
 
@@ -1486,6 +1487,11 @@ export default function HomeScreen() {
         retry={refresh}
       />
 
+      <PendingUpdateBanner
+        pending={gbpPlace.data?.place?.pendingGoogleUpdate}
+        onRefresh={refresh}
+      />
+
       {/* Marketing Score — unified 3-slide carousel (Gauge, Growth line chart, Marketing tracker) */}
       <MarketingScoreCard
         res={marketingScore}
@@ -1970,6 +1976,7 @@ export default function HomeScreen() {
         visible={growthModalOpen}
         onClose={() => setGrowthModalOpen(false)}
         growthData={growthActions.data}
+        pendingUpdate={gbpPlace.data?.place?.pendingGoogleUpdate}
         onRefresh={async () => {
           await Promise.allSettled([growthActions.refresh(), gbpPlace.refresh(), workspace.refresh()]);
         }}

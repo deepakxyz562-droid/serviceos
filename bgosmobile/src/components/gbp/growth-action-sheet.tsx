@@ -14,6 +14,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, ui } from '../ui';
 import { TutorialVideoModal } from './tutorial-video-modal';
+import { PendingUpdateBanner } from './pending-update-banner';
+import type { PendingGoogleUpdate } from './types';
 import { apiRequest } from '../../lib/api';
 
 export interface AutopilotGrowthActionItem {
@@ -148,6 +150,7 @@ export interface GrowthActionSheetProps {
       };
     };
   } | null;
+  pendingUpdate?: PendingGoogleUpdate | null;
   onRefresh: () => Promise<void> | void;
 }
 
@@ -155,9 +158,11 @@ export function GrowthActionSheet({
   visible,
   onClose,
   growthData,
+  pendingUpdate,
   onRefresh,
 }: GrowthActionSheetProps) {
   const router = useRouter();
+  const isLocked = pendingUpdate?.status === 'PENDING' || pendingUpdate?.status === 'VERIFICATION_REQUIRED';
   const [activeTab, setActiveTab] = useState<'actions' | 'roadmap' | 'approvals' | 'audit'>('actions');
   const [approving, setApproving] = useState<string | null>(null);
   const [tutorialModalVisible, setTutorialModalVisible] = useState(false);
@@ -355,6 +360,13 @@ export function GrowthActionSheet({
   };
 
   const handleCreateServiceFromTerm = async (term: GrowthSegmentSearchDemand) => {
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pendingUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicts, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     setApproving(`term_${term.keyword}`);
     try {
       const res = await apiRequest<{ success: boolean; message?: string }>('/api/gbp/growth-actions', {
@@ -399,6 +411,13 @@ export function GrowthActionSheet({
   };
 
   const handleSaveWhatsapp = async () => {
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pendingUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicts, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     if (!whatsappPhone.trim()) return;
     setSavingWhatsapp(true);
     try {
@@ -417,6 +436,13 @@ export function GrowthActionSheet({
   };
 
   const handleSaveBooking = async () => {
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pendingUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicts, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     setSavingBooking(true);
     try {
       const res = await apiRequest<{ success: boolean; bookingUrl: string; syncedToGoogle: boolean; message: string }>('/api/gbp/growth-actions', {
@@ -439,6 +465,13 @@ export function GrowthActionSheet({
   };
 
   const handleAutoWriteAllServices = async (actionId?: string) => {
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${pendingUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicts, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     const key = actionId || 'auto_write_all_services';
     setApproving(key);
     try {
@@ -849,6 +882,9 @@ export function GrowthActionSheet({
 
           {/* TAB CONTENT SCROLLVIEW */}
           <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            {pendingUpdate && (
+              <PendingUpdateBanner pending={pendingUpdate} onRefresh={onRefresh} />
+            )}
             {/* 1. RECOMMENDED ACTIONS TAB */}
             {activeTab === 'actions' && (
               <View style={{ gap: 12 }}>

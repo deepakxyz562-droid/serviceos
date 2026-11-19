@@ -97,6 +97,8 @@ export function Screen({
   headerIcon,
   showBack,
   onBack,
+  showClose,
+  onClose,
   customHeader,
   stickyHeader,
   extraTopPadding = 0,
@@ -114,6 +116,8 @@ export function Screen({
   headerIcon?: React.ComponentProps<typeof MaterialIcons>['name'];
   showBack?: boolean;
   onBack?: () => void;
+  showClose?: boolean;
+  onClose?: () => void;
   customHeader?: React.ReactNode;
   stickyHeader?: React.ReactNode;
   extraTopPadding?: number;
@@ -129,7 +133,15 @@ export function Screen({
 
   function handleBack() {
     if (onBack) {
-      onBack();
+      try {
+        if (router.canGoBack?.()) {
+          onBack();
+        } else {
+          router.replace('/(tabs)');
+        }
+      } catch {
+        router.replace('/(tabs)');
+      }
     } else if (router.canGoBack?.()) {
       router.back();
     } else {
@@ -137,10 +149,9 @@ export function Screen({
     }
   }
 
-  // Ensure top clearance is NEVER cut off by punch holes, camera notches, or mobile top edges
-  const androidStatus = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0;
-  const minTopInset = Platform.OS === 'android' ? androidStatus + 10 : (Platform.OS === 'ios' ? 44 : 20);
-  const effectiveTopPadding = Math.max(insets.top, minTopInset) + extraTopPadding;
+  // Ensure top clearance fits naturally without artificial excessive top gaps
+  const androidStatus = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
+  const effectiveTopPadding = Math.max(insets.top, androidStatus) + extraTopPadding;
 
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
   const floatingClearance = floatingAction ? 60 : 0;
@@ -170,15 +181,35 @@ export function Screen({
         ) : null}
 
         {title ? (
-          <Text accessibilityRole="header" numberOfLines={1} style={ui.navTitle}>
-            {title}
-          </Text>
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <Text accessibilityRole="header" numberOfLines={1} style={ui.navTitle}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B', fontWeight: '500', marginTop: -1 }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         ) : (
           <Brand />
         )}
       </View>
 
-      {rightAction ? <View style={ui.navBarRight}>{rightAction}</View> : null}
+      <View style={ui.navBarRight}>
+        {rightAction ? rightAction : null}
+        {showClose ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={onClose || handleBack}
+            style={({ pressed }) => [ui.navBackBtn, { opacity: pressed ? 0.65 : 1 }]}
+          >
+            <MaterialIcons name="close" size={20} color={colors.ink} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   ) : null;
 
@@ -219,14 +250,18 @@ export function Screen({
               }
             >
               {customHeader ? customHeader : null}
-              {!customHeader && subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
+              {!hasPinnedNav && subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
               <View style={ui.stack}>{children}</View>
             </ScrollView>
           ) : (
-            <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 12 }}>
+            <View style={{ flex: 1 }}>
               {customHeader ? customHeader : null}
-              {!customHeader && subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : null}
-              <View style={{ flex: 1, paddingBottom: bottomInset }}>{children}</View>
+              {!hasPinnedNav && subtitle ? (
+                <View style={{ paddingHorizontal: 16 }}>
+                  <Text style={ui.subtitle}>{subtitle}</Text>
+                </View>
+              ) : null}
+              <View style={{ flex: 1 }}>{children}</View>
             </View>
           )}
 
@@ -655,13 +690,13 @@ export const ui = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EEF2F6',
-    minHeight: 56,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
   navBarLeft: {
     flex: 1,
@@ -672,12 +707,14 @@ export const ui = StyleSheet.create({
   },
   navBarRight: {
     flexShrink: 0,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   navBackBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -694,10 +731,10 @@ export const ui = StyleSheet.create({
     justifyContent: 'center',
   },
   navTitle: {
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.ink,
-    letterSpacing: -0.35,
+    letterSpacing: -0.3,
     flexShrink: 1,
   },
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },

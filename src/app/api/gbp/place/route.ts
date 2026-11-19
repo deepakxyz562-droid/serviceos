@@ -19,6 +19,13 @@ import {
   finalizeLocalizedServiceDescription,
   type StructuredSeoService,
 } from '@/lib/gbp/seo-context';
+import {
+  getPendingGoogleUpdate,
+  setPendingGoogleUpdate,
+  checkAndEnforcePendingLock,
+  type PendingGoogleUpdate,
+} from '@/lib/gbp/pending-update';
+import { sendBgosGbpUpdatePendingEmail } from '@/lib/emails/bgos/sender';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 
 export const dynamic = 'force-dynamic';
@@ -551,6 +558,18 @@ export async function GET(request: NextRequest) {
             )}`
           : null);
 
+    let pendingGoogleUpdate = getPendingGoogleUpdate(tenant.settingsJson);
+    if (pendingGoogleUpdate && pendingGoogleUpdate.status === 'PENDING') {
+      if (placeDetails && (placeDetails as any).metadata && (placeDetails as any).metadata.hasPendingEdits === false) {
+        pendingGoogleUpdate = {
+          ...pendingGoogleUpdate,
+          status: 'COMPLETED',
+          hasPendingEdits: false,
+        };
+        await setPendingGoogleUpdate(user.tenantId, pendingGoogleUpdate).catch(() => {});
+      }
+    }
+
     const connectedPayload = {
       isConnected: true,
       connectionState,
@@ -594,6 +613,7 @@ export async function GET(request: NextRequest) {
         attributes: tenantSettings.attributes || {},
         specialHours: tenantSettings.specialHours || [],
         moreHours: tenantSettings.moreHours || {},
+        pendingGoogleUpdate: pendingGoogleUpdate || null,
       },
       metrics: {
         totalViews,
@@ -640,6 +660,26 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+
+    // If pushing live to Google, enforce pending lock to prevent duplicate concurrent submissions
+    if (body.pushToGoogle === true) {
+      const tenantForLock = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { settingsJson: true },
+      });
+      const lockCheck = checkAndEnforcePendingLock(tenantForLock?.settingsJson);
+      if (lockCheck.locked) {
+        return NextResponse.json(
+          {
+            error: lockCheck.reason,
+            locked: true,
+            pending: lockCheck.pending,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
 
     if (typeof body.title === 'string' && body.title.trim()) {
@@ -894,6 +934,28 @@ export async function PATCH(request: NextRequest) {
         }
       } catch (gErr: unknown) {
         googleWarnings.push(gErr instanceof Error ? gErr.message : 'Google Business sync notice');
+      }
+
+      if (syncedToGoogle) {
+        const hasVerificationWarning = googleWarnings.some((w) =>
+          /verif|voice\s*of\s*merchant|permission|suspended/i.test(w),
+        );
+        const newPending: PendingGoogleUpdate = {
+          status: hasVerificationWarning ? 'VERIFICATION_REQUIRED' : 'PENDING',
+          type: 'profile',
+          label: 'Profile Details & Services',
+          submittedAt: new Date().toISOString(),
+          targetFields: appliedMasks,
+          hasPendingEdits: true,
+          notes: googleWarnings.length > 0 ? googleWarnings.join(', ') : undefined,
+        };
+        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
+        sendBgosGbpUpdatePendingEmail({
+          tenantId: user.tenantId,
+          updateLabel: 'Profile Details & Services',
+          updateType: 'profile',
+          requiresVerification: hasVerificationWarning,
+        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
       }
     }
 

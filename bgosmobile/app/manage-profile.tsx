@@ -23,6 +23,7 @@ import { apiRequest } from '../src/lib/api';
 import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
 import { extractCityOrLocality } from '../src/lib/address';
 import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
+import { PendingUpdateBanner } from '../src/components/gbp/pending-update-banner';
 import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
@@ -224,6 +225,14 @@ export default function ManageGoogleProfileScreen() {
   }
 
   async function handleSaveProfileService() {
+    const isLocked = place?.pendingGoogleUpdate?.status === 'PENDING' || place?.pendingGoogleUpdate?.status === 'VERIFICATION_REQUIRED';
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${place?.pendingGoogleUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     const cleanName = svcName.trim();
     const priceNum = Number(svcPrice || 0);
     const durationNum = Number(svcDuration || 60);
@@ -370,6 +379,14 @@ export default function ManageGoogleProfileScreen() {
   }
 
   async function handleSaveRegularHours() {
+    const isLocked = place?.pendingGoogleUpdate?.status === 'PENDING' || place?.pendingGoogleUpdate?.status === 'VERIFICATION_REQUIRED';
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${place?.pendingGoogleUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     for (const day of BUSINESS_DAYS) {
       const row = hoursState[day];
       if (!row?.open) continue;
@@ -459,6 +476,14 @@ export default function ManageGoogleProfileScreen() {
   }
 
   async function handleSaveBasics() {
+    const isLocked = place?.pendingGoogleUpdate?.status === 'PENDING' || place?.pendingGoogleUpdate?.status === 'VERIFICATION_REQUIRED';
+    if (isLocked) {
+      Alert.alert(
+        'Update in Progress',
+        `A previous Google update (${place?.pendingGoogleUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing, new submissions are locked until this completes.`,
+      );
+      return;
+    }
     setSavingBasics(true);
     try {
       const addCats = editAdditionalCategories
@@ -647,6 +672,12 @@ export default function ManageGoogleProfileScreen() {
         contentContainerStyle={{ paddingBottom: 40, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
+        <PendingUpdateBanner
+          pending={place?.pendingGoogleUpdate}
+          onRefresh={async () => {
+            await placeRes.refresh();
+          }}
+        />
         {/* ── 1. Hero Profile Card ─────────────────────────────── */}
         <Card style={styles.heroCard}>
           {/* Top Banner Accent */}

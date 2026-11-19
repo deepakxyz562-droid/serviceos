@@ -137,6 +137,17 @@ export type GbpConnectionState =
   | 'reconnect_required'
   | 'not_connected';
 
+export type PendingGoogleUpdate = {
+  status: 'IDLE' | 'PENDING' | 'VERIFICATION_REQUIRED' | 'COMPLETED' | 'REJECTED';
+  type: 'profile' | 'services' | 'booking' | 'whatsapp' | 'hours' | 'general';
+  label: string;
+  submittedAt: string;
+  targetFields?: string[];
+  googleVerificationUrl?: string;
+  notes?: string;
+  hasPendingEdits?: boolean;
+};
+
 export type GbpPlaceResult = {
   isConnected: boolean;
   connectionState?: GbpConnectionState;
@@ -175,6 +186,7 @@ export type GbpPlaceResult = {
     attributes?: Record<string, string[]>;
     specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
     moreHours?: Record<string, string>;
+    pendingGoogleUpdate?: PendingGoogleUpdate | null;
   } | null;
   tenantFallback?: {
     name?: string;

@@ -24,6 +24,7 @@ import {
   renderBgosVerificationEmail,
   renderBgosWelcomeEmail,
   renderBgosDailyActionChecklistEmail,
+  renderBgosGbpUpdatePendingEmail,
   resolveBgosBaseUrl,
 } from './templates';
 
@@ -578,4 +579,77 @@ export async function sendBgosDailyActionChecklistEmail(params: {
   return res.success
     ? { sent: true, messageId: res.messageId }
     : { sent: false, error: res.error || 'Failed to send BGOS daily action checklist email' };
+}
+
+/**
+ * Dispatch an email to the business owner when an update is submitted to Google
+ * and is currently under review or requires manual verification on Google.
+ */
+export async function sendBgosGbpUpdatePendingEmail(params: {
+  tenantId: string;
+  updateLabel: string;
+  updateType: string;
+  requiresVerification?: boolean;
+  googleVerificationUrl?: string;
+  appUrl?: string;
+}): Promise<BgosSendOutcome> {
+  const tenant = await db.tenant.findUnique({
+    where: { id: params.tenantId },
+    select: {
+      name: true,
+      brandProfile: { select: { businessName: true } },
+      users: {
+        where: { role: 'owner' },
+        select: { email: true, name: true },
+        take: 1,
+      },
+    },
+  });
+
+  const owner = tenant?.users[0];
+  const targetEmail = owner?.email;
+  if (!targetEmail || isSyntheticPlaceholderEmail(targetEmail)) {
+    return { sent: false, skipped: true, reason: 'no_valid_owner_email' };
+  }
+
+  const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'Your Business';
+  const baseUrl = resolveBgosBaseUrl(params.appUrl);
+
+  const rendered = renderBgosGbpUpdatePendingEmail({
+    businessName,
+    updateLabel: params.updateLabel,
+    updateType: params.updateType,
+    requiresVerification: params.requiresVerification,
+    googleVerificationUrl: params.googleVerificationUrl,
+    appUrl: baseUrl,
+  });
+
+  const res = await sendEmail({
+    to: targetEmail.trim(),
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    usageType: 'transactional',
+    platformMarketing: false,
+    tenantId: params.tenantId,
+    skipTenantQuota: true,
+    trackingBaseUrl: baseUrl || DEFAULT_BGOS_URL,
+    recipientSource: 'bgos_gbp_update_pending',
+  });
+
+  await logBgosEmailDispatch({
+    tenantId: params.tenantId,
+    recipient: targetEmail,
+    recipientName: owner?.name || businessName,
+    subject: rendered.subject,
+    emailKey: 'bgos_gbp_update_pending',
+    status: res.success ? 'sent' : 'failed',
+    messageId: res.messageId,
+    providerUsed: res.providerUsed,
+    error: res.error,
+  });
+
+  return res.success
+    ? { sent: true, messageId: res.messageId }
+    : { sent: false, error: res.error || 'Failed to send GBP update pending email' };
 }

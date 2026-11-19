@@ -189,24 +189,79 @@ export async function GET(request: NextRequest) {
     }
     const trend = Array.from(trendMap.entries()).map(([date, v]) => ({ date, ...v }));
 
-    // ─── Top posts (by total engagement) ─────────────────────────────────
+    // ─── Connected accounts (for Page/Account selection & identity display) ────
+    const accounts = await db.socialAccount.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        platform: true,
+        accountId: true,
+        accountName: true,
+        metadata: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const parsedAccounts = accounts.map((acc) => {
+      let meta: Record<string, unknown> | null = null;
+      if (acc.metadata) {
+        try {
+          meta = JSON.parse(acc.metadata);
+        } catch {}
+      }
+      return {
+        id: acc.id,
+        platform: acc.platform,
+        accountId: acc.accountId,
+        accountName: acc.accountName,
+        metadata: meta,
+      };
+    });
+
+    // ─── Top posts (by total engagement) with full metrics breakdown ──────
     const postEngagement = new Map<
       string,
-      { post: (typeof posts)[number]; totalEngagement: number }
+      {
+        post: (typeof posts)[number];
+        totalEngagement: number;
+        metrics: Record<
+          string,
+          {
+            likes: number;
+            comments: number;
+            shares: number;
+            impressions: number;
+            reach: number;
+            clicks: number;
+          }
+        >;
+      }
     >();
     for (const post of posts) {
-      postEngagement.set(post.id, { post, totalEngagement: 0 });
+      postEngagement.set(post.id, { post, totalEngagement: 0, metrics: {} });
     }
     for (const m of latestMetrics) {
       const entry = postEngagement.get(m.socialPostId);
       if (entry) {
         entry.totalEngagement += m.likes + m.comments + m.shares;
+        entry.metrics[m.platform] = {
+          likes: m.likes,
+          comments: m.comments,
+          shares: m.shares,
+          impressions: m.impressions,
+          reach: m.reach,
+          clicks: m.clicks,
+        };
       }
     }
     const topPosts = Array.from(postEngagement.values())
       .sort((a, b) => b.totalEngagement - a.totalEngagement)
-      .slice(0, 10)
-      .map(({ post, totalEngagement }) => ({
+      .slice(0, 15)
+      .map(({ post, totalEngagement, metrics }) => ({
         post: {
           id: post.id,
           content: post.content,
@@ -215,8 +270,10 @@ export async function GET(request: NextRequest) {
           platforms: Array.from(
             new Set(parseTargets(post.publishTargets).map((t) => t.platform)),
           ),
+          publishTargets: parseTargets(post.publishTargets),
         },
         totalEngagement,
+        metrics,
       }));
 
     return NextResponse.json({
@@ -230,6 +287,7 @@ export async function GET(request: NextRequest) {
       byPlatform,
       trend,
       topPosts,
+      accounts: parsedAccounts,
     });
   } catch (error) {
     console.error('[api/social/analytics] GET error:', error);
