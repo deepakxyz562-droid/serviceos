@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
           supportSubject: `AI Image Generation Issue: ${businessName}`,
           supportMailto,
         },
-        { status: 502 },
+        { status: 200 },
       );
     }
 

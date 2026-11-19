@@ -125,7 +125,7 @@ describe('Business Image Generation & Visual Pool Resilience', () => {
     }
   });
 
-  it('returns structured 502 error with support contact when generation produces no assets without using silent fallbacks', async () => {
+  it('returns structured 200 payload with success: false and support contact when generation produces no assets without using silent fallbacks', async () => {
     const originalVitest = process.env.VITEST;
     const originalNodeEnv = process.env.NODE_ENV;
     delete process.env.VITEST;
@@ -144,7 +144,7 @@ describe('Business Image Generation & Visual Pool Resilience', () => {
       });
 
       const res = await POST(req);
-      expect(res.status).toBe(502);
+      expect(res.status).toBe(200);
 
       const data = await res.json();
       expect(data.success).toBe(false);

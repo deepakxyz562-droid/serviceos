@@ -1144,6 +1144,11 @@ function parseProviderImageResponse(
   data: any,
 ): string | null {
   if (provider === 'gemini') {
+    // 1. Imagen 3 predict response format
+    if (Array.isArray(data?.predictions) && typeof data.predictions[0]?.bytesBase64Encoded === 'string') {
+      return data.predictions[0].bytesBase64Encoded;
+    }
+    // 2. Gemini generateContent responseModalities inlineData format
     const inline = data.candidates?.[0]?.content?.parts?.find((part: any) => part.inlineData)?.inlineData;
     const inlineMime = typeof inline?.mimeType === 'string' ? inline.mimeType.toLowerCase() : '';
     if (
@@ -1186,15 +1191,14 @@ async function callGeminiOrOpenRouterImage(params: {
     cred.modelOverride ||
     explicitEnvModel ||
     (params.provider === 'gemini'
-      ? 'gemini-3.1-flash-image'
+      ? 'imagen-3.0-generate-002'
       : 'google/gemini-2.5-flash-image');
 
   const candidateModels =
     params.provider === 'gemini' &&
     !cred.modelOverride &&
-    !explicitEnvModel &&
-    primaryModel !== 'gemini-2.5-flash-image'
-      ? [primaryModel, 'gemini-2.5-flash-image']
+    !explicitEnvModel
+      ? ['imagen-3.0-generate-002', 'gemini-2.0-flash-exp']
       : [primaryModel];
 
   let lastError: unknown = null;
@@ -1202,8 +1206,22 @@ async function callGeminiOrOpenRouterImage(params: {
     const model = candidateModels[idx];
     const hasFallbackModel = idx < candidateModels.length - 1;
 
-    const requestBody =
-      params.provider === 'gemini'
+    const isImagen = params.provider === 'gemini' && model.startsWith('imagen-');
+    const requestUrl = isImagen
+      ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:predict`
+      : params.provider === 'gemini'
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
+        : 'https://openrouter.ai/api/v1/chat/completions';
+
+    const requestBody = isImagen
+      ? {
+          instances: [{ prompt: params.promptText }],
+          parameters: {
+            sampleCount: 1,
+            outputMimeType: 'image/jpeg',
+          },
+        }
+      : params.provider === 'gemini'
         ? {
             contents: [
               {
@@ -1240,9 +1258,7 @@ async function callGeminiOrOpenRouterImage(params: {
     let response: Response;
     try {
       response = await fetch(
-        params.provider === 'gemini'
-          ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`
-          : 'https://openrouter.ai/api/v1/chat/completions',
+        requestUrl,
         {
           method: 'POST',
           signal: combineSignals(params.signal, 20_000),

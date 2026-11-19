@@ -209,6 +209,7 @@ export function AiStudioFeed({
         supportMailto?: string;
       }>('/api/social/designs/business-images/generate', {
         method: 'POST',
+        timeoutMs: 90000,
         body: JSON.stringify({
           suggestionId: sug.id,
           sceneTitle: sug.title,
@@ -259,8 +260,12 @@ export function AiStudioFeed({
           ]
         );
       }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Generation failed';
+    } catch (err: any) {
+      const errorMsg =
+        err?.data?.error ||
+        err?.data?.message ||
+        (err instanceof Error ? err.message : 'Generation failed');
+      const targetEmail = err?.data?.supportEmail || BGOS_SUPPORT_EMAIL || 'support@fieseros.com';
       Alert.alert(
         'Image Generation Error',
         `${errorMsg}\n\nWould you like to email support for assistance?`,
@@ -273,7 +278,7 @@ export function AiStudioFeed({
               const body = encodeURIComponent(
                 `Business Name: ${businessName}\nIndustry/Category: ${industry}\nScene: ${sug.title}\nCity: ${city}\n\nError Encountered:\n${errorMsg}`
               );
-              Linking.openURL(`mailto:${BGOS_SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => null);
+              Linking.openURL(`mailto:${targetEmail}?subject=${subject}&body=${body}`).catch(() => null);
             },
           },
         ]
