@@ -4,6 +4,7 @@ import { Alert, AppState, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import { MaterialIcons } from '@expo/vector-icons';
 import type { NotificationResponse } from 'expo-notifications';
 import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
 import { notificationDestination } from '../src/lib/notification-routing';
@@ -33,7 +34,8 @@ try {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
+    ...MaterialIcons.font,
     BgosDesign: require('../assets/fonts/BgosDesign-Regular.ttf'),
     BgosDesignBold: require('../assets/fonts/BgosDesign-Bold.ttf'),
     BgosEditorial: require('../assets/fonts/BgosEditorial.ttf'),
@@ -304,7 +306,7 @@ export default function RootLayout() {
         <Stack.Screen name="help" />
         <Stack.Screen name="settings" />
       </Stack>
-      <AnimatedSplash ready={fontsLoaded && !isLoading} />
+      <AnimatedSplash ready={(fontsLoaded || !!fontError) && !isLoading} />
     </RootErrorBoundary>
   );
 }
