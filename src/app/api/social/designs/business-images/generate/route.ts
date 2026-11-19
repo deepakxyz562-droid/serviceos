@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { generateDesignImage, resolveCuratedImageFallback } from '@/lib/designs/image-provider';
+import { generateDesignImage } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
 import {
@@ -153,16 +153,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Generate image via Cloudflare FLUX model, compress with Sharp, and upload to S3
+    // 3. Generate image via AI models, compress with Sharp, and upload to S3
     const generatedUrls: string[] = [];
+    const generationErrors: string[] = [];
 
     for (let i = 0; i < scenesToGenerate.length; i++) {
       const prompt = scenesToGenerate[i];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25000);
+      const timeout = setTimeout(() => controller.abort(), 45000);
 
       let imageBytes: Buffer | null = null;
-      let directFallbackUrl: string | null = null;
 
       try {
         const result = await generateDesignImage(
@@ -181,81 +181,102 @@ export async function POST(request: NextRequest) {
 
         if (result.bytes && result.bytes.length > 0) {
           imageBytes = result.bytes;
+        } else {
+          generationErrors.push(`AI provider did not return image bytes for scene ${i + 1}`);
         }
       } catch (genErr) {
-        console.warn(`[business-images/generate] Scene ${i + 1} AI diffusion warning:`, genErr);
+        const msg = genErr instanceof Error ? genErr.message : String(genErr);
+        console.warn(`[business-images/generate] Scene ${i + 1} AI diffusion error:`, msg);
+        generationErrors.push(msg);
       } finally {
         clearTimeout(timeout);
       }
 
-      // If AI diffusion generated no bytes (or encountered an issue), fall back to curated SMB photography
-      if (!imageBytes || imageBytes.length === 0) {
-        try {
-          const fallback = await resolveCuratedImageFallback(prompt, {
-            businessName,
-            category,
-            city,
-            services,
-          });
-          if (fallback.bytes && fallback.bytes.length > 0) {
-            imageBytes = fallback.bytes;
-          } else if (fallback.url) {
-            directFallbackUrl = fallback.url;
-          }
-        } catch (fbErr) {
-          console.warn(`[business-images/generate] Scene ${i + 1} fallback warning:`, fbErr);
-        }
+      if (!imageBytes) {
+        continue;
       }
 
       try {
-        if (imageBytes && imageBytes.length > 0) {
-          // Compress heavy PNG (3–6MB) down to optimized WebP (~150–220KB)
-          const optimized = await optimizeAndCompressImage(imageBytes, {
-            aspectRatio: targetAspectRatio,
-            quality: 82,
+        // Compress heavy PNG (3–6MB) down to optimized WebP (~150–220KB)
+        const optimized = await optimizeAndCompressImage(imageBytes, {
+          aspectRatio: targetAspectRatio,
+          quality: 82,
+        });
+
+        const hash = crypto.randomBytes(4).toString('hex');
+        const fileName = `${folder}-ai-${Date.now()}-${hash}.webp`;
+
+        let uploadedUrl: string | null = null;
+        try {
+          const upload = await uploadFile({
+            bucket: 'bgos-business-images',
+            companyId: 'bgos_merchants',
+            folder: folder,
+            fileName: fileName,
+            file: optimized.buffer,
+            contentType: 'image/webp',
+            requirePublicUrl: false,
           });
+          uploadedUrl = upload.url || null;
+        } catch (uploadErr) {
+          const uploadMsg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+          console.warn(`[business-images/generate] Storage upload warning:`, uploadMsg);
+          generationErrors.push(`Storage upload failed: ${uploadMsg}`);
+        }
 
-          const hash = crypto.randomBytes(4).toString('hex');
-          const fileName = `${folder}-ai-${Date.now()}-${hash}.webp`;
+        if (uploadedUrl) {
+          generatedUrls.push(uploadedUrl);
 
-          let uploadedUrl: string | null = null;
-          try {
-            const upload = await uploadFile({
-              bucket: 'bgos-business-images',
-              companyId: 'bgos_merchants',
-              folder: folder,
-              fileName: fileName,
-              file: optimized.buffer,
-              contentType: 'image/webp',
-              requirePublicUrl: false,
-            });
-            uploadedUrl = upload.url || null;
-          } catch (uploadErr) {
-            console.warn(`[business-images/generate] Storage upload warning:`, uploadErr);
-          }
-
-          const finalUrl = uploadedUrl || directFallbackUrl;
-          if (finalUrl) {
-            generatedUrls.push(finalUrl);
-
-            // Record into merchant's ImageLibrary
-            await db.imageLibrary?.create?.({
-              data: {
-                tenantId: user.tenantId,
-                name: `${businessName} AI Commercial Photo ${i + 1}`,
-                url: finalUrl,
-                folder: 'bgos_ai_photos',
-                mediaType: 'image/webp',
-                size: optimized.size,
-              },
-            }).catch(() => null);
-          }
-        } else if (directFallbackUrl) {
-          generatedUrls.push(directFallbackUrl);
+          // Record into merchant's ImageLibrary
+          await db.imageLibrary?.create?.({
+            data: {
+              tenantId: user.tenantId,
+              name: `${businessName} AI Commercial Photo ${i + 1}`,
+              url: uploadedUrl,
+              folder: 'bgos_ai_photos',
+              mediaType: 'image/webp',
+              size: optimized.size,
+            },
+          }).catch(() => null);
         }
       } catch (saveErr) {
-        console.warn(`[business-images/generate] Scene ${i + 1} save warning:`, saveErr);
+        const saveMsg = saveErr instanceof Error ? saveErr.message : String(saveErr);
+        console.warn(`[business-images/generate] Scene ${i + 1} save warning:`, saveMsg);
+        generationErrors.push(`Image processing failed: ${saveMsg}`);
       }
+    }
+
+    if (generatedUrls.length === 0) {
+      const rawError = generationErrors[0] || 'Image generation failed to produce commercial assets.';
+      const isKeyConfig = /Configure an active|credentials|API_KEY|AUTH_KEY|not configured/i.test(rawError);
+      const isQuota = /quota|rate limit|429|402/i.test(rawError);
+      const isTimeout = /timeout|abort|504|ETIMEDOUT/i.test(rawError);
+
+      let userMessage = rawError;
+      if (isKeyConfig) {
+        userMessage = `AI provider credentials or AWS S3 storage are not configured: ${rawError}`;
+      } else if (isQuota) {
+        userMessage = `AI provider rate limit or quota exceeded. Please try again in a few moments.`;
+      } else if (isTimeout) {
+        userMessage = `AI diffusion rendering timed out. Please try another scene or retry.`;
+      }
+
+      const supportEmail = 'support@fieseros.com';
+      const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
+      const body = encodeURIComponent(`Business: ${businessName}\nCategory: ${category}\nError: ${rawError}`);
+      const supportMailto = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: rawError,
+          message: userMessage,
+          supportEmail,
+          supportSubject: `AI Image Generation Issue: ${businessName}`,
+          supportMailto,
+        },
+        { status: 502 },
+      );
     }
 
     const seo = await seoPromise;
@@ -268,9 +289,7 @@ export async function POST(request: NextRequest) {
       url: generatedUrls[0] || null,
       count: generatedUrls.length,
       seo,
-      message: generatedUrls.length > 0
-        ? `Successfully generated ${generatedUrls.length} commercial photo(s) for ${businessName}.`
-        : 'Image generation completed without new assets.',
+      message: `Successfully generated ${generatedUrls.length} commercial photo(s) for ${businessName}.`,
     });
   } catch (error: unknown) {
     console.error('[business-images/generate] Error:', error);

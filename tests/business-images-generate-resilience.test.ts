@@ -124,4 +124,37 @@ describe('Business Image Generation & Visual Pool Resilience', () => {
       expect(visuals[i].url).not.toBe(visuals[i + 1].url);
     }
   });
+
+  it('returns structured 502 error with support contact when generation produces no assets without using silent fallbacks', async () => {
+    const originalVitest = process.env.VITEST;
+    const originalNodeEnv = process.env.NODE_ENV;
+    delete process.env.VITEST;
+    (process.env as any).NODE_ENV = 'production';
+
+    try {
+      const req = new NextRequest('http://localhost:3000/api/social/designs/business-images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sceneTitle: 'Test Scene',
+          promptBlueprint: 'Prompt blueprint',
+          category: 'IT, Software & Digital Services',
+          aspectRatio: '4:5',
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(502);
+
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error).toBeTruthy();
+      expect(data.message).toBeTruthy();
+      expect(data.supportEmail).toBe('support@fieseros.com');
+      expect(data.supportMailto).toContain('mailto:support@fieseros.com');
+    } finally {
+      process.env.VITEST = originalVitest;
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
 });

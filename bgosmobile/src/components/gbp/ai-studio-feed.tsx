@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
+import { BGOS_SUPPORT_EMAIL } from '../../lib/constants';
 import { resolveTemplateSource } from '../design/professional-assets';
 
 export type StudioTabKey = 'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals';
@@ -201,7 +203,10 @@ export function AiStudioFeed({
           tags: string[];
           category?: string;
         };
-        message: string;
+        message?: string;
+        error?: string;
+        supportEmail?: string;
+        supportMailto?: string;
       }>('/api/social/designs/business-images/generate', {
         method: 'POST',
         body: JSON.stringify({
@@ -234,10 +239,45 @@ export function AiStudioFeed({
         }
         await fetchTemplates();
       } else {
-        Alert.alert('Notice', res?.message || 'Failed to generate image. Please try another scene.');
+        const errorDetail = res?.error || res?.message || 'Failed to generate image. Please try another scene.';
+        const targetEmail = (res as any)?.supportEmail || BGOS_SUPPORT_EMAIL || 'support@fieseros.com';
+        Alert.alert(
+          'Image Generation Failed',
+          `${errorDetail}\n\nWould you like to email support for assistance?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Email Support',
+              onPress: () => {
+                const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
+                const body = encodeURIComponent(
+                  `Business Name: ${businessName}\nIndustry/Category: ${industry}\nScene: ${sug.title}\nCity: ${city}\n\nError Encountered:\n${errorDetail}`
+                );
+                Linking.openURL(`mailto:${targetEmail}?subject=${subject}&body=${body}`).catch(() => null);
+              },
+            },
+          ]
+        );
       }
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Generation failed');
+      const errorMsg = err instanceof Error ? err.message : 'Generation failed';
+      Alert.alert(
+        'Image Generation Error',
+        `${errorMsg}\n\nWould you like to email support for assistance?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Email Support',
+            onPress: () => {
+              const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
+              const body = encodeURIComponent(
+                `Business Name: ${businessName}\nIndustry/Category: ${industry}\nScene: ${sug.title}\nCity: ${city}\n\nError Encountered:\n${errorMsg}`
+              );
+              Linking.openURL(`mailto:${BGOS_SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => null);
+            },
+          },
+        ]
+      );
     } finally {
       clearTimeout(timer1);
       clearTimeout(timer2);

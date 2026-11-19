@@ -296,10 +296,25 @@ export function PosterTemplateGallery({
         }
         toast.success(data.message || 'Commercial photo & SEO content created!');
       } else {
-        toast.error(data?.message || 'Failed to generate image');
+        const errMsg = data?.error || data?.message || 'Failed to generate image';
+        const mailto =
+          data?.supportMailto ||
+          `mailto:${data?.supportEmail || 'support@fieseros.com'}?subject=${encodeURIComponent(`AI Image Generation Issue: ${business.businessName || 'Business'}`)}&body=${encodeURIComponent(`Error: ${errMsg}`)}`;
+        toast.error(
+          <div className="flex flex-col gap-1 text-left">
+            <span className="font-medium">{errMsg}</span>
+            <a
+              href={mailto}
+              className="text-xs text-amber-200 underline hover:text-white mt-1"
+            >
+              Contact Support ({data?.supportEmail || 'support@fieseros.com'})
+            </a>
+          </div>,
+          { duration: 8000 }
+        );
       }
     } catch {
-      toast.error('Network error during image generation');
+      toast.error('Network error during image generation. Please check your connection or contact support.');
     } finally {
       setGeneratingImages(false);
       setActiveGeneratingStep('');
