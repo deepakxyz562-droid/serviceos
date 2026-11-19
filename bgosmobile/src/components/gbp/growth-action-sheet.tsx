@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, ui } from '../ui';
+import { TutorialVideoModal } from './tutorial-video-modal';
 import { apiRequest } from '../../lib/api';
 
 export interface AutopilotGrowthActionItem {
@@ -159,6 +160,7 @@ export function GrowthActionSheet({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'actions' | 'roadmap' | 'approvals' | 'audit'>('actions');
   const [approving, setApproving] = useState<string | null>(null);
+  const [tutorialModalVisible, setTutorialModalVisible] = useState(false);
 
   // Quick edit modal states for missing contact info (address, phone, website)
   const [quickInputType, setQuickInputType] = useState<'address' | 'phone' | 'website' | null>(null);
@@ -587,22 +589,44 @@ export function GrowthActionSheet({
                 </Text>
               </View>
             </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              accessibilityLabel="Close modal"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: '#F1F5F9',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <MaterialIcons name="close" size={20} color={colors.ink} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                onPress={() => setTutorialModalVisible(true)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: '#FEF3C7',
+                  paddingHorizontal: 9,
+                  paddingVertical: 6,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#FDE68A',
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <MaterialIcons name="play-circle-filled" size={15} color="#D97706" />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>
+                  Watch Guide (2m)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityLabel="Close modal"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <MaterialIcons name="close" size={20} color={colors.ink} />
+              </Pressable>
+            </View>
           </View>
 
           {/* Executive 3-Stat KPI Bar matching Spec */}
@@ -2108,6 +2132,12 @@ export function GrowthActionSheet({
           )}
         </View>
       </View>
+
+      <TutorialVideoModal
+        visible={tutorialModalVisible}
+        videoId="boost_ranking"
+        onClose={() => setTutorialModalVisible(false)}
+      />
     </Modal>
   );
 }

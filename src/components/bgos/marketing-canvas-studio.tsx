@@ -585,7 +585,13 @@ export function MarketingCanvasStudio({
         data.caption ||
         `${activeTopic}\n\nExperience high-quality service at ${businessName}. Contact us today to learn more!\n\n#${businessName.replace(/\W+/g, '')} #LocalBusiness`;
       const finalImg =
-        attachedImageUrl || data.imageUrl || data.photoUrl || photoUrl || posterUrl || brandLogo || '';
+        attachedImageUrl ||
+        data.imageUrl ||
+        data.photoUrl ||
+        photoUrl ||
+        posterUrl ||
+        brandLogo ||
+        'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80';
 
       setAiGeneratedPost({
         headline: genHeadline,
@@ -596,10 +602,8 @@ export function MarketingCanvasStudio({
       });
       setCaption(genCaption);
       setHeadline(genHeadline);
-      if (finalImg) {
-        setPhotoUrl(finalImg);
-        setPosterUrl(finalImg);
-      }
+      setPhotoUrl(finalImg);
+      setPosterUrl(finalImg);
       toast.success('AI crafted your post & visual!');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'AI post generation failed');
@@ -625,7 +629,8 @@ export function MarketingCanvasStudio({
         attachedImageUrl ||
         posterUrl ||
         photoUrl ||
-        '';
+        brandLogo ||
+        'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80';
       const finalImage = rawImage ? toAbsoluteUrl(rawImage) : '';
 
       const res = await authFetch('/api/social/posts', {
@@ -637,7 +642,7 @@ export function MarketingCanvasStudio({
           content: fullContent.trim(),
           mediaUrls: finalImage ? [finalImage] : [],
           isPoster: false,
-          isPreRendered: Boolean(finalImage),
+          isPreRendered: true,
           design: undefined,
           platforms: selectedChannels,
           targets: targets.length > 0 ? targets : undefined,
@@ -1742,11 +1747,15 @@ export function MarketingCanvasStudio({
                       photoUrl ||
                       posterUrl ||
                       brandLogo ||
-                      ''
+                      'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80'
                     }
                     alt="Preview"
                     onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = 'none';
+                      const el = e.currentTarget as HTMLImageElement;
+                      if (!el.src.includes('1557804506')) {
+                        el.src = 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80';
+                        el.style.display = 'block';
+                      }
                     }}
                     className="w-full h-full object-cover"
                   />

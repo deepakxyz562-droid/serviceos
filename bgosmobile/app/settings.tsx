@@ -24,6 +24,7 @@ import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { BGOS_SUPPORT_EMAIL, BGOS_SUPPORT_WHATSAPP_DIGITS } from '../src/lib/constants';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
+import { TutorialVideoModal, type TutorialVideoId } from '../src/components/gbp/tutorial-video-modal';
 
 const FONT_SIZES = [
   { label: 'Small', scale: 0.9 },
@@ -56,6 +57,7 @@ export default function SettingsScreen() {
   // Modals state
   const [languageModalOpen, setLanguageModalOpen] = useState(false);
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
+  const [activeTutorialVideoId, setActiveTutorialVideoId] = useState<TutorialVideoId | null>(null);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [labelsModalOpen, setLabelsModalOpen] = useState(false);
   const [dataSettingsModalOpen, setDataSettingsModalOpen] = useState(false);
@@ -512,15 +514,16 @@ export default function SettingsScreen() {
             </View>
             <View style={{ padding: 16, gap: 10 }}>
               {[
-                { title: '1. Getting Started with BGOS Growth Plan', duration: '3 mins' },
-                { title: '2. 1-Tap Google Reviews & WhatsApp Invites', duration: '4 mins' },
-                { title: '3. Connecting Google Business Profile & Auto-Posting', duration: '5 mins' },
+                { id: 'boost_ranking' as TutorialVideoId, title: '1. Getting Started with BGOS Growth Plan', duration: '2:10 mins' },
+                { id: 'how_to_get_reviews' as TutorialVideoId, title: '2. 1-Tap Google Reviews & WhatsApp Invites', duration: '2:10 mins' },
+                { id: 'why_photos' as TutorialVideoId, title: '3. Connecting Google Business Profile & Auto-Posting', duration: '2:10 mins' },
               ].map((v) => (
                 <Pressable
                   key={v.title}
                   onPress={() => {
                     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    void Linking.openURL('https://youtube.com');
+                    setTrainingModalOpen(false);
+                    setActiveTutorialVideoId(v.id);
                   }}
                   style={styles.trainingVideoCard}
                 >
@@ -541,6 +544,14 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ─── In-App Tutorial Video Player ───────────────────────── */}
+      <TutorialVideoModal
+        visible={Boolean(activeTutorialVideoId)}
+        videoId={activeTutorialVideoId || 'boost_ranking'}
+        businessName={workspace.data?.name || workspace.data?.bookingPageConfig?.businessName || 'Your Business'}
+        onClose={() => setActiveTutorialVideoId(null)}
+      />
 
       {/* ─── Notifications Modal ──────────────────────────────────── */}
       <Modal

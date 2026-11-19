@@ -289,10 +289,50 @@ export default function ServicesManagementScreen() {
   async function handleSave(pushToGoogle: boolean) {
     setSaving(true);
     try {
+      // Auto-generate 300-500 char localized SEO copy for any service that lacks it before saving
+      const unoptimized = selectedServices.filter(
+        (name) => (descriptionsByName[name] || '').trim().length < 300
+      );
+
+      const activeDescriptions = { ...descriptionsByName };
+      const activeKeywords = { ...keywordsByName };
+
+      if (unoptimized.length > 0) {
+        try {
+          const optRes = await apiRequest<{
+            services: StructuredSeoService[];
+          }>('/api/gbp/services/optimize', {
+            method: 'POST',
+            body: {
+              services: unoptimized.map((name) => ({
+                name,
+                targetKeyword: activeKeywords[name] || undefined,
+                existingDescription: activeDescriptions[name] || undefined,
+                category,
+              })),
+              save: false,
+            },
+          });
+
+          if (optRes?.services && Array.isArray(optRes.services)) {
+            for (const s of optRes.services) {
+              if (s?.name && s?.description) {
+                activeDescriptions[s.name] = s.description;
+                if (s.targetKeyword) activeKeywords[s.name] = s.targetKeyword;
+              }
+            }
+            setDescriptionsByName(activeDescriptions);
+            setKeywordsByName(activeKeywords);
+          }
+        } catch (genErr) {
+          console.warn('[services-management] Pre-save auto-write notice:', genErr);
+        }
+      }
+
       const structuredPayload: StructuredSeoService[] = selectedServices.map((name) => ({
         name,
-        description: (descriptionsByName[name] || '').trim().slice(0, 500),
-        targetKeyword: keywordsByName[name] || undefined,
+        description: (activeDescriptions[name] || '').trim().slice(0, 500),
+        targetKeyword: activeKeywords[name] || undefined,
         category,
       }));
       const res = await apiRequest<{
@@ -311,11 +351,14 @@ export default function ServicesManagementScreen() {
         res.googleWarnings && res.googleWarnings.length > 0
           ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
           : '';
+      const optimizedCount = structuredPayload.filter(
+        (s) => s.description && s.description.length >= 300
+      ).length;
       Alert.alert(
         res.syncedToGoogle ? 'Synced to Google!' : 'Services Saved',
         res.syncedToGoogle
-          ? `Your services and 300–500 char localized SEO descriptions were pushed to Google Business Profile.${warningMsg}`
-          : `Saved ${selectedServices.length} services to your workspace.${warningMsg}`,
+          ? `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) and synced to Google Business Profile.${warningMsg}`
+          : `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) to your workspace.${warningMsg}`,
       );
       router.back();
     } catch (err: unknown) {

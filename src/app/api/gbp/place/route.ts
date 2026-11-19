@@ -16,8 +16,10 @@ import {
 import {
   mergeStructuredServices,
   upsertTenantStructuredServices,
+  finalizeLocalizedServiceDescription,
   type StructuredSeoService,
 } from '@/lib/gbp/seo-context';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -709,6 +711,40 @@ export async function PATCH(request: NextRequest) {
         });
     }
 
+    if (resolvedSeoServices) {
+      const currentTenantForGeo = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: {
+          name: true,
+          city: true,
+          address: true,
+          brandProfile: { select: { businessName: true, location: true } },
+        },
+      });
+      const tCity =
+        currentTenantForGeo?.city ||
+        currentTenantForGeo?.brandProfile?.location ||
+        (currentTenantForGeo?.address ? currentTenantForGeo.address.split(',')[0].trim() : '') ||
+        'Patna';
+      const tName =
+        currentTenantForGeo?.brandProfile?.businessName ||
+        currentTenantForGeo?.name ||
+        'our business';
+
+      resolvedSeoServices = resolvedSeoServices.map((s) => ({
+        ...s,
+        description:
+          s.description && s.description.trim().length >= 300
+            ? s.description.trim().slice(0, 500)
+            : finalizeLocalizedServiceDescription(s.description || '', {
+                serviceName: s.name,
+                targetKeyword: s.targetKeyword,
+                city: tCity,
+                businessName: tName,
+              }),
+      }));
+    }
+
     if (hasSettingsField) {
       const currentTenant = await db.tenant.findUnique({
         where: { id: user.tenantId },
@@ -862,6 +898,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     invalidatePlacePayloadCache(user.tenantId);
+    invalidateBootstrapCache(user.tenantId);
 
     const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
     await ensureAndSyncBusinessChatbot(user.tenantId, {

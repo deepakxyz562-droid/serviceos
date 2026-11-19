@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getTenantSeoContext } from '@/lib/gbp/seo-context';
 import { generateLocalizedServiceDescriptions } from '@/lib/gbp/service-optimizer';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +70,10 @@ export async function POST(request: NextRequest) {
       pushToGoogle: Boolean(body.pushToGoogle),
       locationId: typeof body.locationId === 'string' ? body.locationId : undefined,
     });
+
+    if (body.save || body.pushToGoogle) {
+      invalidateBootstrapCache(user.tenantId);
+    }
 
     return NextResponse.json({
       success: true,

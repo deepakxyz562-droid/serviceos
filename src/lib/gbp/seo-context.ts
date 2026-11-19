@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { isSeededDummyService } from '@/lib/bgos-business-sanitizers';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 
 function deriveServiceSlug(name: string): string {
   return name
@@ -358,6 +359,74 @@ export function formatSeoKeywordsPromptSection(ctx: TenantSeoContext | null | un
 }
 
 /**
+ * Post-processes or generates localized 300-500 character Google Business Profile service descriptions
+ * while ensuring both the target keyword and local city/area appear naturally.
+ */
+export function finalizeLocalizedServiceDescription(
+  rawText: string,
+  opts: {
+    serviceName: string;
+    targetKeyword?: string;
+    city?: string;
+    businessName?: string;
+    serviceAreas?: string[];
+  },
+): string {
+  let clean = (rawText || '')
+    .replace(/```/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+
+  const city = (opts.city || '').trim() || 'your local area';
+  const businessName = (opts.businessName || '').trim() || 'Our team';
+  const targetKeyword = (opts.targetKeyword || '').trim() || opts.serviceName;
+  const areaSuffix =
+    opts.serviceAreas && opts.serviceAreas.length > 0
+      ? ` Serving ${opts.serviceAreas.slice(0, 3).join(', ')}, and nearby neighborhoods in ${city}.`
+      : ` Proudly serving residential and commercial customers across ${city} with fast scheduling.`;
+
+  if (!clean) {
+    clean = `${businessName} provides trusted ${opts.serviceName} in ${city}, designed for customers searching for ${targetKeyword}. Our experienced local specialists deliver dependable workmanship, transparent pricing, fast turnarounds, and responsive support from first inquiry through completion.${areaSuffix} Contact our ${city} team today to check availability and request a quick quote.`;
+  }
+
+  // Ensure location & target keyword appear naturally if the model dropped them
+  if (city !== 'your local area' && !clean.toLowerCase().includes(city.toLowerCase())) {
+    clean = `${clean} Available in ${city}.`.replace(/\.\./g, '.');
+  }
+  if (
+    targetKeyword &&
+    !clean.toLowerCase().includes(targetKeyword.toLowerCase())
+  ) {
+    clean = `${clean} Tailored for clients looking for ${targetKeyword}.`.replace(/\.\./g, '.');
+  }
+
+  // Expand cleanly until at least 300 characters while staying authentic
+  if (clean.length < 300) {
+    const expansion = `${areaSuffix} Book an appointment or call ${businessName} for prompt, reliable ${opts.serviceName} support and upfront estimates.`;
+    clean = `${clean} ${expansion}`.replace(/\s+/g, ' ').trim();
+  }
+  if (clean.length < 300) {
+    const extra = `Whether you need scheduled care or urgent help with ${targetKeyword || opts.serviceName} in ${city}, ${businessName} delivers attentive local service backed by clear communication and dependable quality.`;
+    clean = `${clean} ${extra}`.replace(/\s+/g, ' ').trim();
+  }
+
+  // Cleanly trim on sentence/word boundary if above 500 characters
+  if (clean.length > 500) {
+    const slice = clean.slice(0, 497);
+    const lastStop = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '));
+    if (lastStop >= 300) {
+      clean = slice.slice(0, lastStop + 1).trim();
+    } else {
+      const lastSpace = slice.lastIndexOf(' ');
+      clean = `${(lastSpace >= 300 ? slice.slice(0, lastSpace) : slice).trim().replace(/[.,;:\-]+$/, '')}.`;
+    }
+  }
+
+  return clean;
+}
+
+/**
  * Persist structured SEO services uniformly across `settingsJson.seoServices`,
  * legacy `settingsJson.services` (`string[]`), `BrandProfile.services`, and
  * Prisma `db.service` records (used for Public Hub + Service JSON-LD + GBP Audit).
@@ -367,12 +436,38 @@ export async function upsertTenantStructuredServices(
   services: StructuredSeoService[],
   options?: { syncMissingToInactive?: boolean },
 ): Promise<StructuredSeoService[]> {
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      name: true,
+      city: true,
+      address: true,
+      serviceAreasJson: true,
+      settingsJson: true,
+      industry: true,
+      brandProfile: {
+        select: {
+          businessName: true,
+          location: true,
+        },
+      },
+    },
+  });
+
+  const tenantCity =
+    tenant?.city ||
+    tenant?.brandProfile?.location ||
+    (tenant?.address ? tenant.address.split(',')[0].trim() : '') ||
+    'Patna';
+  const tenantBizName = tenant?.brandProfile?.businessName || tenant?.name || 'our business';
+  const tenantServiceAreas = safeParseJsonArray(tenant?.serviceAreasJson);
+
   const normalized: StructuredSeoService[] = [];
   const seen = new Set<string>();
   for (const raw of services) {
     const name = String(raw?.name || '').trim().slice(0, 100);
     if (!name) continue;
-    const description = String(raw.description || '').trim().slice(0, 500);
+    let description = String(raw.description || '').trim().slice(0, 500);
     if (
       isSeededDummyService({
         slug: deriveServiceSlug(name),
@@ -385,6 +480,17 @@ export async function upsertTenantStructuredServices(
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
+
+    if (description.length < 300) {
+      description = finalizeLocalizedServiceDescription(description, {
+        serviceName: name,
+        targetKeyword: raw.targetKeyword,
+        city: tenantCity,
+        businessName: tenantBizName,
+        serviceAreas: tenantServiceAreas,
+      });
+    }
+
     normalized.push({
       id: raw.id,
       name,
@@ -394,11 +500,6 @@ export async function upsertTenantStructuredServices(
       syncedToGoogle: Boolean(raw.syncedToGoogle),
     });
   }
-
-  const tenant = await db.tenant.findUnique({
-    where: { id: tenantId },
-    select: { settingsJson: true, industry: true },
-  });
   const settings = safeParseJsonObject(tenant?.settingsJson);
   const serviceNames = normalized.map((s) => s.name);
 
@@ -532,6 +633,8 @@ export async function upsertTenantStructuredServices(
         .catch(() => {});
     }
   }
+
+  invalidateBootstrapCache(tenantId);
 
   return normalized;
 }

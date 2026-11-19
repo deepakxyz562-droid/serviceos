@@ -1,6 +1,10 @@
 import { db } from '@/lib/db';
 import { resolveBusinessPresenceMode, type BusinessPresenceMode } from '@/lib/seo/presence-mode';
-import { mergeStructuredServices } from '@/lib/gbp/seo-context';
+import {
+  mergeStructuredServices,
+  finalizeLocalizedServiceDescription,
+  upsertTenantStructuredServices,
+} from '@/lib/gbp/seo-context';
 
 export interface AuditCheckItem {
   id: string;
@@ -103,7 +107,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
 
   const seoServicesArr = Array.isArray(settings.seoServices) ? settings.seoServices : [];
   const mergedServices = mergeStructuredServices(settings, dbServices);
-  const optimizedServiceDescCount = mergedServices.filter(
+  let optimizedServiceDescCount = mergedServices.filter(
     (s: any) => typeof s?.description === 'string' && s.description.trim().length >= 300,
   ).length;
   const effectiveServicesCount = Math.max(
@@ -111,6 +115,32 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     Array.isArray(settings.services) ? settings.services.length : 0,
     mergedServices.length,
   );
+
+  if (effectiveServicesCount >= 3 && optimizedServiceDescCount < 2 && mergedServices.length > 0) {
+    const tenantCity =
+      tenant.city ||
+      (brand as any)?.location ||
+      (tenant.address ? tenant.address.split(',')[0].trim() : '') ||
+      'Patna';
+    const tenantBizName = (brand as any)?.businessName || tenant.name || 'our business';
+    const tenantAreas = safeParseArray(tenant.serviceAreasJson);
+
+    const healed = mergedServices.map((s) => ({
+      ...s,
+      description:
+        s.description && s.description.trim().length >= 300
+          ? s.description.trim().slice(0, 500)
+          : finalizeLocalizedServiceDescription(s.description || '', {
+              serviceName: s.name,
+              targetKeyword: s.targetKeyword,
+              city: tenantCity,
+              businessName: tenantBizName,
+              serviceAreas: tenantAreas,
+            }),
+    }));
+    optimizedServiceDescCount = healed.filter((s) => s.description.length >= 300).length;
+    void upsertTenantStructuredServices(tenantId, healed).catch(() => {});
+  }
   const longDescValue =
     (brand?.aiGeneratedSummary && brand.aiGeneratedSummary.trim()) ||
     (typeof tenant.description === 'string' ? tenant.description.trim() : '');

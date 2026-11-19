@@ -2,11 +2,15 @@ import { callAI } from '@/lib/ai-client';
 import {
   getTenantSeoContext,
   upsertTenantStructuredServices,
+  finalizeLocalizedServiceDescription,
   type StructuredSeoService,
 } from '@/lib/gbp/seo-context';
+
+export { finalizeLocalizedServiceDescription };
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
 import { invalidatePlacePayloadCache } from '@/app/api/gbp/place/route';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 import { getGbpCategoryByNameOrAlias } from '@/lib/gbp/master-category-catalog';
 
 export interface ServiceOptimizeItemInput {
@@ -44,71 +48,7 @@ export function pickKeywordForService(
   return bestMatch || serviceName;
 }
 
-/**
- * Clamp/pad a generated service description strictly into the 300-500 char sweet spot
- * while ensuring both the target keyword and local city/area appear naturally.
- */
-export function finalizeLocalizedServiceDescription(
-  rawText: string,
-  opts: {
-    serviceName: string;
-    targetKeyword: string;
-    city: string;
-    businessName: string;
-    serviceAreas?: string[];
-  },
-): string {
-  let clean = rawText
-    .replace(/```/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/^["']|["']$/g, '')
-    .trim();
 
-  const city = opts.city.trim() || 'your local area';
-  const areaSuffix =
-    opts.serviceAreas && opts.serviceAreas.length > 0
-      ? ` Serving ${opts.serviceAreas.slice(0, 3).join(', ')}, and nearby neighborhoods in ${city}.`
-      : ` Proudly serving residential and commercial customers across ${city} with fast scheduling.`;
-
-  if (!clean) {
-    clean = `${opts.businessName} provides trusted ${opts.serviceName} in ${city}, designed for customers searching for ${opts.targetKeyword}. Our experienced local specialists deliver dependable workmanship, transparent pricing, fast turnarounds, and responsive support from first inquiry through completion.${areaSuffix} Contact our ${city} team today to check availability and request a quick quote.`;
-  }
-
-  // Ensure location & target keyword appear naturally if the model dropped them
-  if (city !== 'your local area' && !clean.toLowerCase().includes(city.toLowerCase())) {
-    clean = `${clean} Available in ${city}.`.replace(/\.\./g, '.');
-  }
-  if (
-    opts.targetKeyword &&
-    !clean.toLowerCase().includes(opts.targetKeyword.toLowerCase())
-  ) {
-    clean = `${clean} Tailored for clients looking for ${opts.targetKeyword}.`.replace(/\.\./g, '.');
-  }
-
-  // Expand cleanly until at least 300 characters while staying authentic
-  if (clean.length < 300) {
-    const expansion = `${areaSuffix} Book an appointment or call ${opts.businessName} for prompt, reliable ${opts.serviceName} support and upfront estimates.`;
-    clean = `${clean} ${expansion}`.replace(/\s+/g, ' ').trim();
-  }
-  if (clean.length < 300) {
-    const extra = `Whether you need scheduled care or urgent help with ${opts.targetKeyword || opts.serviceName} in ${city}, ${opts.businessName} delivers attentive local service backed by clear communication and dependable quality.`;
-    clean = `${clean} ${extra}`.replace(/\s+/g, ' ').trim();
-  }
-
-  // Cleanly trim on sentence/word boundary if above 500 characters
-  if (clean.length > 500) {
-    const slice = clean.slice(0, 497);
-    const lastStop = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '));
-    if (lastStop >= 300) {
-      clean = slice.slice(0, lastStop + 1).trim();
-    } else {
-      const lastSpace = slice.lastIndexOf(' ');
-      clean = `${(lastSpace >= 300 ? slice.slice(0, lastSpace) : slice).trim().replace(/[.,;:\-]+$/, '')}.`;
-    }
-  }
-
-  return clean;
-}
 
 /**
  * Generate 300-500 character localized descriptions (Search Term + City/Area) for one or more
@@ -273,6 +213,7 @@ Respond ONLY with a valid JSON array matching the exact order above:
     saved = true;
     finalList = generated.map((g) => ({ ...g, syncedToGoogle: syncedToGoogle || g.syncedToGoogle }));
     invalidatePlacePayloadCache(params.tenantId);
+    invalidateBootstrapCache(params.tenantId);
   }
 
   return { services: finalList, saved, syncedToGoogle, googleWarnings };

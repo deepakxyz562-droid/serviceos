@@ -378,8 +378,11 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
 
     const finalCta = generated.ctaText || 'Book now';
 
-    // Resolved photo: use input photo if provided, otherwise the generated graphic
-    const chosenPhoto = inputPhoto || imageUrl || '';
+    const verifiedFallback =
+      'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80';
+
+    // Resolved photo: use input photo if provided, otherwise generated card, otherwise high-res verified photo
+    const chosenPhoto = inputPhoto || imageUrl || verifiedFallback;
 
     const gbpPostType = body.postType || (body.theme === 'promo' ? 'offer' : 'standard');
     const gbpCtaAction = gbpPostType === 'offer' ? 'GET_OFFER' : 'CALL';
@@ -436,8 +439,8 @@ Return a STRICT JSON object with these EXACT keys (no markdown code blocks, just
       caption: finalCaption,
       hashtags: hashtagsArray,
       hashtagsText,
-      imageUrl: inputPhoto || imageUrl || '',
-      photoUrl: inputPhoto || imageUrl || '',
+      imageUrl: chosenPhoto,
+      photoUrl: chosenPhoto,
       layouts,
       bookingUrl:
         tenant?.brandProfile?.website ||

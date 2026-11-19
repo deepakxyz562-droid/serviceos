@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, ActivityIndicator, Alert, Easing, Image, Linking, Modal, Pressable, Share, useWindowDimensions, ScrollView, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
@@ -973,8 +974,32 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </View>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Watch AI Guide"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setActiveTutorialVideoId('boost_ranking');
+                  setTutorialVideoOpen(true);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                  backgroundColor: 'rgba(255,255,255,0.22)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 5,
+                  borderRadius: 12,
+                }}
+              >
+                <MaterialIcons name="play-arrow" size={14} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Guide</Text>
+              </Pressable>
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+              </View>
             </View>
           </View>
         </Pressable>

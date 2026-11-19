@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
 import { colors } from '../ui';
 
 export type TutorialVideoId =
@@ -33,12 +34,14 @@ export interface TutorialVideoItem {
   takeaways: Array<{ title: string; desc: string }>;
 }
 
+const PRIMARY_TUTORIAL_VIDEO_URL = 'https://bgos.site/bgos/tutorials/bgos-tutorial.mp4';
+
 export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   why_photos: {
     id: 'why_photos',
     title: 'Why Google Photos Matter',
-    subtitle: 'GBP Growth Guide · 1:30 min',
-    videoUrl: 'https://bgos.site/bgos/tutorials/why-gbp-photos.mp4',
+    subtitle: 'GBP Growth Guide · 2:10 min',
+    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
     ctaText: 'Add Photos & Auto-Schedule Now',
     ctaIcon: 'add-a-photo',
     takeawaysHeader: 'Key Ranking Takeaways',
@@ -60,8 +63,8 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   boost_ranking: {
     id: 'boost_ranking',
     title: 'See Exactly How AI Boosts Your Google Ranking',
-    subtitle: 'Automated Setup & AI Autopilot · 1:50 min',
-    videoUrl: 'https://bgos.site/bgos/tutorials/boost-google-ranking.mp4',
+    subtitle: 'Automated Setup & AI Autopilot · 2:10 min',
+    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
     ctaText: 'Activate GBP AI Autopilot',
     ctaIcon: 'auto-awesome',
     takeawaysHeader: 'How AI Boosts Ranking',
@@ -83,8 +86,8 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   performance_analysis: {
     id: 'performance_analysis',
     title: 'Is Your Google Business Profile Performing?',
-    subtitle: 'GBP Performance & Geo-Grid Analysis · 3:39 min',
-    videoUrl: 'https://bgos.site/bgos/tutorials/gbp-performance-analysis.mp4',
+    subtitle: 'GBP Performance & Geo-Grid Analysis · 2:10 min',
+    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
     ctaText: 'View Full Performance Report',
     ctaIcon: 'trending-up',
     takeawaysHeader: 'Performance Metrics That Matter',
@@ -106,8 +109,8 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   reviews_trust: {
     id: 'reviews_trust',
     title: 'More Reviews = More Trust = More Customers',
-    subtitle: 'Customer Trust & Conversion Strategy · 1:50 min',
-    videoUrl: 'https://bgos.site/bgos/tutorials/reviews-build-trust.mp4',
+    subtitle: 'Customer Trust & Conversion Strategy · 2:10 min',
+    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
     ctaText: 'Turn Customers into Reviews',
     ctaIcon: 'star',
     takeawaysHeader: 'Why Reviews Drive Sales',
@@ -129,8 +132,8 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   how_to_get_reviews: {
     id: 'how_to_get_reviews',
     title: 'How to Get Reviews for Your Google Profile',
-    subtitle: '1-Tap & Drip Follow-ups Guide · 1:11 min',
-    videoUrl: 'https://bgos.site/bgos/tutorials/how-to-get-reviews.mp4',
+    subtitle: '1-Tap & Drip Follow-ups Guide · 2:10 min',
+    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
     ctaText: 'Send Review Request Now',
     ctaIcon: 'send',
     takeawaysHeader: 'Step-by-Step Review Collection',
@@ -194,6 +197,15 @@ export function TutorialVideoModal({
     }
   };
 
+  const handleOpenNativePlayer = async () => {
+    try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await WebBrowser.openBrowserAsync(videoData.videoUrl);
+    } catch {
+      Alert.alert('Video Stream', 'Opening video in default player...');
+    }
+  };
+
   const videoHtml = `
     <!DOCTYPE html>
     <html>
@@ -211,23 +223,88 @@ export function TutorialVideoModal({
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           }
+          .video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
           video {
             width: 100%;
             height: 100%;
             object-fit: contain;
             background: #000;
           }
+          .play-overlay {
+            position: absolute;
+            width: 68px;
+            height: 68px;
+            border-radius: 34px;
+            background: rgba(0, 159, 80, 0.92);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            z-index: 10;
+          }
+          .play-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+          }
         </style>
       </head>
       <body>
-        <video
-          id="player"
-          src="${videoData.videoUrl}"
-          playsinline
-          webkit-playsinline
-          controls
-          autoplay
-        ></video>
+        <div class="video-container" id="container">
+          <video
+            id="player"
+            src="${videoData.videoUrl}"
+            playsinline
+            webkit-playsinline
+            controls
+            preload="metadata"
+          ></video>
+          <div id="playBtn" class="play-overlay" onclick="togglePlay()">▶</div>
+        </div>
+        <script>
+          const v = document.getElementById('player');
+          const btn = document.getElementById('playBtn');
+
+          function togglePlay() {
+            if (v.paused) {
+              v.play().then(() => {
+                btn.classList.add('hidden');
+              }).catch(() => {
+                v.muted = true;
+                v.play().then(() => {
+                  btn.classList.add('hidden');
+                });
+              });
+            } else {
+              v.pause();
+              btn.classList.remove('hidden');
+            }
+          }
+
+          v.addEventListener('play', () => btn.classList.add('hidden'));
+          v.addEventListener('pause', () => btn.classList.remove('hidden'));
+          v.addEventListener('ended', () => btn.classList.remove('hidden'));
+
+          // Try autoplay on ready
+          window.addEventListener('DOMContentLoaded', () => {
+            v.play().then(() => {
+              btn.classList.add('hidden');
+            }).catch(() => {
+              // Browser requires user gesture; keep play button visible
+              btn.classList.remove('hidden');
+            });
+          });
+        </script>
       </body>
     </html>
   `;
@@ -250,15 +327,30 @@ export function TutorialVideoModal({
             </Text>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={videoData.ctaText}
-            onPress={handleActionClick}
-            style={({ pressed }) => [styles.uploadNowBtn, pressed && { opacity: 0.8 }]}
-          >
-            <Text style={styles.uploadNowText} numberOfLines={1}>Action</Text>
-            <MaterialIcons name="open-in-new" size={15} color="#0284C7" />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Native Fullscreen Player"
+              onPress={handleOpenNativePlayer}
+              style={({ pressed }) => [
+                styles.uploadNowBtn,
+                { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <MaterialIcons name="fullscreen" size={18} color="#009F50" />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={videoData.ctaText}
+              onPress={handleActionClick}
+              style={({ pressed }) => [styles.uploadNowBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.uploadNowText} numberOfLines={1}>Action</Text>
+              <MaterialIcons name="open-in-new" size={15} color="#0284C7" />
+            </Pressable>
+          </View>
         </View>
 
         {/* ── Video Player Area ── */}
@@ -279,9 +371,10 @@ export function TutorialVideoModal({
           ) : (
             <WebView
               originWhitelist={['*']}
-              source={{ html: videoHtml }}
+              source={{ html: videoHtml, baseUrl: 'https://bgos.site' }}
               allowsInlineMediaPlayback
               mediaPlaybackRequiresUserAction={false}
+              allowsFullscreenVideo
               javaScriptEnabled
               style={styles.webView}
             />
