@@ -117,6 +117,7 @@ export async function syncServiceCatalogAndGbp(
         googleSync.connected = true;
         googleSync.attempted = true;
         const pushRes = await updateGoogleBusinessProfile(googleAccount, {
+          primaryCategory: settings.activeGbpCategory || settings.category || undefined,
           serviceItems: nextSeoServices.map((s) => ({
             name: s.name,
             description: s.description,

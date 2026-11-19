@@ -1819,8 +1819,14 @@ export async function updateGoogleBusinessProfile(
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
-      const errJson = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      warnings.push(`${label}: ${errJson.error?.message || `HTTP ${res.status}`}`);
+      const errJson = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string; details?: Array<{ errorDetails?: Array<{ message?: string }> }> };
+      };
+      const detailMsg =
+        errJson.error?.details?.[0]?.errorDetails?.[0]?.message || errJson.error?.message;
+      const errorStr = `${label}: ${detailMsg || `HTTP ${res.status}`}`;
+      console.warn(`[GBP patchGroup ${mask}] failed:`, errorStr);
+      warnings.push(errorStr);
       return false;
     }
     appliedMasks.push(mask);
@@ -1885,16 +1891,45 @@ export async function updateGoogleBusinessProfile(
   // 3. Service items with localized descriptions (clamped strictly under Google's 300-char limit)
   if (Array.isArray(updates.serviceItems) && updates.serviceItems.length > 0) {
     const primaryCat = await fetchLocationPrimaryCategoryResource(account.accessToken, locationId);
-    const fallbackCategory = primaryCat || 'categories/gcid:local_business';
+    let resolvedCategoryResource: string | null = primaryCat || null;
+    let resolvedCategoryId: string | null = null;
+
+    if (resolvedCategoryResource) {
+      resolvedCategoryId = resolvedCategoryResource.replace(/^categories\//, '');
+    } else if (updates.primaryCategory && updates.primaryCategory.trim()) {
+      const { resolved } = await resolveGoogleCategoryRefs(
+        account.accessToken,
+        [updates.primaryCategory.trim()],
+        updates.regionCode || 'IN',
+      );
+      if (resolved[0]?.name) {
+        resolvedCategoryResource = resolved[0].name;
+        resolvedCategoryId = resolved[0].name.replace(/^categories\//, '');
+      }
+    }
+
+    if (!resolvedCategoryId) {
+      resolvedCategoryId = 'gcid:software_company';
+      resolvedCategoryResource = 'categories/gcid:software_company';
+    }
+
     const formattedItems = updates.serviceItems
       .filter((s) => s.name && s.name.trim())
       .slice(0, 40)
       .map((s) => {
         const desc = s.description ? formatGoogleServiceDescription(s.description) : '';
+        const itemCatId = s.categoryName
+          ? s.categoryName.replace(/^categories\//, '')
+          : resolvedCategoryId;
+        const itemCatResource = s.categoryName
+          ? (s.categoryName.startsWith('categories/') ? s.categoryName : `categories/${s.categoryName}`)
+          : resolvedCategoryResource;
+
         return {
           isOffered: true,
           freeFormServiceItem: {
-            category: s.categoryName || fallbackCategory,
+            categoryId: itemCatId,
+            category: itemCatResource,
             label: {
               displayName: s.name.trim().slice(0, 100),
               ...(desc ? { description: desc } : {}),
@@ -1903,6 +1938,7 @@ export async function updateGoogleBusinessProfile(
           },
         };
       });
+
     if (formattedItems.length > 0) {
       await patchGroup('serviceItems', { serviceItems: formattedItems }, 'Services catalog');
     }

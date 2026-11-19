@@ -141,6 +141,56 @@ export default function ProductsManagementScreen() {
     setModalOpen(true);
   }
 
+  async function copyOrShareText(text: string, title?: string, alertMsg?: string) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        Alert.alert(title || 'Copied', alertMsg || 'Copied to clipboard!');
+        return;
+      }
+    } catch {
+      // fallback to Share
+    }
+    try {
+      await Share.share({
+        title: title || 'Copy',
+        message: text,
+      });
+    } catch {
+      Alert.alert('Notice', text);
+    }
+  }
+
+  function copyProductForGoogle(prod: BgosProduct) {
+    const landingUrl = `${storeRes.data?.canonicalUrl || 'https://bgos.site'}#products`;
+    const lines = [
+      `Product Name: ${prod.name}`,
+      `Category: ${prod.category || 'General'}`,
+      `Price (INR): ${prod.price !== null && prod.price > 0 ? String(prod.price) : '0'}`,
+      `Landing Page URL: ${landingUrl}`,
+      prod.description ? `Description: ${prod.description}` : '',
+      prod.imageUrl ? `Photo URL: ${prod.imageUrl}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    void copyOrShareText(
+      lines,
+      'Product Details Copied',
+      `Details for "${prod.name}" copied to clipboard!\n\nYou can now paste directly into Google Business Profile's "Add product" form.`,
+    );
+  }
+
+  function openGoogleProfile() {
+    const bizName = workspaceRes.data?.bookingPageConfig?.businessName || 'My Business';
+    const query = encodeURIComponent(bizName);
+    void Linking.openURL(`https://www.google.com/search?q=${query}`).catch(() => {});
+  }
+
+  function openGoogleMerchantCenter() {
+    void Linking.openURL('https://merchants.google.com').catch(() => {});
+  }
+
   async function pickProductImage() {
     try {
       if (Platform.OS !== 'web') {
@@ -215,8 +265,8 @@ export default function ProductsManagementScreen() {
         extraParts.push('Google Update published');
       }
       const baseMsg = editingId
-        ? 'Product updated & synced to BGOS Page + AI Chatbot'
-        : 'Product added & synced to BGOS Page + AI Chatbot';
+        ? 'Product updated & synced to Storefront, AI Chatbot + Merchant Feed'
+        : 'Product added & synced to Storefront, AI Chatbot + Merchant Feed';
       setNotice(extraParts.length > 0 ? `${baseMsg} (${extraParts.join(' • ')})` : baseMsg);
     } catch (err) {
       setError((err as Error).message || 'Could not save product');
@@ -388,6 +438,124 @@ export default function ProductsManagementScreen() {
         <View style={{ gap: 12 }}>
           <Action label="Add Product / Menu Item" icon="add-shopping-cart" onPress={openNewProductModal} />
 
+          {/* Google Sync & Merchant Feed Banner */}
+          <Card style={{ backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: '#EFF6FF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="cloud-sync" size={18} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                  Google Business Profile &amp; Merchant Sync
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  Google Merchant Center Feed + 1-Tap Google Product Shelf
+                </Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+              Google does not provide a direct write API for the manual web "Product Editor". To display all your BGOS products on Google Search, Maps &amp; Shopping, connect your automated Google Merchant XML feed or use 1-tap copy on any product below.
+            </Text>
+
+            {storeRes.data?.productsFeedUrl ? (
+              <View
+                style={{
+                  gap: 6,
+                  backgroundColor: '#FFFFFF',
+                  padding: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
+                  Your Google Merchant XML Feed URL:
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  selectable
+                  style={{
+                    fontSize: 11,
+                    color: '#0369A1',
+                    backgroundColor: '#F0F9FF',
+                    padding: 6,
+                    borderRadius: 6,
+                    fontWeight: '600',
+                  }}
+                >
+                  {storeRes.data.productsFeedUrl}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <Pressable
+                    onPress={() => {
+                      void copyOrShareText(
+                        storeRes.data?.productsFeedUrl || '',
+                        'Feed URL Copied',
+                        'Google Merchant XML Feed URL copied! In Google Merchant Center, add this as a Scheduled Fetch feed.',
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      backgroundColor: '#2563EB',
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <MaterialIcons name="content-copy" size={14} color="#FFFFFF" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+                      Copy Feed Link
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={openGoogleMerchantCenter}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      backgroundColor: '#F1F5F9',
+                      paddingVertical: 7,
+                      paddingHorizontal: 10,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <MaterialIcons name="open-in-new" size={14} color="#334155" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#334155' }}>
+                      Open GMC
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
+              <Pressable
+                onPress={openGoogleProfile}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              >
+                <MaterialIcons name="search" size={15} color="#2563EB" />
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
+                  Open Google Business Profile on Search
+                </Text>
+              </Pressable>
+            </View>
+          </Card>
+
           {products.length === 0 ? (
             <Card style={{ alignItems: 'center', paddingVertical: 28, gap: 10 }}>
               <View
@@ -434,7 +602,7 @@ export default function ProductsManagementScreen() {
                     </View>
                   )}
                   <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
                         {prod.category || 'General'}
                       </Text>
@@ -442,16 +610,32 @@ export default function ProductsManagementScreen() {
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 2,
-                          backgroundColor: '#EFF6FF',
+                          gap: 3,
+                          backgroundColor: '#ECFDF5',
                           paddingHorizontal: 6,
-                          paddingVertical: 1,
+                          paddingVertical: 1.5,
                           borderRadius: 4,
                         }}
                       >
-                        <MaterialIcons name="verified" size={10} color="#2563EB" />
+                        <MaterialIcons name="storefront" size={10} color="#059669" />
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#065F46' }}>
+                          Storefront Live
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                          backgroundColor: '#EFF6FF',
+                          paddingHorizontal: 6,
+                          paddingVertical: 1.5,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <MaterialIcons name="rss-feed" size={10} color="#2563EB" />
                         <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#1D4ED8' }}>
-                          Google Synced
+                          Feed Ready
                         </Text>
                       </View>
                       {!prod.inStock ? (
@@ -499,6 +683,58 @@ export default function ProductsManagementScreen() {
                     {prod.description}
                   </Text>
                 ) : null}
+
+                {/* 1-Tap Copy for Google Product Shelf & View */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: 8,
+                    borderTopWidth: 1,
+                    borderTopColor: '#F1F5F9',
+                    marginTop: 2,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => copyProductForGoogle(prod)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      paddingVertical: 5,
+                      paddingHorizontal: 8,
+                      borderRadius: 8,
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                    }}
+                  >
+                    <MaterialIcons name="content-copy" size={13} color="#334155" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>
+                      Copy for Google Product Shelf
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      const url = `${storeRes.data?.canonicalUrl || 'https://bgos.site'}#products`;
+                      void Linking.openURL(url).catch(() => {});
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingVertical: 5,
+                      paddingHorizontal: 8,
+                    }}
+                  >
+                    <MaterialIcons name="visibility" size={13} color="#2563EB" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>
+                      Storefront View
+                    </Text>
+                  </Pressable>
+                </View>
               </Card>
             ))
           )}
@@ -951,10 +1187,10 @@ export default function ProductsManagementScreen() {
               >
                 <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
-                    Announce on Google Updates
+                    Announce on Google Updates (Showcase Post)
                   </Text>
                   <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                    Also publish a product showcase post with an Order button to your Google Business Profile.
+                    Publishes a showcase update with an &apos;Order&apos; button on Google Maps. (Note: Google&apos;s separate &apos;Products&apos; shelf syncs via your Merchant Feed).
                   </Text>
                 </View>
                 <Switch

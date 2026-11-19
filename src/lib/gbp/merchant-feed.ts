@@ -27,14 +27,21 @@ export function buildGoogleMerchantXmlFeed(input: MerchantFeedInput): string {
   const itemsXml = input.products
     .map((p) => {
       const id = p.id || p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const desc = (p.description || `${p.name} — available at ${input.businessName}`).slice(0, 4900);
+      const rawDesc = p.description || `${p.name} — available at ${input.businessName}`;
+      const cleanDesc = rawDesc.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 4900);
       const availability = p.inStock === false ? 'out of stock' : 'in stock';
       const priceLine =
         typeof p.price === 'number' && Number.isFinite(p.price) && p.price >= 0
           ? `\n      <g:price>${p.price.toFixed(2)} ${escapeXml(currency)}</g:price>`
           : '';
-      const imageLine = p.imageUrl
-        ? `\n      <g:image_link>${escapeXml(p.imageUrl)}</g:image_link>`
+      let resolvedImg = p.imageUrl ? p.imageUrl.trim() : '';
+      if (resolvedImg && !/^https?:\/\//i.test(resolvedImg) && input.canonicalUrl) {
+        try {
+          resolvedImg = new URL(resolvedImg, input.canonicalUrl).toString();
+        } catch {}
+      }
+      const imageLine = resolvedImg
+        ? `\n      <g:image_link>${escapeXml(resolvedImg)}</g:image_link>`
         : '';
       const categoryLine = p.category
         ? `\n      <g:product_type>${escapeXml(p.category)}</g:product_type>`
@@ -43,7 +50,7 @@ export function buildGoogleMerchantXmlFeed(input: MerchantFeedInput): string {
       return `    <item>
       <g:id>${escapeXml(id)}</g:id>
       <g:title>${escapeXml(p.name.slice(0, 150))}</g:title>
-      <g:description>${escapeXml(desc)}</g:description>
+      <g:description>${escapeXml(cleanDesc)}</g:description>
       <g:link>${escapeXml(baseProductLink)}</g:link>${imageLine}
       <g:condition>new</g:condition>
       <g:availability>${availability}</g:availability>${priceLine}

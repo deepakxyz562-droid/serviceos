@@ -193,6 +193,7 @@ Respond ONLY with a valid JSON array matching the exact order above:
         const googleAccount = await prepareGoogleAccount(params.tenantId, params.locationId);
         if (googleAccount?.accessToken) {
           const pushRes = await updateGoogleBusinessProfile(googleAccount, {
+            primaryCategory: ctx.category || undefined,
             serviceItems: mergedAll.map((s) => ({
               name: s.name,
               description: s.description,

@@ -34,10 +34,10 @@ function formatServiceTitleFromKeyword(keyword: string): string {
 }
 
 function getCharHealth(len: number): { label: string; color: string; bg: string } {
-  if (len === 0) return { label: 'Empty · target 300–500 chars', color: '#64748B', bg: '#F1F5F9' };
-  if (len < 300) return { label: `${len}/500 chars · add ${300 - len} for SEO`, color: '#B45309', bg: '#FEF3C7' };
-  if (len <= 500) return { label: `${len}/500 chars · Optimal SEO ✓`, color: '#047857', bg: '#ECFDF5' };
-  return { label: `${len}/500 chars · trim ${len - 500} chars`, color: '#B91C1C', bg: '#FEE2E2' };
+  if (len === 0) return { label: 'Empty · target 140–280 chars', color: '#64748B', bg: '#F1F5F9' };
+  if (len < 140) return { label: `${len}/300 chars · add ${140 - len} for Google`, color: '#B45309', bg: '#FEF3C7' };
+  if (len <= 290) return { label: `${len}/300 chars · Optimal for Google ✓`, color: '#047857', bg: '#ECFDF5' };
+  return { label: `${len}/300 chars · trim ${len - 290} for Google`, color: '#B91C1C', bg: '#FEE2E2' };
 }
 
 export default function ServicesManagementScreen() {
@@ -178,7 +178,7 @@ export default function ServicesManagementScreen() {
     () =>
       selectedServices.filter((name) => {
         const len = (descriptionsByName[name] || '').trim().length;
-        return len >= 300 && len <= 500;
+        return len >= 140 && len <= 290;
       }).length,
     [selectedServices, descriptionsByName],
   );
@@ -316,6 +316,7 @@ export default function ServicesManagementScreen() {
 
       const res = await apiRequest<{
         syncedToGoogle?: boolean;
+        servicesSynced?: boolean;
         googleWarnings?: string[];
       }>('/api/gbp/place', {
         method: 'PATCH',
@@ -331,14 +332,22 @@ export default function ServicesManagementScreen() {
           ? `\n\nGoogle notice: ${res.googleWarnings[0]}`
           : '';
       const optimizedCount = structuredPayload.filter(
-        (s) => s.description && s.description.length >= 300
+        (s) => s.description && s.description.length >= 140 && s.description.length <= 290
       ).length;
-      Alert.alert(
-        res.syncedToGoogle ? 'Synced to Google!' : 'Services Saved',
-        res.syncedToGoogle
-          ? `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) and synced to Google Business Profile.${warningMsg}`
-          : `Saved ${selectedServices.length} services (${optimizedCount} with 300–500 char SEO copy) to your workspace.${warningMsg}`,
-      );
+
+      const title = res.servicesSynced
+        ? 'Synced to Google Business Profile!'
+        : res.syncedToGoogle
+        ? 'Profile Updated'
+        : 'Services Saved';
+
+      const message = res.servicesSynced
+        ? `Successfully saved ${selectedServices.length} services (${optimizedCount} with optimal Google descriptions) and synced to Google Business Profile.${warningMsg}`
+        : res.syncedToGoogle
+        ? `Profile details updated, but Google service catalog reported a notice.${warningMsg}`
+        : `Saved ${selectedServices.length} services (${optimizedCount} with SEO copy) to your workspace.${warningMsg}`;
+
+      Alert.alert(title, message);
       handleSafeBack();
     } catch (err: unknown) {
       Alert.alert('Save Failed', err instanceof Error ? err.message : 'Could not save services.');
@@ -438,7 +447,7 @@ export default function ServicesManagementScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.summaryTitle}>Active Services</Text>
                     <Text style={styles.summarySub}>
-                      {seoReadyCount}/{selectedServices.length} SEO optimized (300–500 chars)
+                      {seoReadyCount}/{selectedServices.length} Google SEO ready (140–280 chars)
                     </Text>
                   </View>
                   <Pressable
@@ -519,7 +528,7 @@ export default function ServicesManagementScreen() {
                       {/* Character Count Health Indicator */}
                       <View style={[styles.healthBadge, { backgroundColor: health.bg }]}>
                         <MaterialIcons
-                          name={desc.length >= 300 && desc.length <= 500 ? 'check-circle' : 'info'}
+                          name={desc.length >= 140 && desc.length <= 290 ? 'check-circle' : 'info'}
                           size={13}
                           color={health.color}
                         />
@@ -530,13 +539,13 @@ export default function ServicesManagementScreen() {
 
                       {/* Direct Inline Editable Description */}
                       <View style={{ gap: 4 }}>
-                        <Text style={styles.inputLabel}>Service Description (Google Local SEO)</Text>
+                        <Text style={styles.inputLabel}>Google Service Description (max 300 chars)</Text>
                         <TextInput
                           style={styles.inlineDescInput}
                           multiline
-                          maxLength={500}
+                          maxLength={300}
                           textAlignVertical="top"
-                          placeholder={`Describe ${name} targeting ${kw || category} in ${cityLabel}... (aim for 300–500 characters for top Google ranking)`}
+                          placeholder={`Describe ${name} targeting ${kw || category} in ${cityLabel}... (140–280 chars for Google Business Profile)`}
                           placeholderTextColor="#94A3B8"
                           value={desc}
                           onChangeText={(val) =>

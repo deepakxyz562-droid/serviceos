@@ -899,6 +899,12 @@ export async function PATCH(request: NextRequest) {
               : {}),
             ...(resolvedSeoServices && resolvedSeoServices.length > 0
               ? {
+                  primaryCategory:
+                    currentSettings.activeGbpCategory ||
+                    currentSettings.category ||
+                    currentTenantForGeo?.brandProfile?.industry ||
+                    currentTenantForGeo?.industry ||
+                    undefined,
                   serviceItems: resolvedSeoServices.map((s) => ({
                     name: s.name,
                     description: s.description,
@@ -912,6 +918,26 @@ export async function PATCH(request: NextRequest) {
           appliedMasks = pushRes.appliedMasks;
           googleWarnings = pushRes.warnings;
           syncedToGoogle = appliedMasks.length > 0;
+
+          const servicesSynced = appliedMasks.includes('serviceItems');
+          if (resolvedSeoServices && resolvedSeoServices.length > 0) {
+            resolvedSeoServices = resolvedSeoServices.map((s) => ({
+              ...s,
+              syncedToGoogle: servicesSynced ? true : Boolean(s.syncedToGoogle),
+            }));
+            currentSettings.seoServices = resolvedSeoServices;
+            await db.tenant.update({
+              where: { id: user.tenantId },
+              data: { settingsJson: JSON.stringify(currentSettings) },
+            });
+          }
+
+          if (body.pushToGoogle && resolvedSeoServices && resolvedSeoServices.length > 0 && !servicesSynced) {
+            const svcWarn = pushRes.warnings.find((w) => w.toLowerCase().includes('services catalog'));
+            if (svcWarn && !googleWarnings.includes(svcWarn)) {
+              googleWarnings.unshift(svcWarn);
+            }
+          }
 
           // Also sync Place Actions (Booking / Appointment) if configured
           try {
@@ -975,6 +1001,7 @@ export async function PATCH(request: NextRequest) {
       updated: updateData,
       seoServices: resolvedSeoServices || undefined,
       syncedToGoogle,
+      servicesSynced: appliedMasks.includes('serviceItems'),
       appliedMasks,
       googleWarnings,
     });
