@@ -831,9 +831,14 @@ export default function BusinessPageSettingsScreen() {
                   }}
                 >
                   <MaterialIcons name="link" size={18} color="#009F50" style={{ marginRight: 8 }} />
-                  <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>
-                    https://bgos.site/{slugCandidate}
-                  </Text>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                      https://{slugCandidate}.bgos.site
+                    </Text>
+                    <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#0284C7' }} numberOfLines={1}>
+                      Alternate: https://bgos.site/{slugCandidate}
+                    </Text>
+                  </View>
                 </View>
 
                 <Field

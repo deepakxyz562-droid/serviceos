@@ -201,8 +201,29 @@ export default async function ShortBusinessUrlPage({
     country: profile.country,
     logo: toAbsoluteAssetUrl(profile.logoUrl, profile.canonicalUrl),
     coverImage: toAbsoluteAssetUrl(profile.coverImage, profile.canonicalUrl),
+    images: [
+      toAbsoluteAssetUrl(profile.logoUrl, profile.canonicalUrl),
+      toAbsoluteAssetUrl(profile.coverImage, profile.canonicalUrl),
+      ...profile.gallery.map((g) => toAbsoluteAssetUrl(g.url, profile.canonicalUrl)),
+    ].filter((img): img is string => typeof img === 'string' && img.length > 0),
     rating: profile.rating > 0 && profile.reviewCount > 0 ? profile.rating : undefined,
     reviewCount: profile.rating > 0 && profile.reviewCount > 0 ? profile.reviewCount : undefined,
+    hasMap:
+      profile.mapsUrl ||
+      (profile.googlePlaceId
+        ? `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${profile.googlePlaceId}`
+        : undefined),
+    knowsAbout: [
+      profile.category,
+      ...profile.additionalCategories,
+      ...profile.services.slice(0, 8).map((s) => s.name),
+    ].filter(Boolean),
+    reviews: profile.reviews.map((r) => ({
+      authorName: r.authorName,
+      rating: r.rating,
+      comment: r.comment || undefined,
+      datePublished: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
+    })),
     openingHours: profile.hours
       .filter((h) => h.open)
       .map((h) => ({

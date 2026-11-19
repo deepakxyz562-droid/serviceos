@@ -152,3 +152,22 @@ fieseros.com, app.fieseros.com, pro.fieseros.com, business.fieseros.com, admin.f
 #     header_up X-Forwarded-Proto {scheme}
 #   }
 # }
+
+# ── Wildcard BGOS tenant subdomains: https://<slug>.bgos.site ────────────────
+*.bgos.site {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-X-Powered-By
+	}
+	reverse_proxy localhost:3000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

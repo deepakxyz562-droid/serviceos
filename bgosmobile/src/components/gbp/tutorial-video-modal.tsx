@@ -34,14 +34,14 @@ export interface TutorialVideoItem {
   takeaways: Array<{ title: string; desc: string }>;
 }
 
-const PRIMARY_TUTORIAL_VIDEO_URL = 'https://bgos.site/bgos/tutorials/bgos-tutorial.mp4';
+const PRIMARY_TUTORIAL_VIDEO_URL = 'https://bgos.site/api/bgos/video-stream?file=bgos-tutorial.mp4';
 
 export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
   why_photos: {
     id: 'why_photos',
     title: 'Why Google Photos Matter',
     subtitle: 'GBP Growth Guide · 2:10 min',
-    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
+    videoUrl: 'https://bgos.site/api/bgos/video-stream?file=why-gbp-photos.mp4',
     ctaText: 'Add Photos & Auto-Schedule Now',
     ctaIcon: 'add-a-photo',
     takeawaysHeader: 'Key Ranking Takeaways',
@@ -64,7 +64,7 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
     id: 'boost_ranking',
     title: 'See Exactly How AI Boosts Your Google Ranking',
     subtitle: 'Automated Setup & AI Autopilot · 2:10 min',
-    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
+    videoUrl: 'https://bgos.site/api/bgos/video-stream?file=boost-google-ranking.mp4',
     ctaText: 'Activate GBP AI Autopilot',
     ctaIcon: 'auto-awesome',
     takeawaysHeader: 'How AI Boosts Ranking',
@@ -87,7 +87,7 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
     id: 'performance_analysis',
     title: 'Is Your Google Business Profile Performing?',
     subtitle: 'GBP Performance & Geo-Grid Analysis · 2:10 min',
-    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
+    videoUrl: 'https://bgos.site/api/bgos/video-stream?file=gbp-performance-analysis.mp4',
     ctaText: 'View Full Performance Report',
     ctaIcon: 'trending-up',
     takeawaysHeader: 'Performance Metrics That Matter',
@@ -110,7 +110,7 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
     id: 'reviews_trust',
     title: 'More Reviews = More Trust = More Customers',
     subtitle: 'Customer Trust & Conversion Strategy · 2:10 min',
-    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
+    videoUrl: 'https://bgos.site/api/bgos/video-stream?file=reviews-build-trust.mp4',
     ctaText: 'Turn Customers into Reviews',
     ctaIcon: 'star',
     takeawaysHeader: 'Why Reviews Drive Sales',
@@ -133,7 +133,7 @@ export const TUTORIAL_CATALOG: Record<TutorialVideoId, TutorialVideoItem> = {
     id: 'how_to_get_reviews',
     title: 'How to Get Reviews for Your Google Profile',
     subtitle: '1-Tap & Drip Follow-ups Guide · 2:10 min',
-    videoUrl: PRIMARY_TUTORIAL_VIDEO_URL,
+    videoUrl: 'https://bgos.site/api/bgos/video-stream?file=how-to-get-reviews.mp4',
     ctaText: 'Send Review Request Now',
     ctaIcon: 'send',
     takeawaysHeader: 'Step-by-Step Review Collection',
@@ -213,95 +213,54 @@ export function TutorialVideoModal({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
-          body {
+          html, body {
             background-color: #000000;
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            width: 100vw;
+            height: 100%;
+            width: 100%;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           }
           .video-container {
             position: relative;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #000000;
           }
           video {
             width: 100%;
             height: 100%;
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
-            background: #000;
-          }
-          .play-overlay {
-            position: absolute;
-            width: 68px;
-            height: 68px;
-            border-radius: 34px;
-            background: rgba(0, 159, 80, 0.92);
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            transition: transform 0.2s ease, opacity 0.2s ease;
-            z-index: 10;
-          }
-          .play-overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
+            background: #000000;
           }
         </style>
       </head>
       <body>
-        <div class="video-container" id="container">
+        <div class="video-container">
           <video
             id="player"
             src="${videoData.videoUrl}"
             playsinline
             webkit-playsinline
+            x5-playsinline
             controls
-            preload="metadata"
+            autoplay
+            preload="auto"
           ></video>
-          <div id="playBtn" class="play-overlay" onclick="togglePlay()">▶</div>
         </div>
         <script>
           const v = document.getElementById('player');
-          const btn = document.getElementById('playBtn');
-
-          function togglePlay() {
-            if (v.paused) {
-              v.play().then(() => {
-                btn.classList.add('hidden');
-              }).catch(() => {
-                v.muted = true;
-                v.play().then(() => {
-                  btn.classList.add('hidden');
-                });
-              });
-            } else {
-              v.pause();
-              btn.classList.remove('hidden');
-            }
-          }
-
-          v.addEventListener('play', () => btn.classList.add('hidden'));
-          v.addEventListener('pause', () => btn.classList.remove('hidden'));
-          v.addEventListener('ended', () => btn.classList.remove('hidden'));
-
-          // Try autoplay on ready
           window.addEventListener('DOMContentLoaded', () => {
-            v.play().then(() => {
-              btn.classList.add('hidden');
-            }).catch(() => {
-              // Browser requires user gesture; keep play button visible
-              btn.classList.remove('hidden');
+            v.play().catch(() => {
+              v.muted = true;
+              v.play().catch(() => {});
             });
           });
         </script>
@@ -372,10 +331,14 @@ export function TutorialVideoModal({
             <WebView
               originWhitelist={['*']}
               source={{ html: videoHtml, baseUrl: 'https://bgos.site' }}
-              allowsInlineMediaPlayback
+              allowsInlineMediaPlayback={true}
               mediaPlaybackRequiresUserAction={false}
-              allowsFullscreenVideo
-              javaScriptEnabled
+              allowsFullscreenVideo={true}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
+              androidHardwareAccelerationDisabled={false}
+              androidLayerType="hardware"
               style={styles.webView}
             />
           )}

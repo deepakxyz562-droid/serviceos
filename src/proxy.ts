@@ -299,7 +299,11 @@ export async function proxy(request: NextRequest) {
       if (!BGOS_RESERVED.has(slugCandidate)) {
         const subPath = match[2] || '';
         const url = request.nextUrl.clone();
-        url.pathname = `/b/${slugCandidate}${subPath}`;
+        if (subPath === '/book' || subPath.startsWith('/book/')) {
+          url.pathname = `/b/${slugCandidate}/book${subPath.replace(/^\/book/, '')}`;
+        } else {
+          url.pathname = `/b/${slugCandidate}${subPath}`;
+        }
         const response = NextResponse.rewrite(url);
         response.headers.set('x-app-product', 'bgos');
         response.headers.set('X-Request-Id', generateRequestId());

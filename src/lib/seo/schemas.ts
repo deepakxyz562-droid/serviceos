@@ -310,7 +310,7 @@ export function getLocalBusinessSchema(opts: {
   description: string;
   url: string;             // canonical URL of the business hub page
   slug: string;            // tenant slug
-  industry?: string;       // raw industry string from DB
+  industry?: string | null;       // raw industry string from DB
   phone?: string;
   email?: string;
   address?: string;
@@ -320,12 +320,18 @@ export function getLocalBusinessSchema(opts: {
   country?: string;
   logo?: string;
   coverImage?: string;
+  images?: string[];
   rating?: number;         // aggregate (0-5)
   reviewCount?: number;
   reviews?: LocalBusinessReview[];
   openingHours?: LocalBusinessHours[];
   priceRange?: string;     // "$", "$$", "$$$"
   sameAs?: string[];       // social links
+  hasMap?: string;
+  knowsAbout?: string[];
+  contactPoint?:
+    | Array<{ telephone?: string; contactType?: string; email?: string; url?: string }>
+    | { telephone?: string; contactType?: string; email?: string; url?: string };
   /**
    * Business coordinates for the `geo` JSON-LD property (GeoCoordinates).
    * MUST be a valid (latitude, longitude) pair — pass undefined if either
@@ -349,12 +355,37 @@ export function getLocalBusinessSchema(opts: {
     url: opts.url,
     ...(opts.phone ? { telephone: opts.phone } : {}),
     ...(opts.email ? { email: opts.email } : {}),
+    ...(opts.hasMap ? { hasMap: opts.hasMap } : {}),
+    ...(opts.knowsAbout && opts.knowsAbout.length > 0 ? { knowsAbout: opts.knowsAbout } : {}),
+    ...(opts.contactPoint
+      ? {
+          contactPoint: Array.isArray(opts.contactPoint)
+            ? opts.contactPoint.map((cp) => ({ "@type": "ContactPoint", contactType: "customer service", ...cp }))
+            : { "@type": "ContactPoint", contactType: "customer service", ...opts.contactPoint },
+        }
+      : opts.phone
+      ? {
+          contactPoint: [
+            {
+              "@type": "ContactPoint",
+              contactType: "customer service",
+              telephone: opts.phone,
+            },
+          ],
+        }
+      : {}),
     // SEO-3 (review fix): absolutize image URLs. The `logo` and `coverImage`
     // values may be relative (e.g. the industry-default fallback
     // `/images/industry/hvac.webp`). Schema.org requires absolute URLs.
     // Already-absolute URLs (https://...) are passed through unchanged.
-    ...(opts.logo ? { logo: absolutizeImageUrl(opts.logo), image: absolutizeImageUrl(opts.logo) } : {}),
-    ...(opts.coverImage && !opts.logo ? { image: absolutizeImageUrl(opts.coverImage) } : {}),
+    ...(opts.logo ? { logo: absolutizeImageUrl(opts.logo) } : {}),
+    ...(opts.images && opts.images.length > 0
+      ? { image: opts.images.map(absolutizeImageUrl) }
+      : opts.logo
+      ? { image: absolutizeImageUrl(opts.logo) }
+      : opts.coverImage
+      ? { image: absolutizeImageUrl(opts.coverImage) }
+      : {}),
     ...(opts.priceRange ? { priceRange: opts.priceRange } : {}),
     ...(opts.sameAs && opts.sameAs.length > 0 ? { sameAs: opts.sameAs } : {}),
   };

@@ -424,7 +424,8 @@ export function GrowthActionSheet({
         body: {
           action: 'update_booking_button',
           bookingType,
-          customUrl: bookingType === 'google_calendar' ? customBookingUrl.trim() : undefined,
+          customUrl: bookingType !== 'bgos' ? customBookingUrl.trim() : undefined,
+          customBookingUrl: bookingType !== 'bgos' ? customBookingUrl.trim() : undefined,
         },
       });
       showNotice('✓ Booking Button Set', res.message || 'Booking action updated.', 'success');
@@ -2041,22 +2042,22 @@ export function GrowthActionSheet({
                         color={bookingType === 'google_calendar' ? '#2563EB' : '#94A3B8'}
                       />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                        📅 Google Calendar Appointment Schedule
+                        📅 Custom Website or Google Calendar Link
                       </Text>
                     </View>
                     <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#1D4ED8' }}>FREE</Text>
+                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#1D4ED8' }}>CUSTOM</Text>
                     </View>
                   </View>
                   <Text style={{ fontSize: 11, color: '#64748B', marginLeft: 24, lineHeight: 15 }}>
-                    Free Google feature (Calendar &gt; Create &gt; Appointment Schedule). Paste your link below.
+                    Paste your official booking URL, website page, or Google Calendar schedule link below.
                   </Text>
 
                   {bookingType === 'google_calendar' && (
                     <TextInput
                       value={customBookingUrl}
                       onChangeText={setCustomBookingUrl}
-                      placeholder="https://calendar.app.google/..."
+                      placeholder="https://partypies-events.grexa.site/ or https://calendar.app.google/..."
                       placeholderTextColor="#94A3B8"
                       keyboardType="url"
                       autoCapitalize="none"

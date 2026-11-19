@@ -1970,7 +1970,9 @@ export default function HomeScreen() {
         visible={growthModalOpen}
         onClose={() => setGrowthModalOpen(false)}
         growthData={growthActions.data}
-        onRefresh={growthActions.refresh}
+        onRefresh={async () => {
+          await Promise.allSettled([growthActions.refresh(), gbpPlace.refresh(), workspace.refresh()]);
+        }}
       />
 
       {/* 1-Tap WhatsApp & Bulk 5/Day Google Review Request Sheet */}

@@ -1024,8 +1024,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'create_service_from_term') {
-      const keyword = String(body?.keyword || '').trim();
-      const serviceNameInput = String(body?.serviceName || '').trim();
+      const keyword = String(body?.keyword || body?.term || '').trim();
+      const serviceNameInput = String(body?.serviceName || body?.suggestedServiceName || '').trim();
       if (!keyword && !serviceNameInput) {
         return NextResponse.json({ error: 'keyword or serviceName is required' }, { status: 400 });
       }
@@ -1167,18 +1167,44 @@ export async function POST(request: NextRequest) {
         data: { settingsJson: JSON.stringify(settings) },
       });
 
+      // Sync WhatsApp direct chat link to Google Business Profile if connected
+      let syncedToGoogle = false;
+      const googleWarnings: string[] = [];
+      try {
+        const googleAccount = await prepareGoogleAccount(user.tenantId, typeof body?.locationId === 'string' ? body.locationId : undefined);
+        if (googleAccount?.accessToken) {
+          const gbpRes = await updateGoogleBusinessProfile(googleAccount, {
+            whatsappUrl: resolvedUrl,
+          });
+          syncedToGoogle = gbpRes.appliedMasks.includes('attributes/url_whatsapp');
+          if (gbpRes.warnings.length > 0) {
+            googleWarnings.push(...gbpRes.warnings);
+          }
+        }
+      } catch (err: unknown) {
+        googleWarnings.push(err instanceof Error ? err.message : 'Google WhatsApp sync notice');
+      }
+
+      invalidateBootstrapCache(user.tenantId);
+
       return NextResponse.json({
         success: true,
         whatsappUrl: resolvedUrl,
         phone: phoneToUse,
-        message: `WhatsApp chat link configured (${resolvedUrl}).`,
+        syncedToGoogle,
+        googleWarnings,
+        message: syncedToGoogle
+          ? `WhatsApp chat button synced to Google Maps (${resolvedUrl}).`
+          : `WhatsApp chat link configured (${resolvedUrl}).`,
       });
     }
 
     // ─── 6. Google Maps Booking / Appointment Place Action Link ───────────────
     if (action === 'update_booking_button') {
       const bookingType = String(body?.bookingType || 'bgos');
-      const customUrl = typeof body?.customUrl === 'string' ? body.customUrl.trim() : '';
+      const customUrl = typeof body?.customUrl === 'string'
+        ? body.customUrl.trim()
+        : (typeof body?.customBookingUrl === 'string' ? body.customBookingUrl.trim() : '');
 
       const tenant = await db.tenant.findUnique({
         where: { id: user.tenantId },

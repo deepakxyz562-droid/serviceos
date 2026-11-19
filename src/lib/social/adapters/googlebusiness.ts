@@ -1691,7 +1691,21 @@ export interface GbpProfileUpdateInput {
   additionalCategories?: string[]; // display names or 'categories/gcid:...' / 'gcid:...'
   serviceItems?: Array<{ name: string; description?: string; categoryName?: string }>;
   attributes?: Record<string, boolean | string | string[]>;
+  whatsappUrl?: string; // WhatsApp click-to-chat URL or phone
   regionCode?: string;
+}
+
+export function formatGoogleServiceDescription(raw: string): string {
+  let clean = raw.replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  if (clean.length <= 280) return clean;
+  const slice = clean.slice(0, 278);
+  const lastStop = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '));
+  if (lastStop >= 120) {
+    return slice.slice(0, lastStop + 1).trim();
+  }
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace >= 80 ? slice.slice(0, lastSpace) : slice).trim().replace(/[.,;:\-]+$/, '')}.`;
 }
 
 export interface GbpProfileUpdateResult {
@@ -1868,23 +1882,27 @@ export async function updateGoogleBusinessProfile(
     }
   }
 
-  // 3. Service items with localized 300-500 char descriptions
+  // 3. Service items with localized descriptions (clamped strictly under Google's 300-char limit)
   if (Array.isArray(updates.serviceItems) && updates.serviceItems.length > 0) {
     const primaryCat = await fetchLocationPrimaryCategoryResource(account.accessToken, locationId);
     const fallbackCategory = primaryCat || 'categories/gcid:local_business';
     const formattedItems = updates.serviceItems
       .filter((s) => s.name && s.name.trim())
       .slice(0, 40)
-      .map((s) => ({
-        freeFormServiceItem: {
-          category: s.categoryName || fallbackCategory,
-          label: {
-            displayName: s.name.trim().slice(0, 100),
-            ...(s.description?.trim() ? { description: s.description.trim().slice(0, 500) } : {}),
-            languageCode: 'en',
+      .map((s) => {
+        const desc = s.description ? formatGoogleServiceDescription(s.description) : '';
+        return {
+          isOffered: true,
+          freeFormServiceItem: {
+            category: s.categoryName || fallbackCategory,
+            label: {
+              displayName: s.name.trim().slice(0, 100),
+              ...(desc ? { description: desc } : {}),
+              languageCode: 'en',
+            },
           },
-        },
-      }));
+        };
+      });
     if (formattedItems.length > 0) {
       await patchGroup('serviceItems', { serviceItems: formattedItems }, 'Services catalog');
     }
@@ -1935,6 +1953,47 @@ export async function updateGoogleBusinessProfile(
       } else {
         const errJson = (await attrRes.json().catch(() => ({}))) as { error?: { message?: string } };
         warnings.push(`Attributes: ${errJson.error?.message || `HTTP ${attrRes.status}`}`);
+      }
+    }
+  }
+
+  // 4b. Direct WhatsApp Click-to-Chat attribute sync
+  if (updates.whatsappUrl !== undefined && updates.whatsappUrl.trim()) {
+    const rawWa = updates.whatsappUrl.trim();
+    const cleanDigits = rawWa.replace(/[^0-9]/g, '');
+    const normalizedDigits = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+    const finalWaUri = rawWa.startsWith('http') ? rawWa : (normalizedDigits ? `https://wa.me/${normalizedDigits}` : '');
+    if (finalWaUri) {
+      try {
+        const waAttrRes = await fetch(
+          `${GBP_API_BASE}/${locationPath}/attributes?attributeMask=attributes/url_whatsapp`,
+          {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${account.accessToken}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              name: `${locationPath}/attributes`,
+              attributes: [
+                {
+                  name: 'attributes/url_whatsapp',
+                  uriValues: [{ uri: finalWaUri }],
+                },
+              ],
+            }),
+            signal: AbortSignal.timeout(15000),
+          },
+        );
+        if (waAttrRes.ok) {
+          appliedMasks.push('attributes/url_whatsapp');
+        } else {
+          const errJson = (await waAttrRes.json().catch(() => ({}))) as { error?: { message?: string } };
+          warnings.push(`WhatsApp attribute notice: ${errJson.error?.message || `HTTP ${waAttrRes.status}`}`);
+        }
+      } catch (waErr) {
+        warnings.push(waErr instanceof Error ? waErr.message : 'WhatsApp update notice');
       }
     }
   }
