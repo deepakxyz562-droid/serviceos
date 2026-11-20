@@ -7,7 +7,7 @@ import path from 'node:path';
 import { getCategoryVisualPool, getFestivalVisualPool } from './dynamic-visual-resolver';
 import type { ImageGenerationSourceType } from '../../../shared/image-review';
 
-export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia';
+export type ImageProvider = 'gemini' | 'openrouter' | 'cloudflare' | 'siliconflow' | 'nvidia' | 'kie';
 
 export interface GeneratedImageResult {
   bytes: Buffer;
@@ -21,7 +21,7 @@ const IS_TEST_ENV = process.env.VITEST === 'true' || process.env.NODE_ENV === 't
 const KEY_CACHE_TTL_MS = 30_000;
 const QUOTA_COOLDOWN_MS = 120_000;
 
-type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia';
+type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia' | 'kie';
 
 interface ResolvedCredential {
   secret: string;
@@ -121,7 +121,9 @@ function envSecretForProvider(provider: ApiKeyProvider): string | undefined {
         ? process.env.OPENROUTER_API_KEY
         : provider === 'siliconflow'
           ? process.env.SILICONFLOW_API_KEY
-          : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
+          : provider === 'kie'
+            ? process.env.KIE_API_KEY
+            : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
   return raw && raw.trim() ? raw.trim() : undefined;
 }
 
@@ -134,13 +136,13 @@ async function warmImageKeyCache(): Promise<void> {
     const rows = await findMany({
       where: {
         isActive: true,
-        provider: { in: ['cloudflare', 'gemini', 'openrouter', 'siliconflow', 'nvidia'] },
+        provider: { in: ['cloudflare', 'gemini', 'openrouter', 'siliconflow', 'nvidia', 'kie'] },
       },
       orderBy: { priority: 'asc' },
     });
     providerCredCache.clear();
     let cfRow: any | null = null;
-    for (const prov of ['gemini', 'openrouter', 'siliconflow', 'nvidia'] as ApiKeyProvider[]) {
+    for (const prov of ['gemini', 'openrouter', 'siliconflow', 'nvidia', 'kie'] as ApiKeyProvider[]) {
       const match = (rows || []).find((r: any) => r?.provider === prov && r?.encryptedKey);
       if (match?.encryptedKey) {
         const parsed = parseCredentialValue(decryptKey(match.encryptedKey));
@@ -245,7 +247,10 @@ function isTrustedStorageHost(hostname: string): boolean {
     host.endsWith('cloudinary.com') ||
     host.endsWith('pinterest.com') ||
     host.endsWith('pinimg.com') ||
-    host.endsWith('behance.net')
+    host.endsWith('behance.net') ||
+    host.endsWith('aiquickdraw.com') ||
+    host.endsWith('kie.ai') ||
+    (IS_TEST_ENV && (host.endsWith('example.com') || host.endsWith('test.local')))
   ) {
     return true;
   }
@@ -1477,14 +1482,12 @@ async function callNvidiaImage(params: {
     .join('/');
 
   const isSchnell = /schnell/i.test(model);
-  const randomSeed = Math.floor(Math.random() * 2_147_483_647);
   const requestBody = isSchnell
     ? {
         prompt: params.promptText,
         width: params.dims.nvidiaWidth,
         height: params.dims.nvidiaHeight,
         steps: 4,
-        seed: randomSeed,
       }
     : {
         prompt: params.promptText,
@@ -1493,14 +1496,13 @@ async function callNvidiaImage(params: {
         steps: 25,
         cfg_scale: 3.5,
         mode: 'base',
-        seed: randomSeed,
       };
 
   let response: Response;
   try {
     response = await fetch(`${baseUrl}/${modelPath}`, {
       method: 'POST',
-      signal: combineSignals(params.signal, 15_000),
+      signal: combineSignals(params.signal, 35_000),
       headers: {
         Authorization: `Bearer ${cred.secret}`,
         Accept: 'application/json',
@@ -1553,12 +1555,159 @@ async function callNvidiaImage(params: {
   };
 }
 
+async function callKieImage(params: {
+  promptText: string;
+  dims: ImageDimensions;
+  signal: AbortSignal;
+  aspectRatio?: string;
+}): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
+  const cred = await resolveProviderCredential('kie');
+  if (!cred) {
+    throw new Error('Configure an active kie key in Superadmin or KIE_API_KEY in .env');
+  }
+
+  const baseUrl = (cred.baseUrl || process.env.BGOS_KIE_BASE_URL || 'https://api.kie.ai').trim().replace(/\/+$/, '');
+  await assertSafeRemoteUrl(baseUrl);
+
+  const model = cred.modelOverride || process.env.BGOS_KIE_IMAGE_MODEL?.trim() || 'z-image';
+
+  // Map aspect ratio for KIE models
+  let mappedAspect = '1:1';
+  if (params.aspectRatio === '9:16') mappedAspect = '9:16';
+  else if (params.aspectRatio === '16:9') mappedAspect = '16:9';
+  else if (params.aspectRatio === '4:5') mappedAspect = '3:4';
+  else if (params.dims.width > params.dims.height) mappedAspect = '16:9';
+  else if (params.dims.height > params.dims.width) mappedAspect = '9:16';
+
+  // 1. Submit task
+  let createRes: Response;
+  try {
+    createRes = await fetch(`${baseUrl}/api/v1/jobs/createTask`, {
+      method: 'POST',
+      signal: combineSignals(params.signal, 15_000),
+      headers: {
+        Authorization: `Bearer ${cred.secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        input: {
+          prompt: params.promptText,
+          aspect_ratio: mappedAspect,
+        },
+      }),
+    });
+  } catch (err) {
+    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+      throw new ProviderRequestError('kie task submission timed out (504)', 504);
+    }
+    throw err;
+  }
+
+  if (!createRes.ok) {
+    const errText = await createRes.text().catch(() => '');
+    const accountQuotaExhausted =
+      createRes.status === 401 ||
+      createRes.status === 402 ||
+      (createRes.status === 429 && /quota|exceeded|credit|balance/i.test(errText));
+    throw new ProviderRequestError(
+      `kie task submission failed (${createRes.status})`,
+      createRes.status,
+      accountQuotaExhausted,
+    );
+  }
+
+  const createData = await createRes.json();
+  if (createData.code !== 200 || !createData.data?.taskId) {
+    const isQuota = createData.code === 402;
+    throw new ProviderRequestError(
+      `kie error (${createData.code}): ${createData.msg || 'Failed to create task'}`,
+      createData.code || 500,
+      isQuota,
+    );
+  }
+
+  const taskId = createData.data.taskId;
+
+  // 2. Poll for task completion
+  const startTime = Date.now();
+  let imageUrl: string | null = null;
+  let creditsConsumed: number | null = null;
+
+  while (Date.now() - startTime < 45_000) {
+    if (params.signal.aborted) throw new Error('kie image generation aborted');
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    try {
+      const pollRes = await fetch(`${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+        method: 'GET',
+        signal: combineSignals(params.signal, 10_000),
+        headers: {
+          Authorization: `Bearer ${cred.secret}`,
+        },
+      });
+
+      if (!pollRes.ok) continue;
+      const pollData = await pollRes.json();
+      const taskRecord = pollData?.data;
+
+      if (taskRecord?.state === 'success') {
+        const urls =
+          taskRecord.response?.resultUrls ||
+          (taskRecord.resultJson ? JSON.parse(taskRecord.resultJson)?.resultUrls : null);
+        if (Array.isArray(urls) && urls[0]) {
+          imageUrl = urls[0];
+          creditsConsumed = typeof taskRecord.creditsConsumed === 'number' ? taskRecord.creditsConsumed : null;
+          break;
+        }
+      } else if (taskRecord?.state === 'fail') {
+        throw new ProviderRequestError(
+          `kie task failed: ${taskRecord.failMsg || taskRecord.failCode || 'unknown error'}`,
+          500,
+        );
+      }
+    } catch (pollErr) {
+      if (pollErr instanceof ProviderRequestError) throw pollErr;
+      // non-fatal polling network blip; continue loop
+    }
+  }
+
+  if (!imageUrl) {
+    throw new ProviderRequestError('kie task timed out waiting for generation result', 504);
+  }
+
+  // 3. Download image
+  const safeImgUrl = await assertSafeRemoteUrl(imageUrl);
+  const imgRes = await fetch(safeImgUrl.toString(), {
+    signal: combineSignals(params.signal, 15_000),
+    redirect: 'follow',
+  });
+
+  if (!imgRes.ok) {
+    throw new Error(`kie image download failed (${imgRes.status})`);
+  }
+
+  const bytes = Buffer.from(await imgRes.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > 15_000_000) {
+    throw new Error('kie returned an invalid image size');
+  }
+
+  await recordProviderKeyUsage(cred.keyRowId);
+
+  return {
+    bytes,
+    model: `kie/${model}`,
+    cost: creditsConsumed,
+  };
+}
+
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  gemini: ['cloudflare', 'siliconflow', 'nvidia', 'openrouter'],
-  cloudflare: ['gemini', 'siliconflow', 'nvidia', 'openrouter'],
-  siliconflow: ['gemini', 'cloudflare', 'nvidia', 'openrouter'],
-  nvidia: ['gemini', 'siliconflow', 'cloudflare', 'openrouter'],
-  openrouter: ['gemini', 'cloudflare', 'siliconflow', 'nvidia'],
+  cloudflare: ['nvidia', 'gemini', 'kie', 'siliconflow', 'openrouter'],
+  nvidia: ['cloudflare', 'gemini', 'kie', 'siliconflow', 'openrouter'],
+  gemini: ['nvidia', 'cloudflare', 'kie', 'siliconflow', 'openrouter'],
+  kie: ['nvidia', 'cloudflare', 'gemini', 'siliconflow', 'openrouter'],
+  siliconflow: ['nvidia', 'cloudflare', 'gemini', 'kie', 'openrouter'],
+  openrouter: ['nvidia', 'cloudflare', 'gemini', 'kie', 'siliconflow'],
 };
 
 async function callSingleTextImageProvider(params: {
@@ -1566,6 +1715,7 @@ async function callSingleTextImageProvider(params: {
   promptText: string;
   dims: ImageDimensions;
   signal: AbortSignal;
+  aspectRatio?: string;
 }): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
   if (params.provider === 'cloudflare') {
     return callCloudflareImage(params.promptText, params.signal, params.dims);
@@ -1575,6 +1725,9 @@ async function callSingleTextImageProvider(params: {
   }
   if (params.provider === 'nvidia') {
     return callNvidiaImage(params);
+  }
+  if (params.provider === 'kie') {
+    return callKieImage(params);
   }
   return callGeminiOrOpenRouterImage({
     provider: params.provider,
@@ -1643,7 +1796,7 @@ export async function generateDesignImage(
       lastMultimodalError instanceof Error
         ? `Reference-aware multimodal generation was unavailable (${lastMultimodalError.message}); generated from visual prompt instead.`
         : 'Reference-aware multimodal generation was unavailable; generated from visual prompt instead.';
-    for (const textFallback of ['cloudflare', 'siliconflow', 'nvidia'] as const) {
+    for (const textFallback of ['cloudflare', 'nvidia', 'kie', 'siliconflow'] as const) {
       if (signal.aborted) break;
       if (getActiveProviderCooldown(textFallback)) continue;
       try {
@@ -1652,6 +1805,7 @@ export async function generateDesignImage(
           promptText: promptWithAspect,
           dims,
           signal,
+          aspectRatio,
         });
         return {
           ...res,
@@ -1680,6 +1834,7 @@ export async function generateDesignImage(
         promptText: promptWithAspect,
         dims,
         signal,
+        aspectRatio,
       });
       return {
         ...res,
@@ -1704,6 +1859,7 @@ export async function generateDesignImage(
         promptText: promptWithAspect,
         dims,
         signal,
+        aspectRatio,
       });
       return {
         ...res,

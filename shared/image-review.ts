@@ -1,23 +1,25 @@
-export type ImageProviderChoice = 'cloudflare' | 'siliconflow' | 'nvidia' | 'gemini' | 'openrouter';
+export type ImageProviderChoice = 'cloudflare' | 'nvidia' | 'gemini' | 'kie' | 'siliconflow' | 'openrouter';
 
 export const IMAGE_PROVIDER_CHOICES: readonly ImageProviderChoice[] = [
   'cloudflare',
-  'siliconflow',
   'nvidia',
   'gemini',
+  'kie',
+  'siliconflow',
   'openrouter',
 ] as const;
 
 export const IMAGE_PROVIDER_LABELS: Record<ImageProviderChoice, string> = {
   cloudflare: 'Cloudflare',
-  siliconflow: 'SiliconFlow',
   nvidia: 'NVIDIA FLUX',
   gemini: 'Gemini Vision',
+  kie: 'KIE AI',
+  siliconflow: 'SiliconFlow',
   openrouter: 'Flux Pro',
 };
 
 export function isTextOnlyImageProvider(provider?: ImageProviderChoice | null): boolean {
-  return provider === 'cloudflare' || provider === 'siliconflow' || provider === 'nvidia';
+  return provider === 'cloudflare' || provider === 'siliconflow' || provider === 'nvidia' || provider === 'kie';
 }
 
 export type ImageGenerationSourceType = 'ai_reference' | 'ai_text' | 'stock_fallback';

@@ -57,6 +57,14 @@ interface AiStudioFeedProps {
   onBack: () => void;
 }
 
+const STYLE_CHIPS = [
+  { id: 'real_photo', label: '📷 Real Photo', promptSuffix: 'authentic candid commercial photography, natural daylight, real-world detail' },
+  { id: 'studio', label: '✨ Studio Lighting', promptSuffix: 'professional studio lighting, sharp focus, high-end commercial photo' },
+  { id: 'workplace', label: '🏢 Workplace', promptSuffix: 'professional team in action at tidy workplace, authentic customer service' },
+  { id: 'action', label: '⚡ Action Shot', promptSuffix: 'dynamic service action, specialized equipment, expert craftsmanship' },
+  { id: 'premium', label: '🌟 Premium Showcase', promptSuffix: 'clean modern presentation, luxury aesthetic, ultra-sharp 8k resolution' },
+];
+
 export function AiStudioFeed({
   businessName,
   industry,
@@ -87,6 +95,9 @@ export function AiStudioFeed({
 
   // ── AI Image & Post Studio Modal State ──
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('real_photo');
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<'4:5' | '1:1' | '9:16'>('4:5');
   const [generatedPhotoUrl, setGeneratedPhotoUrl] = useState<string | null>(null);
   const [generatedSeo, setGeneratedSeo] = useState<{
@@ -189,13 +200,14 @@ export function AiStudioFeed({
     void fetchTemplates();
   }, [activeTab, industry, businessName, selectedFestival]);
 
-  // Generate commercial image + SEO metadata from a selected scene suggestion
-  const handleGenerateScene = async (sug: {
-    id: string;
-    title: string;
-    promptBlueprint: string;
+  // Generate commercial image + SEO metadata from either custom prompt or scene suggestion
+  const handleGenerateAiImage = async (params: {
+    prompt: string;
+    sceneTitle?: string;
+    suggestionId?: string;
   }) => {
     if (generatingImages) return;
+    setGenerationError(null);
 
     // Check user quota before firing network request
     if (quota && quota.remaining <= 0) {
@@ -219,16 +231,22 @@ export function AiStudioFeed({
     }
 
     setGeneratingImages(true);
-    setActiveGeneratingStep('1. Generating scene with Cloudflare FLUX.2...');
+    setActiveGeneratingStep('1. Directing scene with Multi-Provider AI...');
 
     const timer1 = setTimeout(() => {
-      setActiveGeneratingStep('2. Compressing & optimizing WebP...');
-    }, 4500);
+      setActiveGeneratingStep('2. Compressing & optimizing WebP resolution...');
+    }, 4000);
     const timer2 = setTimeout(() => {
-      setActiveGeneratingStep('3. Crafting SEO title, caption & tags with Gemini...');
-    }, 7500);
+      setActiveGeneratingStep('3. Crafting SEO title, caption & tags...');
+    }, 7000);
 
     try {
+      const activeStyle = STYLE_CHIPS.find((s) => s.id === selectedStyleId);
+      const effectivePrompt =
+        activeStyle && !params.prompt.toLowerCase().includes('style:')
+          ? `${params.prompt}. Style: ${activeStyle.promptSuffix}`
+          : params.prompt;
+
       const res = await apiRequest<{
         success: boolean;
         urls: string[];
@@ -243,16 +261,15 @@ export function AiStudioFeed({
         error?: string;
         limitReached?: boolean;
         quota?: AiStudioQuota;
-        supportEmail?: string;
-        supportMailto?: string;
       }>('/api/social/designs/business-images/generate', {
         method: 'POST',
         timeoutMs: 90000,
         body: JSON.stringify({
-          suggestionId: sug.id,
-          sceneTitle: sug.title,
-          promptBlueprint: sug.promptBlueprint,
+          suggestionId: params.suggestionId,
+          sceneTitle: params.sceneTitle || params.prompt.slice(0, 50),
+          promptBlueprint: effectivePrompt,
           category: industry,
+          businessName,
           aspectRatio: selectedAspectRatio,
         }),
       });
@@ -269,7 +286,8 @@ export function AiStudioFeed({
         if (isTrialLimit) {
           Alert.alert(
             'Trial Limit Reached',
-            res?.message || 'You have reached your limit of 5 AI generated images during your free trial. Upgrade your plan to unlock 5 fresh AI commercial photos every day!',
+            res?.message ||
+              'You have reached your limit of 5 AI generated images during your free trial. Upgrade your plan to unlock 5 fresh AI commercial photos every day!',
             [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Upgrade Plan', onPress: () => router.push('/my-plan') },
@@ -278,7 +296,8 @@ export function AiStudioFeed({
         } else {
           Alert.alert(
             'Daily Limit Reached',
-            res?.message || 'You have reached your daily limit of 5 AI generated images. Your daily quota will reset tomorrow at midnight!',
+            res?.message ||
+              'You have reached your daily limit of 5 AI generated images. Your daily quota will reset tomorrow at midnight!',
             [{ text: 'OK' }],
           );
         }
@@ -292,7 +311,7 @@ export function AiStudioFeed({
           setGeneratedSeo(res.seo);
         } else {
           setGeneratedSeo({
-            title: `${sug.title} | ${businessName}`,
+            title: `${params.sceneTitle || params.prompt.slice(0, 40)} | ${businessName}`,
             description: `Quality ${industry} solutions at ${businessName}. Visit us in ${city} for expert service!`,
             tags: [
               `#${businessName.replace(/[^a-zA-Z0-9]/g, '')}`,
@@ -303,49 +322,16 @@ export function AiStudioFeed({
         }
         await fetchTemplates();
       } else {
-        const errorDetail = res?.message || res?.error || 'Failed to generate image. Please try another scene.';
-        const targetEmail = (res as any)?.supportEmail || BGOS_SUPPORT_EMAIL || 'support@fieseros.com';
-        Alert.alert(
-          'Image Generation Failed',
-          `${errorDetail}\n\nWould you like to email support for assistance?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Email Support',
-              onPress: () => {
-                const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
-                const body = encodeURIComponent(
-                  `Business Name: ${businessName}\nIndustry/Category: ${industry}\nScene: ${sug.title}\nCity: ${city}\n\nError Encountered:\n${errorDetail}`
-                );
-                Linking.openURL(`mailto:${targetEmail}?subject=${subject}&body=${body}`).catch(() => null);
-              },
-            },
-          ]
-        );
+        const errorDetail =
+          res?.message || res?.error || 'Generation encountered an issue. Please try another prompt or style.';
+        setGenerationError(errorDetail);
       }
     } catch (err: any) {
       const errorMsg =
         err?.data?.error ||
         err?.data?.message ||
-        (err instanceof Error ? err.message : 'Generation failed');
-      const targetEmail = err?.data?.supportEmail || BGOS_SUPPORT_EMAIL || 'support@fieseros.com';
-      Alert.alert(
-        'Image Generation Error',
-        `${errorMsg}\n\nWould you like to email support for assistance?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Email Support',
-            onPress: () => {
-              const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
-              const body = encodeURIComponent(
-                `Business Name: ${businessName}\nIndustry/Category: ${industry}\nScene: ${sug.title}\nCity: ${city}\n\nError Encountered:\n${errorMsg}`
-              );
-              Linking.openURL(`mailto:${targetEmail}?subject=${subject}&body=${body}`).catch(() => null);
-            },
-          },
-        ]
-      );
+        (err instanceof Error ? err.message : 'Generation failed. Please try again.');
+      setGenerationError(errorMsg);
     } finally {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -571,7 +557,187 @@ export function AiStudioFeed({
             style={styles.modalScrollView}
             contentContainerStyle={styles.modalScrollContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
+            {/* ── CUSTOM PROMPT STUDIO ── */}
+            <View style={styles.promptStudioCard}>
+              <View style={styles.promptHeaderRow}>
+                <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
+                <Text style={styles.promptSectionLabel}>CUSTOM AI PHOTO PROMPT</Text>
+              </View>
+              <View style={styles.promptInputWrap}>
+                <TextInput
+                  style={styles.promptTextInput}
+                  value={customPrompt}
+                  onChangeText={(val) => {
+                    setCustomPrompt(val);
+                    if (generationError) setGenerationError(null);
+                  }}
+                  placeholder={`Describe your commercial photo or scene (e.g. 'Modern clinic reception with friendly specialist at ${businessName}')...`}
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                />
+                {customPrompt.length > 0 && (
+                  <Pressable onPress={() => setCustomPrompt('')} style={styles.clearPromptBtn} hitSlop={8}>
+                    <MaterialIcons name="close" size={16} color="#94A3B8" />
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Style Presets Chips */}
+              <Text style={styles.styleSectionLabel}>PHOTO STYLE PRESET</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.styleChipsScroll}
+              >
+                {STYLE_CHIPS.map((chip) => {
+                  const active = selectedStyleId === chip.id;
+                  return (
+                    <Pressable
+                      key={chip.id}
+                      onPress={() => setSelectedStyleId(active ? '' : chip.id)}
+                      style={[styles.styleChip, active && styles.styleChipActive]}
+                    >
+                      <Text style={[styles.styleChipText, active && styles.styleChipTextActive]}>
+                        {chip.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Primary Generate Prompt Button */}
+              <Pressable
+                onPress={() => {
+                  if (!customPrompt.trim()) {
+                    Alert.alert('Prompt Needed', 'Please type a photo description or tap any scene idea below.');
+                    return;
+                  }
+                  void handleGenerateAiImage({ prompt: customPrompt.trim() });
+                }}
+                disabled={generatingImages}
+                style={({ pressed }) => [
+                  styles.generatePromptBtn,
+                  pressed && { opacity: 0.9 },
+                  generatingImages && { opacity: 0.7 },
+                ]}
+              >
+                <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
+                <Text style={styles.generatePromptBtnText}>
+                  {generatingImages ? 'Directing Photo...' : 'Generate Photo with AI'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Quota Status Indicator */}
+            {quota && (
+              <View style={[styles.quotaBadgeBanner, quota.remaining === 0 && styles.quotaBadgeBannerEmpty]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons
+                    name={quota.remaining === 0 ? 'lock-clock' : 'auto-awesome'}
+                    size={15}
+                    color={quota.remaining === 0 ? '#DC2626' : '#047857'}
+                  />
+                  <Text style={[styles.quotaBannerText, quota.remaining === 0 && styles.quotaBannerTextEmpty]}>
+                    {quota.tier === 'trial'
+                      ? `Trial: ${quota.remaining} of ${quota.limit} free generations remaining`
+                      : `Daily limit: ${quota.remaining} of ${quota.limit} AI images remaining today`}
+                  </Text>
+                </View>
+                {quota.tier === 'trial' && (
+                  <Pressable onPress={() => router.push('/my-plan')} hitSlop={8}>
+                    <Text style={styles.upgradeLinkText}>Upgrade</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {/* Inline Error Notice */}
+            {generationError && (
+              <View style={styles.inlineErrorCard}>
+                <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+                <Text style={styles.inlineErrorText}>{generationError}</Text>
+                <Pressable
+                  onPress={() => {
+                    if (customPrompt.trim()) {
+                      void handleGenerateAiImage({ prompt: customPrompt.trim() });
+                    } else if (businessSuggestions.length > 0) {
+                      void handleGenerateAiImage({
+                        prompt: businessSuggestions[0].promptBlueprint,
+                        sceneTitle: businessSuggestions[0].title,
+                        suggestionId: businessSuggestions[0].id,
+                      });
+                    }
+                  }}
+                  style={styles.inlineRetryBtn}
+                >
+                  <Text style={styles.inlineRetryBtnText}>Retry</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Scene Suggestions Tray with 🔄 Refresh Button */}
+            <View style={styles.sceneSuggestionsSection}>
+              <View style={styles.sceneSuggestionsHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="lightbulb" size={17} color="#D97706" />
+                  <Text style={styles.sceneSuggestionsTitle}>Scene Ideas for {industry}</Text>
+                </View>
+                <Pressable
+                  onPress={() => fetchBusinessSuggestions(true)}
+                  disabled={refreshingSuggestions || generatingImages}
+                  style={styles.refreshIdeasBtn}
+                >
+                  {refreshingSuggestions ? (
+                    <ActivityIndicator size="small" color="#009F50" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="refresh" size={15} color="#009F50" />
+                      <Text style={styles.refreshIdeasBtnText}>Refresh Ideas</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScenesScroll}
+              >
+                {businessSuggestions.map((sug) => (
+                  <Pressable
+                    key={sug.id}
+                    onPress={() => {
+                      setCustomPrompt(sug.title);
+                      void handleGenerateAiImage({
+                        prompt: sug.promptBlueprint,
+                        sceneTitle: sug.title,
+                        suggestionId: sug.id,
+                      });
+                    }}
+                    disabled={generatingImages}
+                    style={styles.sceneHorizontalCard}
+                  >
+                    <View style={styles.sceneCardTop}>
+                      <Text style={styles.sceneEmoji}>{sug.icon}</Text>
+                      <View style={styles.sceneBadge}>
+                        <Text style={styles.sceneBadgeText}>{sug.badge}</Text>
+                      </View>
+                    </View>
+                    <Text numberOfLines={2} style={styles.sceneTitleText}>
+                      {sug.title}
+                    </Text>
+                    <View style={styles.sceneTapCta}>
+                      <Text style={styles.sceneTapCtaText}>Tap to Generate</Text>
+                      <MaterialIcons name="bolt" size={13} color="#009F50" />
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
             {/* Aspect Ratio Selector */}
             <View style={styles.aspectRatioSection}>
               <Text style={styles.sectionMiniLabel}>ASPECT RATIO</Text>
@@ -598,9 +764,15 @@ export function AiStudioFeed({
             <View
               style={[
                 styles.canvasPreviewContainer,
-                selectedAspectRatio === '1:1' && { height: 310 },
-                selectedAspectRatio === '4:5' && { height: 350 },
-                selectedAspectRatio === '9:16' && { height: 420 },
+                generatingImages
+                  ? { height: 220 }
+                  : generatedPhotoUrl
+                    ? selectedAspectRatio === '1:1'
+                      ? { height: 320 }
+                      : selectedAspectRatio === '4:5'
+                        ? { height: 380 }
+                        : { height: 440 }
+                    : { height: 130 },
               ]}
             >
               {generatingImages ? (
@@ -620,11 +792,11 @@ export function AiStudioFeed({
               ) : (
                 <View style={styles.blankCanvasBox}>
                   <View style={styles.blankCanvasIconBox}>
-                    <MaterialIcons name="photo-camera" size={34} color="#94A3B8" />
+                    <MaterialIcons name="auto-awesome" size={24} color="#009F50" />
                   </View>
-                  <Text style={styles.blankCanvasTitle}>Blank Canvas</Text>
+                  <Text style={styles.blankCanvasTitle}>Ready to Create</Text>
                   <Text style={styles.blankCanvasSubtitle}>
-                    Select a scene idea below to generate a photorealistic commercial photo for {businessName}.
+                    Enter a prompt or select a scene idea above to generate high-resolution commercial photos for {businessName}.
                   </Text>
                 </View>
               )}
@@ -675,82 +847,6 @@ export function AiStudioFeed({
                 </View>
               </View>
             )}
-
-            {/* Scene Suggestions Tray with 🔄 Refresh Button */}
-            <View style={styles.sceneSuggestionsSection}>
-              <View style={styles.sceneSuggestionsHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <MaterialIcons name="lightbulb" size={18} color="#D97706" />
-                  <Text style={styles.sceneSuggestionsTitle}>Scene Ideas for {industry}</Text>
-                </View>
-                <Pressable
-                  onPress={() => fetchBusinessSuggestions(true)}
-                  disabled={refreshingSuggestions || generatingImages}
-                  style={styles.refreshIdeasBtn}
-                >
-                  {refreshingSuggestions ? (
-                    <ActivityIndicator size="small" color="#009F50" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="refresh" size={16} color="#009F50" />
-                      <Text style={styles.refreshIdeasBtnText}>Refresh Ideas</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-
-              {/* Quota Status Indicator */}
-              {quota && (
-                <View style={[styles.quotaBadgeBanner, quota.remaining === 0 && styles.quotaBadgeBannerEmpty]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <MaterialIcons
-                      name={quota.remaining === 0 ? 'lock-clock' : 'auto-awesome'}
-                      size={15}
-                      color={quota.remaining === 0 ? '#DC2626' : '#047857'}
-                    />
-                    <Text style={[styles.quotaBannerText, quota.remaining === 0 && styles.quotaBannerTextEmpty]}>
-                      {quota.tier === 'trial'
-                        ? `Trial: ${quota.remaining} of ${quota.limit} free generations remaining`
-                        : `Daily limit: ${quota.remaining} of ${quota.limit} AI images remaining today`}
-                    </Text>
-                  </View>
-                  {quota.tier === 'trial' && (
-                    <Pressable onPress={() => router.push('/my-plan')} hitSlop={8}>
-                      <Text style={styles.upgradeLinkText}>Upgrade</Text>
-                    </Pressable>
-                  )}
-                </View>
-              )}
-
-              <Text style={styles.sceneSuggestionsSubtitle}>
-                Tap any idea to generate an authentic commercial photo with SEO copy:
-              </Text>
-
-              <View style={styles.sceneChipsGrid}>
-                {businessSuggestions.map((sug) => (
-                  <Pressable
-                    key={sug.id}
-                    onPress={() => handleGenerateScene(sug)}
-                    disabled={generatingImages}
-                    style={styles.sceneCardItem}
-                  >
-                    <View style={styles.sceneCardTop}>
-                      <Text style={styles.sceneEmoji}>{sug.icon}</Text>
-                      <View style={styles.sceneBadge}>
-                        <Text style={styles.sceneBadgeText}>{sug.badge}</Text>
-                      </View>
-                    </View>
-                    <Text numberOfLines={2} style={styles.sceneTitleText}>
-                      {sug.title}
-                    </Text>
-                    <View style={styles.sceneTapCta}>
-                      <Text style={styles.sceneTapCtaText}>Tap to Generate</Text>
-                      <MaterialIcons name="bolt" size={13} color="#009F50" />
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
           </ScrollView>
 
           {/* Action Footer: Publish Button */}
@@ -830,13 +926,6 @@ export function AiStudioFeed({
                 resizeMode="cover"
               />
 
-              {/* Badge Overlay */}
-              <View style={styles.cardBadge}>
-                <Text numberOfLines={1} style={styles.cardBadgeText}>
-                  {item.badge || 'FEATURED'}
-                </Text>
-              </View>
-
               {/* Brand Frame: Top Monogram/Logo Strip */}
               {brandFrame && (
                 <View style={styles.cardBrandBanner}>
@@ -855,51 +944,26 @@ export function AiStudioFeed({
                 </View>
               )}
 
-              {/* Middle Copy & Bullets Overlay */}
+              {/* Badge Overlay */}
+              <View style={styles.cardBadge}>
+                <Text numberOfLines={1} style={styles.cardBadgeText}>
+                  {item.badge || 'PRO'}
+                </Text>
+              </View>
+
+              {/* Sleek Bottom Scrim with Headline & 1-Tap Use Pill */}
               <View style={styles.cardContentOverlay}>
                 <Text numberOfLines={2} style={styles.cardHeadline}>
                   {item.headline}
                 </Text>
-
-                {brandFrame && Array.isArray(item.defaultBullets) && item.defaultBullets.length > 0 && (
-                  <View style={styles.bulletsWrap}>
-                    {item.defaultBullets.slice(0, 3).map((bullet, bIdx) => (
-                      <View key={`b-${bIdx}`} style={styles.bulletRow}>
-                        <MaterialIcons name="check-circle" size={11} color="#4ADE80" />
-                        <Text numberOfLines={1} style={styles.bulletText}>
-                          {bullet}
-                        </Text>
-                      </View>
-                    ))}
+                <View style={styles.cardBottomRow}>
+                  <Text numberOfLines={1} style={styles.cardFormatTag}>
+                    {item.aspectRatio === '9:16' ? '📱 Story' : item.aspectRatio === '1:1' ? '◾ Square' : '🖼️ Post'}
+                  </Text>
+                  <View style={styles.useDesignBtn}>
+                    <Text style={styles.useDesignText}>Use</Text>
+                    <MaterialIcons name="arrow-forward" size={12} color="#FFFFFF" />
                   </View>
-                )}
-
-                {/* Brand Frame: Bottom Contact & City */}
-                {brandFrame && (phone || city) && (
-                  <View style={styles.cardContactRow}>
-                    {phone ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        <MaterialIcons name="phone" size={10} color="#CBD5E1" />
-                        <Text numberOfLines={1} style={styles.cardContactText}>
-                          {phone}
-                        </Text>
-                      </View>
-                    ) : null}
-                    {city ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        <MaterialIcons name="location-on" size={10} color="#CBD5E1" />
-                        <Text numberOfLines={1} style={styles.cardContactText}>
-                          {city}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
-
-                {/* 1-Tap Action Button */}
-                <View style={styles.useDesignBtn}>
-                  <Text style={styles.useDesignText}>Use Design</Text>
-                  <MaterialIcons name="arrow-forward" size={13} color="#FFFFFF" />
                 </View>
               </View>
             </Pressable>
@@ -1069,29 +1133,29 @@ const styles = StyleSheet.create({
   blankCanvasBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 8,
+    padding: 16,
+    gap: 6,
   },
   blankCanvasIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F1F5F9',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   blankCanvasTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#0F172A',
   },
   blankCanvasSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 280,
+    lineHeight: 16,
+    maxWidth: 290,
   },
   generatingStateBox: {
     alignItems: 'center',
@@ -1513,7 +1577,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 5,
@@ -1523,47 +1587,174 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     lineHeight: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  bulletsWrap: {
-    gap: 3,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  bulletText: {
-    fontSize: 10,
-    color: '#E2E8F0',
-    fontWeight: '500',
-  },
-  cardContactRow: {
+  cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 3,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 2,
   },
-  cardContactText: {
-    fontSize: 9,
-    color: '#94A3B8',
-    fontWeight: '500',
+  cardFormatTag: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#CBD5E1',
   },
   useDesignBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: '#009F50',
-    paddingVertical: 6,
-    borderRadius: 7,
-    marginTop: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   useDesignText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  promptStudioCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    padding: 12,
+    gap: 10,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  promptHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  promptSectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#009F50',
+    letterSpacing: 0.5,
+  },
+  promptInputWrap: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    position: 'relative',
+  },
+  promptTextInput: {
+    fontSize: 13,
+    color: '#0F172A',
+    minHeight: 55,
+    textAlignVertical: 'top',
+    lineHeight: 18,
+    paddingRight: 24,
+    paddingTop: 0,
+  },
+  clearPromptBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+  },
+  styleSectionLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  styleChipsScroll: {
+    gap: 6,
+  },
+  styleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  styleChipActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#009F50',
+  },
+  styleChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  styleChipTextActive: {
+    color: '#047857',
+    fontWeight: '700',
+  },
+  generatePromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#009F50',
+    paddingVertical: 11,
+    borderRadius: 10,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generatePromptBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  inlineErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 10,
+    gap: 8,
+  },
+  inlineErrorText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#B91C1C',
+    fontWeight: '500',
+  },
+  inlineRetryBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  inlineRetryBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  horizontalScenesScroll: {
+    gap: 10,
+    paddingRight: 10,
+  },
+  sceneHorizontalCard: {
+    width: 175,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+    justifyContent: 'space-between',
   },
   quotaBadgeBanner: {
     flexDirection: 'row',

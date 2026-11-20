@@ -12,51 +12,46 @@ import { getCategoryStorageFolder } from './category-image-engine';
  * ServiceOS / BGOS serves verified AWS S3 category library assets generated via Cloudflare Workers AI FLUX.
  */
 
-const S3_BUCKET = process.env.AWS_S3_BUCKET || 'serviceos-assets-prod';
-const S3_REGION = process.env.AWS_REGION || 'ap-south-1';
-const S3_BASE = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/bgos-business-images/category_library`;
-
-function buildS3CategoryUrls(folder: string, count = 50): string[] {
-  return Array.from({ length: count }, (_, i) =>
-    `${S3_BASE}/${folder}/${folder}-${String(i + 1).padStart(3, '0')}.webp`
-  );
+function buildCategoryVisualUrls(folder: string, verifiedList: string[], count = 30): string[] {
+  const list = verifiedList.length > 0 ? verifiedList : ['/images/industry/industry.webp'];
+  return Array.from({ length: count }, (_, i) => list[i % list.length]);
 }
 
 const LOCAL_CATEGORY_TEMPLATES: Record<string, string[]> = {
-  plywood_timber: buildS3CategoryUrls('plywood_timber'),
-  indian_sweets: buildS3CategoryUrls('indian_sweets'),
-  welding_fabrication: buildS3CategoryUrls('welding_fabrication'),
-  solar_energy: buildS3CategoryUrls('solar_energy'),
-  dental_clinic: buildS3CategoryUrls('dental_clinic'),
-  salon_spa: buildS3CategoryUrls('salon_spa'),
-  auto_repair: buildS3CategoryUrls('auto_repair'),
-  fitness_gym: buildS3CategoryUrls('fitness_gym'),
-  restaurant_dining: buildS3CategoryUrls('restaurant_dining'),
-  bakery_cafe: buildS3CategoryUrls('bakery_cafe'),
-  plumbing: buildS3CategoryUrls('plumbing'),
-  electrical: buildS3CategoryUrls('electrical'),
-  hardware_tools: buildS3CategoryUrls('hardware_tools'),
-  paint_decor: buildS3CategoryUrls('paint_decor'),
-  jewellery: buildS3CategoryUrls('jewellery'),
-  fashion_boutique: buildS3CategoryUrls('fashion_boutique'),
-  real_estate: buildS3CategoryUrls('real_estate'),
-  cleaning_services: buildS3CategoryUrls('cleaning_services'),
-  farmhouse_resort: buildS3CategoryUrls('farmhouse_resort'),
-  it_software: buildS3CategoryUrls('it_software'),
-  legal_accounting: buildS3CategoryUrls('legal_accounting'),
-  healthcare_medical: buildS3CategoryUrls('healthcare_medical'),
-  security_services: buildS3CategoryUrls('security_services'),
-  security_cctv: buildS3CategoryUrls('security_cctv'),
-  grocery_supermarket: buildS3CategoryUrls('grocery_supermarket'),
-  pet_vet: buildS3CategoryUrls('pet_vet'),
-  photography_studio: buildS3CategoryUrls('photography_studio'),
-  hvac_aircon: buildS3CategoryUrls('hvac_aircon'),
-  roofing: buildS3CategoryUrls('roofing'),
-  landscaping_lawn: buildS3CategoryUrls('landscaping_lawn'),
-  logistics_courier: buildS3CategoryUrls('logistics_courier'),
-  education_academy: buildS3CategoryUrls('education_academy'),
-  event_decor: buildS3CategoryUrls('event_decor'),
-  generic_business: buildS3CategoryUrls('it_software'),
+  plywood_timber: buildCategoryVisualUrls('plywood_timber', ['/images/industry/industry.webp', '/images/bgos/templates/property.webp']),
+  indian_sweets: buildCategoryVisualUrls('indian_sweets', ['/images/bgos/templates/cafe.webp', '/images/industry/food.webp', '/images/bgos/templates/restaurant.webp']),
+  welding_fabrication: buildCategoryVisualUrls('welding_fabrication', ['/images/industry/industry.webp', '/images/industry/auto.webp']),
+  solar_energy: buildCategoryVisualUrls('solar_energy', ['/images/industry/electrical.webp', '/images/industry/roofing.webp']),
+  dental_clinic: buildCategoryVisualUrls('dental_clinic', ['/images/bgos/templates/dental.webp', '/images/bgos/templates/physio.webp']),
+  salon_spa: buildCategoryVisualUrls('salon_spa', ['/images/bgos/templates/salon.webp', '/images/industry/salon.webp']),
+  auto_repair: buildCategoryVisualUrls('auto_repair', ['/images/bgos/templates/automotive.webp', '/images/industry/auto.webp']),
+  fitness_gym: buildCategoryVisualUrls('fitness_gym', ['/images/bgos/templates/fitness.webp']),
+  restaurant_dining: buildCategoryVisualUrls('restaurant_dining', ['/images/bgos/templates/restaurant.webp', '/images/industry/food.webp', '/images/bgos/templates/cafe.webp']),
+  bakery_cafe: buildCategoryVisualUrls('bakery_cafe', ['/images/bgos/templates/cafe.webp', '/images/industry/food.webp']),
+  plumbing: buildCategoryVisualUrls('plumbing', ['/images/bgos/templates/plumbing.webp', '/images/industry/plumbing.webp']),
+  electrical: buildCategoryVisualUrls('electrical', ['/images/industry/electrical.webp']),
+  hardware_tools: buildCategoryVisualUrls('hardware_tools', ['/images/industry/industry.webp', '/images/industry/electrical.webp']),
+  paint_decor: buildCategoryVisualUrls('paint_decor', ['/images/industry/painting.webp']),
+  jewellery: buildCategoryVisualUrls('jewellery', ['/images/bgos/templates/fashion.webp']),
+  fashion_boutique: buildCategoryVisualUrls('fashion_boutique', ['/images/bgos/templates/fashion.webp']),
+  real_estate: buildCategoryVisualUrls('real_estate', ['/images/bgos/templates/property.webp']),
+  cleaning_services: buildCategoryVisualUrls('cleaning_services', ['/images/industry/cleaning.webp']),
+  farmhouse_resort: buildCategoryVisualUrls('farmhouse_resort', ['/images/bgos/templates/property.webp', '/images/bgos/templates/restaurant.webp']),
+  it_software: buildCategoryVisualUrls('it_software', ['/images/industry/industry.webp', '/images/bgos/templates/coaching.webp']),
+  legal_accounting: buildCategoryVisualUrls('legal_accounting', ['/images/bgos/templates/coaching.webp', '/images/industry/industry.webp']),
+  healthcare_medical: buildCategoryVisualUrls('healthcare_medical', ['/images/bgos/templates/physio.webp', '/images/bgos/templates/dental.webp']),
+  security_services: buildCategoryVisualUrls('security_services', ['/images/industry/industry.webp']),
+  security_cctv: buildCategoryVisualUrls('security_cctv', ['/images/industry/industry.webp', '/images/industry/electrical.webp']),
+  grocery_supermarket: buildCategoryVisualUrls('grocery_supermarket', ['/images/industry/food.webp', '/images/bgos/templates/cafe.webp']),
+  pet_vet: buildCategoryVisualUrls('pet_vet', ['/images/industry/pet.webp']),
+  photography_studio: buildCategoryVisualUrls('photography_studio', ['/images/industry/photography.webp']),
+  hvac_aircon: buildCategoryVisualUrls('hvac_aircon', ['/images/industry/hvac.webp']),
+  roofing: buildCategoryVisualUrls('roofing', ['/images/industry/roofing.webp']),
+  landscaping_lawn: buildCategoryVisualUrls('landscaping_lawn', ['/images/industry/landscaping.webp']),
+  logistics_courier: buildCategoryVisualUrls('logistics_courier', ['/images/industry/moving.webp']),
+  education_academy: buildCategoryVisualUrls('education_academy', ['/images/bgos/templates/coaching.webp', '/images/industry/tutoring.webp']),
+  event_decor: buildCategoryVisualUrls('event_decor', ['/images/bgos/templates/diwali.webp', '/images/bgos/templates/restaurant.webp']),
+  generic_business: buildCategoryVisualUrls('generic_business', ['/images/industry/industry.webp', '/images/bgos/templates/coaching.webp']),
 };
 
 export const CURATED_SMB_IMAGE_REGISTRY: Record<string, string[]> = new Proxy(LOCAL_CATEGORY_TEMPLATES, {

@@ -21,7 +21,9 @@ export const PROFESSIONAL_ASSETS:Record<string,number>={
  * Prefers the offline pre-bundled asset from PROFESSIONAL_ASSETS if matched, otherwise returns `{ uri: absoluteHttpsUrl }`.
  */
 export function resolveTemplateSource(url?: string | null): any {
-  if (!url) return { uri: '' };
+  if (!url) {
+    return PROFESSIONAL_ASSETS['/images/bgos/templates/property.webp'];
+  }
   if (PROFESSIONAL_ASSETS[url]) {
     return PROFESSIONAL_ASSETS[url];
   }
@@ -29,5 +31,9 @@ export function resolveTemplateSource(url?: string | null): any {
   if (match && PROFESSIONAL_ASSETS[match[0]]) {
     return PROFESSIONAL_ASSETS[match[0]];
   }
-  return { uri: resolvePhotoUrl(url) };
+  const resolved = resolvePhotoUrl(url);
+  if (resolved && resolved.trim()) {
+    return { uri: resolved };
+  }
+  return PROFESSIONAL_ASSETS['/images/bgos/templates/property.webp'];
 }

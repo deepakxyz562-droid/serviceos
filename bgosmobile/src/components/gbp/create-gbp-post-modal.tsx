@@ -58,17 +58,18 @@ export function CreateGbpPostModal({
     const cat = (businessCategory + ' ' + businessName).toLowerCase();
 
     if (
-      cat.includes('farm') ||
-      cat.includes('pool') ||
-      cat.includes('resort') ||
-      cat.includes('stay') ||
-      cat.includes('villa')
+      cat.includes('it') ||
+      cat.includes('software') ||
+      cat.includes('tech') ||
+      cat.includes('developer') ||
+      cat.includes('web') ||
+      cat.includes('digital')
     ) {
       return [
-        'Perfect venue for your next family pool party',
-        'Create unforgettable memories at our private farmhouse pool',
-        'Weekend getaway destination near Delhi with swimming',
-        'Safe and fun swimming for kids of all ages',
+        `Transform your business with custom software solutions from ${businessName}`,
+        'Scalable cloud architecture and modern digital platforms built for growth',
+        'Special tech consultation & architecture audit available this month',
+        `Why top enterprises trust ${businessName} for reliable delivery`,
       ];
     }
 
@@ -203,20 +204,20 @@ export function CreateGbpPostModal({
 
   const handleMicrophoneTap = () => {
     Alert.alert(
-      '🎙️ Voice Input',
+      '🎙️ Voice Input & Quick Ideas',
       'Choose a quick idea or speak your promotion details:',
       [
         {
-          text: 'Weekend Pool Party & Discounts',
-          onPress: () => setPrompt('Weekend pool party package with 15% discount for families'),
+          text: 'Special Customer Offer',
+          onPress: () => setPrompt(`Special limited-time discount for local customers at ${businessName}`),
         },
         {
-          text: 'New Service Showcase',
-          onPress: () => setPrompt(`Showcase our premium amenities and top-rated comfort at ${businessName}`),
+          text: 'Service & Product Showcase',
+          onPress: () => setPrompt(`Showcase our premium ${businessCategory || 'services'} and top-rated quality at ${businessName}`),
         },
         {
-          text: 'Seasonal Limited Offer',
-          onPress: () => setPrompt('Special limited-time offer for early bookings this week'),
+          text: 'Customer Trust & Reviews',
+          onPress: () => setPrompt(`Discover why local customers rate ${businessName} 5 stars on Google`),
         },
         { text: 'Cancel', style: 'cancel' },
       ],
@@ -327,7 +328,7 @@ export function CreateGbpPostModal({
           </Pressable>
 
           <View style={styles.titleCenter}>
-            <MaterialIcons name="auto-awesome" size={20} color="#8B5CF6" style={{ marginBottom: 4 }} />
+            <MaterialIcons name="auto-awesome" size={20} color="#009F50" style={{ marginBottom: 4 }} />
             <Text style={styles.screenTitle}>Create Post for GBP with AI</Text>
           </View>
 
@@ -387,9 +388,9 @@ export function CreateGbpPostModal({
                 disabled={uploadingImage}
               >
                 {uploadingImage ? (
-                  <ActivityIndicator size="small" color="#2563EB" />
+                  <ActivityIndicator size="small" color="#009F50" />
                 ) : (
-                  <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
+                  <MaterialIcons name="add-photo-alternate" size={18} color="#009F50" />
                 )}
                 <Text style={styles.addRefText}>Attach Photo</Text>
               </Pressable>
@@ -424,14 +425,14 @@ export function CreateGbpPostModal({
                 ]}
               >
                 <Text style={styles.ideaText}>{idea}</Text>
-                <MaterialIcons name="arrow-upward" size={18} color="#2563EB" />
+                <MaterialIcons name="arrow-upward" size={18} color="#009F50" />
               </Pressable>
             ))}
           </View>
 
           {/* ── Usage Info ── */}
           <Text style={styles.usageText}>
-            1 use remaining this week • Resets in 7 days
+            ✨ Powered by BGOS AI • Auto-optimized for Google Business Profile
           </Text>
 
           {/* ── Primary Action Button: Generate with AI ✨ ── */}
@@ -518,11 +519,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#E0E7FF',
+    borderColor: '#BBF7D0',
     padding: 14,
-    shadowColor: '#6366F1',
+    shadowColor: '#009F50',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
     marginBottom: 20,
@@ -579,7 +580,7 @@ const styles = StyleSheet.create({
   addRefText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#009F50',
   },
   micBtn: {
     width: 32,
@@ -634,10 +635,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   generateBtnActive: {
-    backgroundColor: '#7C3AED',
-    shadowColor: '#7C3AED',
+    backgroundColor: '#009F50',
+    shadowColor: '#009F50',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },

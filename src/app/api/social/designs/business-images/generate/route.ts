@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { generateDesignImage } from '@/lib/designs/image-provider';
+import { generateDesignImage, resolveCuratedImageFallback, type ImageProvider } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
 import {
@@ -232,10 +232,18 @@ export async function POST(request: NextRequest) {
 
       let imageBytes: Buffer | null = null;
 
+      // Smart initial provider selection:
+      // If NVIDIA or KIE is configured in env, prefer it over rate-limited Cloudflare.
+      // The automatic fallback cascade will try: Cloudflare <-> NVIDIA -> Gemini -> KIE
+      const preferredProvider: ImageProvider =
+        process.env.NVIDIA_API_KEY ? 'nvidia' :
+        process.env.KIE_API_KEY ? 'kie' :
+        'cloudflare';
+
       try {
         const result = await generateDesignImage(
           prompt,
-          'cloudflare',
+          preferredProvider,
           controller.signal,
           false,
           {
@@ -258,6 +266,25 @@ export async function POST(request: NextRequest) {
         generationErrors.push(msg);
       } finally {
         clearTimeout(timeout);
+      }
+
+      // Zero-failure fallback: If all cloud diffusion providers were busy/limited,
+      // gracefully resolve a high-resolution verified category visual
+      if (!imageBytes) {
+        try {
+          console.log(`[business-images/generate] AI providers exhausted for scene ${i + 1}, using curated stock fallback`);
+          const fallbackRes = await resolveCuratedImageFallback(prompt, {
+            category,
+            businessName,
+            city,
+            services,
+          });
+          if (fallbackRes.bytes && fallbackRes.bytes.length > 0) {
+            imageBytes = fallbackRes.bytes;
+          }
+        } catch (fbErr) {
+          console.warn(`[business-images/generate] Curated fallback error:`, fbErr);
+        }
       }
 
       if (!imageBytes) {

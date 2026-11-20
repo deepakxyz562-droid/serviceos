@@ -5360,12 +5360,12 @@ export default function MarketingScreen() {
                   </View>
 
                   {/* AI Generation section */}
-                  <View style={{ backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 }}>
+                  <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <MaterialIcons name="auto-awesome" size={16} color="#7C3AED" />
+                      <MaterialIcons name="auto-awesome" size={16} color="#009F50" />
                       <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0F172A' }}>AI Background Generator</Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 11, color: '#475569', lineHeight: 16, marginBottom: 10 }}>
                       Synthesizes a brand-new high-resolution background tailored to your headline and festive occasion.
                     </Text>
 
@@ -5388,9 +5388,9 @@ export default function MarketingScreen() {
                           <Pressable
                             onPress={() => void handleUploadRefPhoto()}
                             disabled={uploadingRefPhoto}
-                            style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE' }}
+                            style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' }}
                           >
-                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#6D28D9' }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#047857' }}>
                               {uploadingRefPhoto ? 'Uploading…' : '+ Upload Ref'}
                             </Text>
                           </Pressable>
@@ -5402,7 +5402,7 @@ export default function MarketingScreen() {
                             {refPhotosError}
                           </Text>
                           <Pressable onPress={() => void loadBusinessRefPhotos()}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>Retry</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#009F50' }}>Retry</Text>
                           </Pressable>
                         </View>
                       ) : refPhotosList.length > 0 ? (
@@ -5454,7 +5454,7 @@ export default function MarketingScreen() {
                         </Text>
                       )}
                       {selectedRefUrls.length > 0 && isTextOnlyImageProvider(imageProvider) ? (
-                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#6D28D9', marginTop: 4 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#047857', marginTop: 4 }}>
                           ✨ Using Gemini Vision to blend your selected reference photo{selectedRefUrls.length > 1 ? 's' : ''}.
                         </Text>
                       ) : null}
@@ -5503,7 +5503,7 @@ export default function MarketingScreen() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: 8,
-                        backgroundColor: '#7C3AED',
+                        backgroundColor: '#009F50',
                         borderRadius: 10,
                         paddingVertical: 10,
                         opacity: isGeneratingImage ? 0.7 : 1,

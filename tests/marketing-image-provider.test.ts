@@ -278,7 +278,7 @@ it('produces diverse scene subjects and lighting across consecutive calls for th
   expect(prompts.size).toBeGreaterThanOrEqual(3);
 });
 
-it('injects randomized seeds into NVIDIA requests', async () => {
+it('sends valid FLUX parameters to NVIDIA NIM without forbidden seed', async () => {
   m.find.mockImplementation(async ({ where }: any) => {
     if (where?.provider === 'nvidia') return { id: 'nv-key', encryptedKey: 'nv-secret' };
     return null;
@@ -288,8 +288,35 @@ it('injects randomized seeds into NVIDIA requests', async () => {
       headers: { 'content-type': 'application/json' },
     }),
   );
-  await generateDesignImage('Luxury villa exterior', 'nvidia', new AbortController().signal);
+  const result = await generateDesignImage('Luxury villa exterior', 'nvidia', new AbortController().signal);
   const sentBody = JSON.parse(String(m.fetch.mock.calls[0][1].body));
-  expect(typeof sentBody.seed).toBe('number');
-  expect(sentBody.seed).toBeGreaterThan(0);
+  expect(sentBody.seed).toBeUndefined();
+  expect(sentBody.prompt).toContain('Luxury villa exterior');
+  expect(sentBody.width).toBe(1024);
+  expect(sentBody.height).toBe(1024);
+  expect(result.bytes.toString()).toBe('nv-img');
+});
+
+it('supports kie.ai provider task creation, polling, and downloading image', async () => {
+  m.find.mockImplementation(async ({ where }: any) => {
+    if (where?.provider === 'kie') return { id: 'kie-key', encryptedKey: 'kie-secret' };
+    return null;
+  });
+  m.fetch
+    // 1. createTask
+    .mockResolvedValueOnce(new Response(JSON.stringify({ code: 200, msg: 'success', data: { taskId: 'task-123' } })))
+    // 2. recordInfo
+    .mockResolvedValueOnce(new Response(JSON.stringify({
+      code: 200,
+      msg: 'success',
+      data: { taskId: 'task-123', state: 'success', response: { resultUrls: ['https://example.com/kie-output.png'] } },
+    })))
+    // 3. image download
+    .mockResolvedValueOnce(new Response(Buffer.from('kie-image-bytes'), {
+      headers: { 'content-type': 'image/png' },
+    }));
+
+  const res = await generateDesignImage('Modern clinic reception', 'kie', new AbortController().signal);
+  expect(res.bytes.toString()).toBe('kie-image-bytes');
+  expect(res.model).toContain('kie/');
 });
