@@ -240,7 +240,7 @@ export function AiStudioFeed({
         }
         await fetchTemplates();
       } else {
-        const errorDetail = res?.error || res?.message || 'Failed to generate image. Please try another scene.';
+        const errorDetail = res?.message || res?.error || 'Failed to generate image. Please try another scene.';
         const targetEmail = (res as any)?.supportEmail || BGOS_SUPPORT_EMAIL || 'support@fieseros.com';
         Alert.alert(
           'Image Generation Failed',

@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < scenesToGenerate.length; i++) {
       const prompt = scenesToGenerate[i];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000);
+      const timeout = setTimeout(() => controller.abort(), 75000);
 
       let imageBytes: Buffer | null = null;
 

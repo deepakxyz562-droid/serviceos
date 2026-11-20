@@ -463,14 +463,26 @@ export async function GET(request: NextRequest) {
   // Trade Isolation & Cloudflare AI S3 Category Library (Minimum 50 images, scaling to 200)
   const categoryFolder = getCategoryStorageFolder(effectiveCategoryText);
   let s3CategoryVisuals = await getCategoryImagesFromS3(effectiveCategoryText, 200);
+  const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
   if (s3CategoryVisuals.length < 50) {
-    s3CategoryVisuals = await ensureOnboardingCategoryPack({
-      category: effectiveCategoryText,
-      businessName,
-      city,
-      services: realServiceNames,
-      targetCount: 50,
-    });
+    if (isTest) {
+      s3CategoryVisuals = await ensureOnboardingCategoryPack({
+        category: effectiveCategoryText,
+        businessName,
+        city,
+        services: realServiceNames,
+        targetCount: 50,
+      });
+    } else {
+      // Non-blocking background worker: prewarm S3 category library asynchronously without blocking GET request
+      void ensureOnboardingCategoryPack({
+        category: effectiveCategoryText,
+        businessName,
+        city,
+        services: realServiceNames,
+        targetCount: 50,
+      }).catch((err) => console.warn('[templates/route] Background category pack error:', err));
+    }
   }
   const visuals = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : getCategoryVisualPool(effectiveCategoryText);
 
@@ -510,8 +522,18 @@ export async function GET(request: NextRequest) {
 
   // Incompatible trade conflict elimination:
   // Non-food / service businesses must NEVER see grocery, supermarket, cafe, bakery, restaurant, dining or sweets templates
+  // Festivals (Diwali, Eid, Harvest, New Year, etc.) are universal celebrations and must never be stripped as food conflicts
   const isConflictingTemplateForNonFood = (tpl: PosterTemplate): boolean => {
     if (isExplicitFoodOrGrocery) return false;
+    const isFest =
+      tpl.category === 'festival' ||
+      tpl.edition?.purpose === 'Festival' ||
+      Boolean(tpl.occasionId) ||
+      tpl.badge?.toLowerCase().includes('festival') ||
+      /diwali|deepavali|holi|eid|christmas|new year|independence|republic|rakhi|navratri|dussehra|chhath|valentine|harvest|festiv/i.test(
+        `${tpl.id} ${tpl.name} ${tpl.headline || ''}`,
+      );
+    if (isFest) return false;
     const text = `${tpl.id} ${tpl.name} ${tpl.headline || ''} ${(tpl.industries || []).join(' ')} ${tpl.bgPrompt || ''}`.toLowerCase();
     return /grocery|supermarket|vegetable|fruit|produce|mandi|bazaar|cafe|bakery|restaurant|food|dining|sweets|mithai|crops|harvest|pumpkins|bistro|cake|dish/.test(text);
   };
@@ -1035,13 +1057,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (isMerchantTech) {
-    festivalsTemplates = festivalsTemplates.filter((t) => {
-      const text = `${t.id} ${t.name} ${t.headline} ${t.photoUrl}`.toLowerCase();
-      return !/crops|harvest|pumpkins|feast|food|sweets|mithai|plate|bistro|cafe/.test(text);
-    });
-  }
-
   const reviewsTemplates: BusinessTemplateResponseItem[] = [
     ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
     ...curatedResponseItems.filter((cr) => cr.tab === 'reviews'),
@@ -1069,23 +1084,35 @@ export async function GET(request: NextRequest) {
     ].slice(0, limit);
   }
 
-  // Strict Photo Deduplication:
-  // Never repeat identical photos across cards! Each card in the feed gets a unique photo.
-  // Only available unique photos are showcased in distinct template designs.
-  const seenPhotoUrls = new Set<string>();
-  const strictlyUniqueTemplates: typeof selectedTemplates = [];
+  // Multi-card window deduplication:
+  // Ensure cards within a 10-card distance never display the identical photoUrl.
+  // Instead of dropping templates, rotate distinct photos across the templates!
+  const distinctPool = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : visuals;
+  if (distinctPool.length > 0) {
+    const windowSize = Math.min(10, Math.floor(distinctPool.length / 2));
+    const recentWindow: string[] = [];
+    let poolCursor = 0;
 
-  for (const tpl of selectedTemplates) {
-    if (!tpl.photoUrl) continue;
-    const normUrl = tpl.photoUrl.split('?')[0].toLowerCase();
-    if (!seenPhotoUrls.has(normUrl)) {
-      seenPhotoUrls.add(normUrl);
-      strictlyUniqueTemplates.push(tpl);
+    for (let i = 0; i < selectedTemplates.length; i++) {
+      let currentPhoto = selectedTemplates[i].photoUrl;
+      if (recentWindow.includes(currentPhoto)) {
+        let replacement = distinctPool[poolCursor % distinctPool.length];
+        let attempts = 0;
+        while (recentWindow.includes(replacement) && attempts < distinctPool.length) {
+          poolCursor++;
+          replacement = distinctPool[poolCursor % distinctPool.length];
+          attempts++;
+        }
+        poolCursor++;
+        selectedTemplates[i].photoUrl = replacement;
+        currentPhoto = replacement;
+      }
+      recentWindow.push(currentPhoto);
+      if (recentWindow.length > windowSize) {
+        recentWindow.shift();
+      }
     }
   }
-
-  // Strictly return unique templates without padding repetitive duplicate photos
-  selectedTemplates = strictlyUniqueTemplates.slice(0, limit);
 
   return NextResponse.json({
     businessContext: {

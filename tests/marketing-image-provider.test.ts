@@ -236,16 +236,18 @@ it('formats poster generation prompts with high-fidelity creative instructions',
  m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('poster').toString('base64')}}]}}]})));
  await generateDesignImage('Fieseros AI Assistant','gemini',new AbortController().signal,true);
  const sentBody=JSON.parse(m.fetch.mock.calls[0][1].body);
- expect(sentBody.contents[0].parts[0].text).toContain('promotional poster graphic (1080x1350 portrait format)');
- expect(sentBody.contents[0].parts[0].text).toContain('Fieseros AI Assistant');
+ const promptText = sentBody.instances?.[0]?.prompt || sentBody.contents?.[0]?.parts?.[0]?.text || '';
+ expect(promptText).toContain('promotional poster graphic (1080x1350 portrait format)');
+ expect(promptText).toContain('Fieseros AI Assistant');
 });
 it('detects [POSTER] prefix in prompt text automatically',async()=>{
  m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('poster').toString('base64')}}]}}]})));
  await generateDesignImage('[POSTER] Plumbing Seasonal Offer','gemini',new AbortController().signal);
  const sentBody=JSON.parse(m.fetch.mock.calls[0][1].body);
- expect(sentBody.contents[0].parts[0].text).toContain('promotional poster graphic (1080x1350 portrait format)');
- expect(sentBody.contents[0].parts[0].text).toContain('Plumbing Seasonal Offer');
- expect(sentBody.contents[0].parts[0].text).not.toContain('[POSTER]');
+ const promptText = sentBody.instances?.[0]?.prompt || sentBody.contents?.[0]?.parts?.[0]?.text || '';
+ expect(promptText).toContain('promotional poster graphic (1080x1350 portrait format)');
+ expect(promptText).toContain('Plumbing Seasonal Offer');
+ expect(promptText).not.toContain('[POSTER]');
 });
 it('prioritizes festive occasion over business category archetype', async () => {
  m.fetch.mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:Buffer.from('diwali-poster').toString('base64')}}]}}]})));
@@ -257,7 +259,7 @@ it('prioritizes festive occasion over business category archetype', async () => 
    { category: 'Software & IT Solutions', businessName: 'CloudTech Systems' }
  );
  const sentBody = JSON.parse(m.fetch.mock.calls[0][1].body);
- const promptText = sentBody.contents[0].parts[0].text;
+ const promptText = sentBody.instances?.[0]?.prompt || sentBody.contents?.[0]?.parts?.[0]?.text || '';
  expect(promptText).toContain('diya');
  expect(promptText).toContain('marigold');
  expect(promptText).not.toContain('smartphone mockup');

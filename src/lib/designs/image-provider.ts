@@ -540,15 +540,23 @@ async function callCloudflareSingleModel(params: {
     });
   }
 
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
-    {
-      method: 'POST',
-      signal: combineSignals(signal, 18000),
-      headers,
-      body,
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`,
+      {
+        method: 'POST',
+        signal: combineSignals(signal, 22000),
+        headers,
+        body,
+      },
+    );
+  } catch (fetchErr) {
+    if (!signal.aborted && fetchErr instanceof Error && /timeout|aborted/i.test(fetchErr.name + ' ' + fetchErr.message)) {
+      throw new ProviderRequestError(`Cloudflare model ${model} timed out (504)`, 504);
+    }
+    throw fetchErr;
+  }
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
@@ -568,8 +576,9 @@ async function callCloudflareSingleModel(params: {
   let bytes: Buffer;
   if (contentType.includes('application/json')) {
     const data = await response.json();
-    if (typeof data.result?.image === 'string' && data.result.image.length > 0) {
-      bytes = Buffer.from(data.result.image, 'base64');
+    const base64Img = data.result?.image || data.image;
+    if (typeof base64Img === 'string' && base64Img.length > 0) {
+      bytes = Buffer.from(base64Img, 'base64');
     } else {
       throw new Error('Cloudflare did not return a supported image');
     }
