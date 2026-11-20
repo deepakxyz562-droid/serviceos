@@ -359,8 +359,8 @@ export function formatSeoKeywordsPromptSection(ctx: TenantSeoContext | null | un
 }
 
 /**
- * Post-processes or generates localized 300-500 character Google Business Profile service descriptions
- * while ensuring both the target keyword and local city/area appear naturally.
+ * Post-processes or generates localized 160–280 character Google Business Profile service descriptions
+ * adhering strictly to Google's hard 300-character maximum limit.
  */
 export function finalizeLocalizedServiceDescription(
   rawText: string,
@@ -381,45 +381,25 @@ export function finalizeLocalizedServiceDescription(
   const city = (opts.city || '').trim() || 'your local area';
   const businessName = (opts.businessName || '').trim() || 'Our team';
   const targetKeyword = (opts.targetKeyword || '').trim() || opts.serviceName;
-  const areaSuffix =
-    opts.serviceAreas && opts.serviceAreas.length > 0
-      ? ` Serving ${opts.serviceAreas.slice(0, 3).join(', ')}, and nearby neighborhoods in ${city}.`
-      : ` Proudly serving residential and commercial customers across ${city} with fast scheduling.`;
 
   if (!clean) {
-    clean = `${businessName} provides trusted ${opts.serviceName} in ${city}, designed for customers searching for ${targetKeyword}. Our experienced local specialists deliver dependable workmanship, transparent pricing, fast turnarounds, and responsive support from first inquiry through completion.${areaSuffix} Contact our ${city} team today to check availability and request a quick quote.`;
+    clean = `${businessName} provides trusted ${opts.serviceName} in ${city}, tailored for customers searching for ${targetKeyword}. We deliver prompt turnarounds, clear communication, and dependable quality. Contact our ${city} team for estimates.`;
   }
 
-  // Ensure location & target keyword appear naturally if the model dropped them
+  // Ensure location appears naturally if the model dropped it
   if (city !== 'your local area' && !clean.toLowerCase().includes(city.toLowerCase())) {
-    clean = `${clean} Available in ${city}.`.replace(/\.\./g, '.');
-  }
-  if (
-    targetKeyword &&
-    !clean.toLowerCase().includes(targetKeyword.toLowerCase())
-  ) {
-    clean = `${clean} Tailored for clients looking for ${targetKeyword}.`.replace(/\.\./g, '.');
+    clean = `${clean} Available across ${city}.`.replace(/\.\./g, '.');
   }
 
-  // Expand cleanly until at least 300 characters while staying authentic
-  if (clean.length < 300) {
-    const expansion = `${areaSuffix} Book an appointment or call ${businessName} for prompt, reliable ${opts.serviceName} support and upfront estimates.`;
-    clean = `${clean} ${expansion}`.replace(/\s+/g, ' ').trim();
-  }
-  if (clean.length < 300) {
-    const extra = `Whether you need scheduled care or urgent help with ${targetKeyword || opts.serviceName} in ${city}, ${businessName} delivers attentive local service backed by clear communication and dependable quality.`;
-    clean = `${clean} ${extra}`.replace(/\s+/g, ' ').trim();
-  }
-
-  // Cleanly trim on sentence/word boundary if above 500 characters
-  if (clean.length > 500) {
-    const slice = clean.slice(0, 497);
+  // Strictly enforce Google Business Profile 300 character maximum (ideal 180–280 chars)
+  if (clean.length > 285) {
+    const slice = clean.slice(0, 280);
     const lastStop = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '));
-    if (lastStop >= 300) {
+    if (lastStop >= 140) {
       clean = slice.slice(0, lastStop + 1).trim();
     } else {
       const lastSpace = slice.lastIndexOf(' ');
-      clean = `${(lastSpace >= 300 ? slice.slice(0, lastSpace) : slice).trim().replace(/[.,;:\-]+$/, '')}.`;
+      clean = `${(lastSpace >= 140 ? slice.slice(0, lastSpace) : slice).trim().replace(/[.,;:\-]+$/, '')}.`;
     }
   }
 

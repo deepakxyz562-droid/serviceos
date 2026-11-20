@@ -54,15 +54,15 @@ async function acceptSession(session: SessionResponse, revision: number) {
 }
 
 async function resolveOnboardingRequirement(session: SessionResponse, user: User): Promise<boolean> {
+  // If server explicitly says onboarding is required, server truth takes precedence over local cache
+  if (session.onboardingRequired === true) {
+    return true;
+  }
+
   const accountKey = user.tenantId || user.id;
   const locallyDone = await isOnboardingDone(accountKey);
   if (locallyDone) {
     return false;
-  }
-
-  // If session explicitly says onboarding is required
-  if (session.onboardingRequired === true) {
-    return true;
   }
 
   // If server says false (or omitted), verify whether the tenant genuinely has a connected Google Business Profile

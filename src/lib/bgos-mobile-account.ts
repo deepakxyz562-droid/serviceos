@@ -283,7 +283,16 @@ export async function resolveBgosMobileAccount(userId: string, workspaceId?: str
       isActive: true,
     },
   });
-  const onboardingRequired = !effectiveTenant?.onboardingCompleted && gbpCount === 0;
+  let settings: Record<string, any> = {};
+  if (effectiveTenant?.settingsJson) {
+    try {
+      settings = typeof effectiveTenant.settingsJson === 'string'
+        ? JSON.parse(effectiveTenant.settingsJson)
+        : (effectiveTenant.settingsJson as Record<string, any>);
+    } catch {}
+  }
+  const isBgosDone = Boolean(settings.bgosOnboardingCompleted || (effectiveTenant?.onboardingCompleted && gbpCount > 0));
+  const onboardingRequired = !isBgosDone && gbpCount === 0;
   return {
     user: {
       ...user,

@@ -51,6 +51,10 @@ export async function generateMetadata({
     searchParams ?? Promise.resolve({}),
   ]);
   const host = reqHeaders.get('x-forwarded-host') || reqHeaders.get('host') || '';
+  const isBgosHost =
+    host.includes('bgos.site') ||
+    host.startsWith('bgos.') ||
+    host.includes('.bgos.');
   const forceView = resolveForceView(resolvedSearch);
   const profile = await getBgosPublicBusinessProfile(slug);
   const decision = shouldRenderBgosCardHost({
@@ -59,7 +63,7 @@ export async function generateMetadata({
     forceView,
   });
 
-  if (decision.action === 'redirect_marketplace') {
+  if (!isBgosHost && decision.action === 'redirect_marketplace') {
     const canonical = await getCanonicalUrlBySlug(slug);
     return {
       robots: { index: false, follow: false },
@@ -68,12 +72,14 @@ export async function generateMetadata({
   }
 
   if (!profile) {
-    const canonical = await getCanonicalUrlBySlug(slug);
-    if (canonical) {
-      return {
-        robots: { index: false, follow: true },
-        alternates: { canonical },
-      };
+    if (!isBgosHost) {
+      const canonical = await getCanonicalUrlBySlug(slug);
+      if (canonical) {
+        return {
+          robots: { index: false, follow: true },
+          alternates: { canonical },
+        };
+      }
     }
     return {
       title: 'Business Not Found',
@@ -122,6 +128,10 @@ export default async function ShortBusinessUrlPage({
     searchParams ?? Promise.resolve({}),
   ]);
   const host = reqHeaders.get('x-forwarded-host') || reqHeaders.get('host') || '';
+  const isBgosHost =
+    host.includes('bgos.site') ||
+    host.startsWith('bgos.') ||
+    host.includes('.bgos.');
   const forceView = resolveForceView(resolvedSearch);
   const profile = await getBgosPublicBusinessProfile(slug);
   const decision = shouldRenderBgosCardHost({
@@ -130,14 +140,14 @@ export default async function ShortBusinessUrlPage({
     forceView,
   });
 
-  if (decision.action === 'redirect_marketplace') {
+  if (!isBgosHost && decision.action === 'redirect_marketplace') {
     const canonical = await getCanonicalUrlBySlug(slug);
     if (canonical) {
       permanentRedirect(canonical);
     }
   }
 
-  if (decision.action === 'redirect_bgos_host') {
+  if (!isBgosHost && decision.action === 'redirect_bgos_host') {
     if (profile) {
       permanentRedirect(getBgosPublicCanonicalUrl(profile.slug));
     }
@@ -148,9 +158,11 @@ export default async function ShortBusinessUrlPage({
   }
 
   if (!profile) {
-    const marketplaceCanonical = await getCanonicalUrlBySlug(slug);
-    if (marketplaceCanonical) {
-      permanentRedirect(marketplaceCanonical);
+    if (!isBgosHost) {
+      const marketplaceCanonical = await getCanonicalUrlBySlug(slug);
+      if (marketplaceCanonical) {
+        permanentRedirect(marketplaceCanonical);
+      }
     }
 
     return (

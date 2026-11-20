@@ -3,16 +3,43 @@
  * Extracts genuine city / locality from formatted address strings without ever returning street numbers.
  */
 
+export function formatDisplayAddress(raw?: string | null): string {
+  if (!raw || !raw.trim()) return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        const parts = [
+          parsed.street,
+          parsed.city,
+          parsed.state,
+          parsed.pincode || parsed.zip,
+          parsed.country && parsed.country !== 'IN' ? parsed.country : null,
+        ].filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+      }
+    } catch {}
+  }
+  return trimmed;
+}
+
 export function extractCityOrLocality(address?: string | null, explicitCity?: string | null): string {
   if (explicitCity && explicitCity.trim()) {
-    return explicitCity.trim();
+    const cleanExplicit = formatDisplayAddress(explicitCity).split(',')[0].trim();
+    if (cleanExplicit && !cleanExplicit.startsWith('{')) {
+      return cleanExplicit.charAt(0).toUpperCase() + cleanExplicit.slice(1);
+    }
   }
 
-  if (!address || !address.trim()) {
+  const cleanAddress = formatDisplayAddress(address);
+  if (!cleanAddress || !cleanAddress.trim()) {
     return 'your area';
   }
 
-  const parts = address
+  const parts = cleanAddress
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean);

@@ -233,12 +233,34 @@ export async function GET(request: NextRequest) {
       tenant?.brandProfile?.industry ||
       (tenant as any)?.industry ||
       'Professional Services';
-    const fallbackAddress =
+    const formatCleanAddress = (raw?: string | null): string => {
+      if (!raw || typeof raw !== 'string') return '';
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') {
+            const parts = [
+              parsed.street,
+              parsed.city,
+              parsed.state,
+              parsed.pincode || parsed.zip,
+              parsed.country && parsed.country !== 'IN' ? parsed.country : null,
+            ].filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+            if (parts.length > 0) return parts.join(', ');
+          }
+        } catch {}
+      }
+      return trimmed;
+    };
+
+    const rawCandidateAddress =
       (typeof tenantSettings.activeGbpAddress === 'string' && tenantSettings.activeGbpAddress.trim()) ||
       (tenant as any)?.address ||
       tenant?.brandProfile?.location ||
       (tenant as any)?.city ||
       '';
+    const fallbackAddress = formatCleanAddress(rawCandidateAddress);
     const fallbackCity =
       (typeof tenantSettings.activeGbpCity === 'string' && tenantSettings.activeGbpCity.trim()) ||
       (tenant as any)?.city ||

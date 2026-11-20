@@ -56,11 +56,34 @@ export async function prepareGoogleAccount(
   if (!account) {
     if (typeof (db as any).socialAccount?.findMany === 'function') {
       const candidates = await db.socialAccount.findMany({
-        where: { tenantId, platform: 'googlebusiness', isActive: true }, take: 2,
+        where: { tenantId, platform: 'googlebusiness', isActive: true },
       });
-      // Multiple accounts require an explicit selection.
-      if (candidates.length !== 1) return null;
-      account = candidates[0];
+      if (candidates.length === 1) {
+        account = candidates[0];
+      } else if (candidates.length > 1) {
+        // Smart match against tenant / brand business name if an explicit location hasn't been chosen yet
+        const bizName = (tenant?.brandProfile?.businessName || tenant?.name || '').trim().toLowerCase();
+        if (bizName) {
+          account = candidates.find((c: any) => {
+            const accName = (c.accountName || '').toLowerCase();
+            let locTitle = '';
+            try {
+              const m = typeof c.metadata === 'string' ? JSON.parse(c.metadata) : c.metadata;
+              locTitle = (m?.locationTitle || '').toLowerCase();
+            } catch {}
+            return (
+              accName === bizName ||
+              locTitle === bizName ||
+              (locTitle && (bizName.includes(locTitle) || locTitle.includes(bizName))) ||
+              (accName && (bizName.includes(accName) || accName.includes(bizName)))
+            );
+          }) || null;
+        }
+        // If still unresolved, default to the most recently updated active profile
+        if (!account && candidates.length > 0) {
+          account = candidates[0];
+        }
+      }
     } else if (typeof (db as any).socialAccount?.findFirst === 'function') {
       account = await db.socialAccount.findFirst({
         where: { tenantId, platform: 'googlebusiness', isActive: true },

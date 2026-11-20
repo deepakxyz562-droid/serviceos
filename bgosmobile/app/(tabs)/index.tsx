@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card, Screen, Action, ErrorNotice, MenuRow, Badge, MetricCard, ui, colors, Avatar, Loading } from '../../src/components/ui';
 import { detectDeviceCountryAndTimezone, getGreetingForLocalTime } from '../../src/lib/country-codes';
-import { extractCityOrLocality } from '../../src/lib/address';
+import { extractCityOrLocality, formatDisplayAddress } from '../../src/lib/address';
 import { BGOS_PUBLIC_WEB_URL } from '../../src/lib/constants';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -697,10 +697,18 @@ export default function HomeScreen() {
     );
   }, [gbpPlace.data?.place, profileName, workspace.data?.name]);
   const greetingText = getGreetingForLocalTime(workspace.data?.locale?.timeZone);
-  const firstGreetingName = (user?.name || profileName || 'there').trim().split(/\s+/)[0];
+  const rawGreetingCandidate = (user?.name || '').trim();
+  const validGreetingName =
+    rawGreetingCandidate && !/^(satya|admin|support|test(\s+user)?)$/i.test(rawGreetingCandidate)
+      ? rawGreetingCandidate
+      : profileName && profileName !== 'Google Business'
+        ? profileName
+        : 'there';
+  const firstGreetingName = validGreetingName.trim().split(/\s+/)[0];
 
   const place = gbpPlace.data?.place || gbpPlace.data?.tenantFallback;
-  const address = place?.address || '';
+  const rawAddress = place?.address || '';
+  const address = formatDisplayAddress(rawAddress);
   const city = extractCityOrLocality(address, (place as any)?.city || (workspace.data as any)?.tenant?.city);
   const category = place?.category || 'Local Business';
   const completionScore = place?.completionScore ?? 76;
@@ -1244,14 +1252,16 @@ export default function HomeScreen() {
                   ) : null}
                 </View>
                 <Text
-                  numberOfLines={2}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
                   style={{
-                    fontSize: 10.5,
+                    fontSize: 10,
                     fontWeight: isPerformance ? '800' : '600',
                     color: isPerformance ? '#1D4ED8' : '#334155',
                     textAlign: 'center',
                     lineHeight: 13,
-                    minHeight: 26,
+                    marginTop: 2,
                   }}
                 >
                   {act.label}

@@ -115,7 +115,11 @@ export function buildHostedCanonicalUrl(params: {
   slug: string;
   industry?: string | null;
   city?: string | null;
+  isBgos?: boolean;
 }): string {
+  if (params.isBgos) {
+    return `https://bgos.site/${params.slug}`;
+  }
   const industrySlug = mapIndustryToPluralSlug(params.industry);
   const citySlug = slugifyCity(params.city);
   return `https://fieseros.com/${industrySlug}/${citySlug}/${params.slug}`;
@@ -130,9 +134,12 @@ export function resolveBusinessPresenceMode(params: {
   const slug = normalizeSlugValue(tenant.publicSlug || tenant.slug || tenant.name, tenant.id);
   const industry = tenant.industry || tenant.brandProfile?.industry || null;
   const city = tenant.city || tenant.brandProfile?.location || null;
+  const isBgos = tenant.signupMode === 'bgos' || tenant.marketplaceOptIn === false;
 
   const shortHostedUrl = `https://bgos.site/${slug}`;
-  const hostedCanonicalUrl = buildHostedCanonicalUrl({ slug, industry, city });
+  const hostedCanonicalUrl = isBgos
+    ? shortHostedUrl
+    : buildHostedCanonicalUrl({ slug, industry, city });
   const publicProfileEnabled = Boolean(tenant.publicProfileEnabled);
   const claimed = Boolean(tenant.claimed);
 

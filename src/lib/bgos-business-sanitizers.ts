@@ -22,6 +22,8 @@ export function shouldRenderBgosCardHost(input: HostRoutingInput): BgosCardRoute
   const force = (input.forceView || '').toLowerCase().trim();
   const isBgosHost =
     productForHostname(host) === 'bgos' ||
+    host === 'bgos.site' ||
+    host.endsWith('.bgos.site') ||
     host.startsWith('bgos.') ||
     host.includes('.bgos.');
   const isLocalOrPreview =

@@ -334,24 +334,34 @@ export async function getBgosPublicBusinessProfileUncached(
 
     if (!tenant) return null;
 
+    const settings = safeJsonObject(tenant.settingsJson);
+    const hasGbpLinked = Boolean(
+      tenant.googlePlaceId ||
+      tenant.googleBusinessVerified ||
+      settings?.activeGbpLocationId ||
+      settings?.activeGbpPlaceId ||
+      settings?.bgosOnboardingCompleted
+    );
+
     // Strict product boundary:
-    // Only genuine BGOS merchants should have a BGOS public profile page (/b/[slug]).
-    // Fieseros CRM / Field Service / BOS users must NOT render BGOS pages!
+    // A tenant is a genuine BGOS merchant if:
+    // 1. Their signupMode is 'bgos' or they have a 'bgos' workspace, OR
+    // 2. They have connected a Google Business Profile or configured BGOS profile settings.
     const isBgosMerchant =
       tenant.signupMode === 'bgos' ||
-      tenant.workspaces?.some((w) => w.productType === 'bgos');
+      tenant.workspaces?.some((w) => w.productType === 'bgos') ||
+      hasGbpLinked;
 
     const isExplicitCrmOrBos =
-      tenant.signupMode === 'crm_trial' ||
+      (tenant.signupMode === 'crm_trial' ||
       tenant.signupMode === 'standalone' ||
       tenant.signupMode === 'free' ||
-      tenant.workspaces?.some((w) => w.productType === 'crm' || w.productType === 'bos');
+      tenant.workspaces?.some((w) => w.productType === 'crm' || w.productType === 'bos')) &&
+      !hasGbpLinked;
 
     if (!isBgosMerchant && isExplicitCrmOrBos) {
       return null;
     }
-
-    const settings = safeJsonObject(tenant.settingsJson);
     const bookingConfig = safeJsonObject(
       settings.bookingPageConfig ? JSON.stringify(settings.bookingPageConfig) : null,
     );

@@ -53,40 +53,40 @@ We pride ourselves on honest pricing, on-time arrivals, and quality workmanship.
   logo: null,
   services: [
     {
-      name: 'Emergency Service',
-      description: '24/7 emergency response for urgent issues.',
-      longDescription: 'When an emergency strikes, you need a professional fast. We offer 24/7 emergency response throughout the service area. Our technicians arrive within 60 minutes for most calls, equipped to handle any urgent situation.',
-      category: 'emergency',
-      basePrice: 150,
-      duration: 90,
-      slug: 'emergency-service',
-    },
-    {
-      name: 'Inspection & Maintenance',
-      description: 'Professional inspection and routine maintenance to prevent issues.',
-      longDescription: 'Regular maintenance is the key to avoiding costly breakdowns. Our inspection service includes a thorough check of all components, identification of potential issues, and a detailed report with recommendations.',
-      category: 'maintenance',
-      basePrice: 89,
+      name: 'Professional Consultation',
+      description: 'Personalized consultation to evaluate your needs and discuss tailored solutions.',
+      longDescription: 'Get dedicated time with our experienced team to assess your specific requirements, evaluate available options, and receive upfront pricing with practical recommendations.',
+      category: 'consultation',
+      basePrice: 99,
       duration: 60,
-      slug: 'inspection-maintenance',
+      slug: 'professional-consultation',
     },
     {
-      name: 'Installation',
-      description: 'Professional installation of new equipment and systems.',
-      longDescription: 'We install, repair, and replace all major brands. Our technicians will help you choose the right product for your needs, and we handle all permits and inspections.',
-      category: 'installation',
-      basePrice: 1200,
-      duration: 240,
-      slug: 'installation',
-    },
-    {
-      name: 'Repair & Replacement',
-      description: 'Expert repair and replacement services for all major components.',
-      longDescription: 'From a simple part replacement to a full system overhaul, our technicians handle all repair work. All repairs are backed by our 1-year labor warranty.',
-      category: 'repair',
-      basePrice: 200,
+      name: 'Primary Service Delivery',
+      description: 'Expert, end-to-end service delivery tailored to your project requirements.',
+      longDescription: 'Our specialists provide dependable, professional service execution from initial setup through final review, maintaining the highest quality standards.',
+      category: 'service',
+      basePrice: 299,
       duration: 120,
-      slug: 'repair-replacement',
+      slug: 'primary-service-delivery',
+    },
+    {
+      name: 'Custom Solutions',
+      description: 'Bespoke packages and customized assistance designed around your goals.',
+      longDescription: 'Every client has unique needs. We design and deliver custom solutions aligned with your timeline, budget, and long-term objectives.',
+      category: 'custom',
+      basePrice: 499,
+      duration: 180,
+      slug: 'custom-solutions',
+    },
+    {
+      name: 'Ongoing Support & Maintenance',
+      description: 'Continuous assistance, proactive reviews, and responsive follow-up care.',
+      longDescription: 'Ensure lasting success with responsive support, scheduled checkups, and priority assistance whenever you need updates or troubleshooting.',
+      category: 'support',
+      basePrice: 149,
+      duration: 60,
+      slug: 'ongoing-support-maintenance',
     },
   ],
   reviews: [],
@@ -132,6 +132,56 @@ const INDUSTRY_DUMMIES: Record<string, IndustryDummy> = {
       { name: 'EV Charger Installation', description: 'Electric vehicle charger installation for homes and businesses.', longDescription: 'Go electric with professional EV charger installation. We install Level 2 chargers for all EV brands, including Tesla, Rivian, and Ford.', category: 'installation', basePrice: 800, duration: 180, slug: 'ev-charger-installation' },
     ],
   },
+  'IT & Web Services': {
+    ...GENERIC_DUMMY,
+    tagline: 'Custom Web Design • Google SEO • Cloud Solutions • Dedicated Support',
+    services: [
+      { name: 'Website Design & Development', description: 'Modern, mobile-first responsive websites designed to drive inquiries and sales.', longDescription: 'We build high-converting, lightning-fast websites and web applications tailored to your brand, optimized for all screen sizes and search visibility.', category: 'web-development', basePrice: 500, duration: 180, slug: 'website-design-development' },
+      { name: 'Local SEO & Maps Ranking', description: 'Rank higher on Google Maps and Google Search for high-intent customer keywords.', longDescription: 'Comprehensive search engine optimization for local businesses, including Google Business Profile optimization, localized citation building, and keyword rank tracking.', category: 'seo', basePrice: 350, duration: 120, slug: 'local-seo-maps-ranking' },
+      { name: 'Custom Software & Web Apps', description: 'Tailor-made software platforms, custom integrations, and automation workflows.', longDescription: 'From client portals to workflow automations, we develop scalable software solutions tailored to streamline operations and elevate customer experience.', category: 'software', basePrice: 800, duration: 240, slug: 'custom-software-web-apps' },
+      { name: 'Cloud Hosting & Ongoing Support', description: 'Secure, high-availability cloud infrastructure with regular backups and updates.', longDescription: 'Reliable cloud deployment, domain management, SSL security, and continuous maintenance ensuring your digital assets run smoothly 24/7 without interruption.', category: 'cloud-support', basePrice: 150, duration: 60, slug: 'cloud-hosting-ongoing-support' },
+    ],
+  },
+  'Salon & Beauty': {
+    ...GENERIC_DUMMY,
+    tagline: 'Expert Haircuts & Styling • Skincare • Premium Products • Relaxing Atmosphere',
+    services: [
+      { name: 'Haircut & Styling', description: 'Custom haircuts, precision trims, and personalized styling.', longDescription: 'Consultation and customized haircut paired with luxury washing, scalp massage, and professional blowout styling tailored to your personal aesthetic.', category: 'hair', basePrice: 65, duration: 60, slug: 'haircut-styling' },
+      { name: 'Color & Highlights', description: 'Full balayage, dimensional highlights, gloss, and root touchups.', longDescription: 'Expert color formulation using gentle, restorative salon products to deliver vibrant, natural-looking dimension that lasts.', category: 'color', basePrice: 140, duration: 120, slug: 'color-highlights' },
+      { name: 'Facial & Skincare Treatment', description: 'Deep cleansing, hydrating, and rejuvenating custom facials.', longDescription: 'Rejuvenate your skin with targeted exfoliations, soothing masks, and deeply nourishing serums tailored to your unique skin type.', category: 'skincare', basePrice: 95, duration: 75, slug: 'facial-skincare' },
+      { name: 'Manicure & Pedicure', description: 'Complete nail shaping, cuticle care, scrub, massage, and polish.', longDescription: 'Relaxing spa manicures and pedicures with non-toxic, long-wearing polishes, paraffin hydration, and gentle foot care.', category: 'nails', basePrice: 50, duration: 60, slug: 'manicure-pedicure' },
+    ],
+  },
+  'Healthcare & Medical': {
+    ...GENERIC_DUMMY,
+    tagline: 'Compassionate Care • Experienced Practitioners • Modern Facilities',
+    services: [
+      { name: 'Initial Health Consultation', description: 'Comprehensive patient assessment and personalized health planning.', longDescription: 'Thorough review of health history, vital checks, diagnostic screening, and personalized care recommendations from experienced clinicians.', category: 'consultation', basePrice: 120, duration: 45, slug: 'health-consultation' },
+      { name: 'Preventative Wellness Checkup', description: 'Routine checkups, diagnostic screenings, and wellness guidance.', longDescription: 'Proactive preventative care designed to detect concerns early, review biomarkers, and support long-term vitality for patients of all ages.', category: 'wellness', basePrice: 180, duration: 60, slug: 'preventative-wellness' },
+      { name: 'Specialist Treatment Session', description: 'Targeted care sessions for specific medical and therapeutic needs.', longDescription: 'Evidence-based clinical treatments focused on symptom relief, rehabilitation, and long-term recovery in a supportive, modern environment.', category: 'treatment', basePrice: 200, duration: 60, slug: 'specialist-treatment' },
+      { name: 'Follow-up & Care Monitoring', description: 'Progress review, prescription evaluation, and continuing care.', longDescription: 'Dedicated follow-up visits to monitor treatment response, answer questions, adjust care plans, and ensure sustained health improvement.', category: 'monitoring', basePrice: 85, duration: 30, slug: 'care-monitoring' },
+    ],
+  },
+  'Restaurant & Dining': {
+    ...GENERIC_DUMMY,
+    tagline: 'Fresh Seasonal Ingredients • Handcrafted Menus • Dine-In & Private Events',
+    services: [
+      { name: 'Dine-In Table Reservation', description: 'Reserved table seating with full culinary hospitality and seasonal menus.', longDescription: 'Enjoy authentic, chef-prepared dining in a vibrant ambiance. Ideal for date nights, family gatherings, and casual celebrations.', category: 'dining', basePrice: 50, duration: 90, slug: 'table-reservation' },
+      { name: 'Takeout & Curbside Pickup', description: 'Freshly prepared orders packaged securely for convenient off-premise dining.', longDescription: 'Order your favorite dishes online or by phone with rapid kitchen turnaround and contactless curbside pickup.', category: 'takeout', basePrice: 25, duration: 20, slug: 'takeout-pickup' },
+      { name: 'Private Event Catering', description: 'Custom catering packages and platters for corporate meetings and family parties.', longDescription: 'From cocktail hors doeuvres to full buffet setups, our kitchen brings unforgettable flavors and full-service dining to your private venue.', category: 'catering', basePrice: 400, duration: 180, slug: 'private-catering' },
+      { name: 'Chef Tasting Experience', description: 'Multi-course culinary journey showcasing signature seasonal dishes.', longDescription: 'An exclusive dining experience guided by our culinary team featuring unique pairings, specialty ingredients, and house-made desserts.', category: 'experience', basePrice: 95, duration: 120, slug: 'chef-tasting' },
+    ],
+  },
+  'Professional & Legal': {
+    ...GENERIC_DUMMY,
+    tagline: 'Trusted Advisors • Strategic Counsel • Confidential & Results-Driven',
+    services: [
+      { name: 'Advisory Consultation', description: 'Initial strategy session to evaluate goals and determine legal or financial paths.', longDescription: 'Confidential, in-depth consultation exploring your objectives, risk factors, and actionable strategies delivered by seasoned advisors.', category: 'advisory', basePrice: 250, duration: 60, slug: 'advisory-consultation' },
+      { name: 'Document & Contract Review', description: 'Meticulous review and drafting of commercial and personal agreements.', longDescription: 'Protect your interests with comprehensive document analysis, risk mitigation, and clear contractual drafting tailored to current regulations.', category: 'document-review', basePrice: 350, duration: 90, slug: 'document-review' },
+      { name: 'Client Representation & Planning', description: 'Dedicated ongoing representation, negotiations, and strategic advocacy.', longDescription: 'Professional guidance and proactive negotiation across business matters, financial filings, and formal stakeholder discussions.', category: 'representation', basePrice: 500, duration: 120, slug: 'representation-planning' },
+      { name: 'Compliance & Ongoing Advisory', description: 'Regular compliance reviews and quarterly advisory checkpoints.', longDescription: 'Keep your business protected with periodic check-ins, regulatory updates, and proactive planning that prevents future liabilities.', category: 'compliance', basePrice: 200, duration: 60, slug: 'compliance-advisory' },
+    ],
+  },
 }
 
 /**
@@ -139,10 +189,37 @@ const INDUSTRY_DUMMIES: Record<string, IndustryDummy> = {
  */
 function getIndustryDummy(industry?: string | null): IndustryDummy {
   if (!industry) return GENERIC_DUMMY
-  // Try exact match first, then case-insensitive
+  // Direct match
   if (INDUSTRY_DUMMIES[industry]) return INDUSTRY_DUMMIES[industry]
+  const raw = industry.toLowerCase().trim()
+
+  // Match IT / Web / Marketing / Software
+  if (/\b(it|web|software|marketing|seo|tech|computer|digital|internet|app)\b/i.test(raw)) {
+    return INDUSTRY_DUMMIES['IT & Web Services']
+  }
+  // Match Salon / Beauty / Spa / Hair
+  if (/\b(salon|beauty|hair|spa|barber|nail|skincare|cosmetic|massage)\b/i.test(raw)) {
+    return INDUSTRY_DUMMIES['Salon & Beauty']
+  }
+  // Match Medical / Healthcare / Clinic / Dental
+  if (/\b(clinic|dent|doctor|health|med|physio|therap|care|hospital)\b/i.test(raw)) {
+    return INDUSTRY_DUMMIES['Healthcare & Medical']
+  }
+  // Match Restaurant / Food / Cafe / Bakery / Dining
+  if (/\b(restaurant|cafe|food|bakery|bar|coffee|dining|cater|pizza|bistro)\b/i.test(raw)) {
+    return INDUSTRY_DUMMIES['Restaurant & Dining']
+  }
+  // Match Legal / Financial / Real Estate / Consulting
+  if (/\b(law|legal|tax|account|consult|finance|estate|insur|advis)\b/i.test(raw)) {
+    return INDUSTRY_DUMMIES['Professional & Legal']
+  }
+  // Match Trades
+  if (/\b(plumb|pipe|drain)\b/i.test(raw)) return INDUSTRY_DUMMIES.Plumbing
+  if (/\b(hvac|air|heat|cool|furnace)\b/i.test(raw)) return INDUSTRY_DUMMIES.HVAC
+  if (/\b(electr|wire|power|panel)\b/i.test(raw)) return INDUSTRY_DUMMIES.Electrical
+
   const key = Object.keys(INDUSTRY_DUMMIES).find(
-    (k) => k.toLowerCase() === industry.toLowerCase(),
+    (k) => k.toLowerCase() === raw,
   )
   return key ? INDUSTRY_DUMMIES[key] : GENERIC_DUMMY
 }

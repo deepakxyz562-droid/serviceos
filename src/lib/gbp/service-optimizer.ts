@@ -123,7 +123,7 @@ Task:
 Write a unique, high-converting Google Business Profile service description for EACH service below.
 
 STRICT RULES FOR EVERY DESCRIPTION:
-1. Length MUST be strictly between 320 and 475 characters (never under 300 or over 500).
+1. Length MUST be strictly between 160 and 270 characters (Google Business Profile has a hard 300-character maximum; NEVER exceed 285 chars).
 2. MUST naturally include the service's Target Keyword AND "${city}" (plus a neighborhood/service area if relevant).
 3. NO spammy keyword lists, NO URLs, NO phone numbers, NO HTML, NO exclamation spam.
 4. Explain customer value, reliability, and end with a concise booking/quote call to action.
@@ -133,7 +133,7 @@ ${targets.map((t, i) => `${i + 1}. Service: "${t.name}" | Target Keyword: "${t.t
 
 Respond ONLY with a valid JSON array matching the exact order above:
 [
-  { "name": "exact service name", "targetKeyword": "used keyword", "description": "320-475 char localized SEO description" }
+  { "name": "exact service name", "targetKeyword": "used keyword", "description": "160-270 char localized SEO description" }
 ]`;
 
   let aiRows: Array<{ name?: string; targetKeyword?: string; description?: string }> = [];

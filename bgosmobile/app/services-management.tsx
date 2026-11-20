@@ -283,8 +283,8 @@ export default function ServicesManagementScreen() {
       Alert.alert(
         res.syncedToGoogle ? 'Synced to Google!' : 'AI Description Generated',
         res.syncedToGoogle
-          ? `Generated localized 300–500 char SEO descriptions for ${targets.length} service(s) and synced to Google.${warnNote}`
-          : `Generated localized 300–500 char SEO descriptions for ${targets.length} service(s). Review and tap Save & Sync below.${warnNote}`,
+          ? `Generated localized SEO descriptions (160–280 chars) for ${targets.length} service(s) and synced to Google.${warnNote}`
+          : `Generated localized SEO descriptions (160–280 chars) for ${targets.length} service(s). Review and tap Save & Sync below.${warnNote}`,
       );
     } catch (err: unknown) {
       Alert.alert('AI Writer Error', err instanceof Error ? err.message : 'Could not optimize descriptions.');
