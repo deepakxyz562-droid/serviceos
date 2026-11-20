@@ -5,9 +5,35 @@ const {
   withAppBuildGradle,
   withGradleProperties,
   withDangerousMod,
+  withAndroidManifest,
 } = require('expo/config-plugins');
 
 function withAndroidReleaseOptimizations(config) {
+  // 0. Ensure non-essential hardware features are marked optional to allow all device form factors (tablets, desktop, XR)
+  config = withAndroidManifest(config, (modConfig) => {
+    const manifest = modConfig.modResults.manifest;
+    if (!manifest['uses-feature']) {
+      manifest['uses-feature'] = [];
+    }
+    const features = [
+      'android.hardware.screen.portrait',
+      'android.hardware.screen.landscape',
+      'android.hardware.touchscreen',
+      'android.hardware.camera',
+      'android.hardware.camera.autofocus',
+    ];
+    for (const f of features) {
+      if (!manifest['uses-feature'].some((item) => item.$?.['android:name'] === f)) {
+        manifest['uses-feature'].push({
+          $: {
+            'android:name': f,
+            'android:required': 'false',
+          },
+        });
+      }
+    }
+    return modConfig;
+  });
   // 1. Ensure compileSdkVersion 37 (required by Expo SDK 58 AARs), targetSdkVersion 36, buildTools 37.0.0, and stable androidx.core 1.17.0
   config = withProjectBuildGradle(config, (modConfig) => {
     let contents = modConfig.modResults.contents;
