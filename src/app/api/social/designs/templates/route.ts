@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
         tagline: true,
         settingsJson: true,
         signupMode: true,
+        planStatus: true,
+        plan: true,
         workspaces: {
           select: {
             industry: true,
@@ -1114,6 +1116,38 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Calculate current AI image generation quota
+  const isPaidSubscriber =
+    tenant?.planStatus === 'active' &&
+    Boolean(tenant?.plan) &&
+    tenant.plan !== 'free';
+  const isTrial = !isPaidSubscriber;
+
+  let aiUsedCount = 0;
+  if (isTrial) {
+    aiUsedCount = await (db.imageLibrary?.count?.({
+      where: { tenantId: user.tenantId, folder: 'bgos_ai_photos' },
+    }) ?? Promise.resolve(0)).catch(() => 0);
+  } else {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    aiUsedCount = await (db.imageLibrary?.count?.({
+      where: {
+        tenantId: user.tenantId,
+        folder: 'bgos_ai_photos',
+        createdAt: { gte: startOfDay },
+      },
+    }) ?? Promise.resolve(0)).catch(() => 0);
+  }
+
+  const aiQuota = {
+    used: aiUsedCount,
+    limit: 5,
+    remaining: Math.max(0, 5 - aiUsedCount),
+    tier: isTrial ? ('trial' as const) : ('active' as const),
+    limitReached: aiUsedCount >= 5,
+  };
+
   return NextResponse.json({
     businessContext: {
       name: businessName,
@@ -1125,6 +1159,7 @@ export async function GET(request: NextRequest) {
       logoUrl,
       address,
       city,
+      quota: aiQuota,
     },
     counts: {
       total:

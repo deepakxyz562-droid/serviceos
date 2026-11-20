@@ -14,11 +14,20 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
 import { BGOS_SUPPORT_EMAIL } from '../../lib/constants';
 import { resolveTemplateSource } from '../design/professional-assets';
+
+export interface AiStudioQuota {
+  used: number;
+  limit: number;
+  remaining: number;
+  tier: 'trial' | 'active';
+  limitReached?: boolean;
+}
 
 export type StudioTabKey = 'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals';
 
@@ -58,9 +67,11 @@ export function AiStudioFeed({
   onBack,
 }: AiStudioFeedProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<StudioTabKey>('all');
   const [brandFrame, setBrandFrame] = useState(true);
   const [templates, setTemplates] = useState<StudioTemplateItem[]>([]);
+  const [quota, setQuota] = useState<AiStudioQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({
     total: 250,
@@ -164,6 +175,9 @@ export function AiStudioFeed({
         setTemplates(res.templates);
         if (res.counts) setCounts(res.counts);
       }
+      if ((res as any)?.businessContext?.quota) {
+        setQuota((res as any).businessContext.quota);
+      }
     } catch (err) {
       console.warn('[AiStudioFeed] Error fetching templates:', err);
     } finally {
@@ -182,6 +196,28 @@ export function AiStudioFeed({
     promptBlueprint: string;
   }) => {
     if (generatingImages) return;
+
+    // Check user quota before firing network request
+    if (quota && quota.remaining <= 0) {
+      if (quota.tier === 'trial') {
+        Alert.alert(
+          'Trial Limit Reached',
+          'You have reached your limit of 5 AI generated images during your free trial. Upgrade your plan to unlock 5 fresh AI commercial photos every day!',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade Plan', onPress: () => router.push('/my-plan') },
+          ],
+        );
+      } else {
+        Alert.alert(
+          'Daily Limit Reached',
+          'You have reached your daily limit of 5 AI generated images. Your daily quota will reset tomorrow at midnight!',
+          [{ text: 'OK' }],
+        );
+      }
+      return;
+    }
+
     setGeneratingImages(true);
     setActiveGeneratingStep('1. Generating scene with Cloudflare FLUX.2...');
 
@@ -205,6 +241,8 @@ export function AiStudioFeed({
         };
         message?: string;
         error?: string;
+        limitReached?: boolean;
+        quota?: AiStudioQuota;
         supportEmail?: string;
         supportMailto?: string;
       }>('/api/social/designs/business-images/generate', {
@@ -221,6 +259,31 @@ export function AiStudioFeed({
 
       clearTimeout(timer1);
       clearTimeout(timer2);
+
+      if (res?.quota) {
+        setQuota(res.quota);
+      }
+
+      if (res?.limitReached) {
+        const isTrialLimit = res?.quota?.tier === 'trial' || res?.error?.includes('Trial');
+        if (isTrialLimit) {
+          Alert.alert(
+            'Trial Limit Reached',
+            res?.message || 'You have reached your limit of 5 AI generated images during your free trial. Upgrade your plan to unlock 5 fresh AI commercial photos every day!',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Upgrade Plan', onPress: () => router.push('/my-plan') },
+            ],
+          );
+        } else {
+          Alert.alert(
+            'Daily Limit Reached',
+            res?.message || 'You have reached your daily limit of 5 AI generated images. Your daily quota will reset tomorrow at midnight!',
+            [{ text: 'OK' }],
+          );
+        }
+        return;
+      }
 
       const finalUrl = res?.url || res?.urls?.[0];
       if (res?.success && finalUrl) {
@@ -635,6 +698,29 @@ export function AiStudioFeed({
                   )}
                 </Pressable>
               </View>
+
+              {/* Quota Status Indicator */}
+              {quota && (
+                <View style={[styles.quotaBadgeBanner, quota.remaining === 0 && styles.quotaBadgeBannerEmpty]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MaterialIcons
+                      name={quota.remaining === 0 ? 'lock-clock' : 'auto-awesome'}
+                      size={15}
+                      color={quota.remaining === 0 ? '#DC2626' : '#047857'}
+                    />
+                    <Text style={[styles.quotaBannerText, quota.remaining === 0 && styles.quotaBannerTextEmpty]}>
+                      {quota.tier === 'trial'
+                        ? `Trial: ${quota.remaining} of ${quota.limit} free generations remaining`
+                        : `Daily limit: ${quota.remaining} of ${quota.limit} AI images remaining today`}
+                    </Text>
+                  </View>
+                  {quota.tier === 'trial' && (
+                    <Pressable onPress={() => router.push('/my-plan')} hitSlop={8}>
+                      <Text style={styles.upgradeLinkText}>Upgrade</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
 
               <Text style={styles.sceneSuggestionsSubtitle}>
                 Tap any idea to generate an authentic commercial photo with SEO copy:
@@ -1478,5 +1564,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  quotaBadgeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginVertical: 4,
+  },
+  quotaBadgeBannerEmpty: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  quotaBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  quotaBannerTextEmpty: {
+    color: '#991B1B',
+  },
+  upgradeLinkText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#009F50',
+    textDecorationLine: 'underline',
   },
 });

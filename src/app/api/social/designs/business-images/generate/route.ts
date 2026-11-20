@@ -41,7 +41,14 @@ export async function POST(request: NextRequest) {
     const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { name: true, industry: true, city: true, settingsJson: true },
+        select: {
+          name: true,
+          industry: true,
+          city: true,
+          settingsJson: true,
+          planStatus: true,
+          plan: true,
+        },
       }).catch(() => null),
       (db.brandProfile?.findUnique({
         where: { tenantId: user.tenantId },
@@ -55,6 +62,60 @@ export async function POST(request: NextRequest) {
         take: 10,
       }) ?? Promise.resolve([])).catch(() => []),
     ]);
+
+    // ── Tier & Quota Enforcement ──
+    // Trial Merchants: Max 5 AI images total for the entire trial period.
+    // Active/Subscribed Merchants: Max 5 AI images per day.
+    const isPaidSubscriber =
+      tenant?.planStatus === 'active' &&
+      Boolean(tenant?.plan) &&
+      tenant.plan !== 'free';
+    const isTrial = !isPaidSubscriber;
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    let usedCount = 0;
+    if (isTrial) {
+      usedCount = await (db.imageLibrary?.count?.({
+        where: {
+          tenantId: user.tenantId,
+          folder: 'bgos_ai_photos',
+        },
+      }) ?? Promise.resolve(0)).catch(() => 0);
+    } else {
+      usedCount = await (db.imageLibrary?.count?.({
+        where: {
+          tenantId: user.tenantId,
+          folder: 'bgos_ai_photos',
+          createdAt: { gte: startOfDay },
+        },
+      }) ?? Promise.resolve(0)).catch(() => 0);
+    }
+
+    const quotaLimit = 5;
+    if (usedCount >= quotaLimit) {
+      const isTrialUser = isTrial;
+      const limitMessage = isTrialUser
+        ? 'You have reached your limit of 5 AI generated images during your free trial. Upgrade your plan to unlock 5 fresh AI commercial photos every day!'
+        : 'You have reached your daily limit of 5 AI generated images. Your daily quota will reset tomorrow at midnight!';
+
+      return NextResponse.json(
+        {
+          success: false,
+          limitReached: true,
+          error: isTrialUser ? 'Trial generation limit reached' : 'Daily generation limit reached',
+          message: limitMessage,
+          quota: {
+            used: usedCount,
+            limit: quotaLimit,
+            remaining: 0,
+            tier: isTrialUser ? 'trial' : 'active',
+          },
+        },
+        { status: 200 },
+      );
+    }
 
     let gbpCategory = '';
     let gbpTitle = '';
@@ -141,6 +202,7 @@ export async function POST(request: NextRequest) {
         `https://bgos.site/images/bgos/templates/${folder}-${i + 1}.webp`
       );
       const seo = await seoPromise;
+      const newUsed = usedCount + mockUrls.length;
       return NextResponse.json({
         success: true,
         businessName,
@@ -149,6 +211,12 @@ export async function POST(request: NextRequest) {
         url: mockUrls[0] || null,
         count: mockUrls.length,
         seo,
+        quota: {
+          used: newUsed,
+          limit: quotaLimit,
+          remaining: Math.max(0, quotaLimit - newUsed),
+          tier: isTrial ? 'trial' : 'active',
+        },
         message: `Generated ${mockUrls.length} commercial photos for ${businessName}.`,
       });
     }
@@ -280,6 +348,7 @@ export async function POST(request: NextRequest) {
     }
 
     const seo = await seoPromise;
+    const newUsed = usedCount + generatedUrls.length;
 
     return NextResponse.json({
       success: true,
@@ -289,6 +358,12 @@ export async function POST(request: NextRequest) {
       url: generatedUrls[0] || null,
       count: generatedUrls.length,
       seo,
+      quota: {
+        used: newUsed,
+        limit: quotaLimit,
+        remaining: Math.max(0, quotaLimit - newUsed),
+        tier: isTrial ? 'trial' : 'active',
+      },
       message: `Successfully generated ${generatedUrls.length} commercial photo(s) for ${businessName}.`,
     });
   } catch (error: unknown) {
@@ -299,6 +374,65 @@ export async function POST(request: NextRequest) {
         error: error instanceof Error ? error.message : 'Failed to generate business images',
         message: 'Could not generate commercial image right now. Please try another scene.',
       },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * Returns the current merchant's AI image generation quota details.
+ * - Trial users: 5 total lifetime images.
+ * - Active subscribers: 5 images per calendar day.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { planStatus: true, plan: true },
+    }).catch(() => null);
+
+    const isPaidSubscriber =
+      tenant?.planStatus === 'active' &&
+      Boolean(tenant?.plan) &&
+      tenant.plan !== 'free';
+    const isTrial = !isPaidSubscriber;
+
+    let usedCount = 0;
+    if (isTrial) {
+      usedCount = await (db.imageLibrary?.count?.({
+        where: { tenantId: user.tenantId, folder: 'bgos_ai_photos' },
+      }) ?? Promise.resolve(0)).catch(() => 0);
+    } else {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      usedCount = await (db.imageLibrary?.count?.({
+        where: {
+          tenantId: user.tenantId,
+          folder: 'bgos_ai_photos',
+          createdAt: { gte: startOfDay },
+        },
+      }) ?? Promise.resolve(0)).catch(() => 0);
+    }
+
+    const quotaLimit = 5;
+    return NextResponse.json({
+      success: true,
+      quota: {
+        used: usedCount,
+        limit: quotaLimit,
+        remaining: Math.max(0, quotaLimit - usedCount),
+        tier: isTrial ? 'trial' : 'active',
+        limitReached: usedCount >= quotaLimit,
+      },
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to retrieve image generation quota' },
       { status: 500 },
     );
   }
