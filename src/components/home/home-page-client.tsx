@@ -15,6 +15,10 @@ const LandingPage = dynamic(
   () => import('@/components/landing/dual-audience-landing').then(m => ({ default: m.DualAudienceLanding })),
   { ssr: true }
 );
+const NativeAgentChatEmbed = dynamic(
+  () => import('@/components/public/native-agent-chat-embed').then(m => ({ default: m.NativeAgentChatEmbed })),
+  { ssr: false }
+);
 const AuthPage = dynamic(
   () => import('@/components/auth/auth-page').then(m => ({ default: m.AuthPage })),
   { ssr: false, loading: () => <ViewLoader /> }
@@ -1436,6 +1440,7 @@ export default function HomePageClient() {
       />
       <PWAInstallBanner />
       <IOSInstallBanner />
+      <NativeAgentChatEmbed agentSlug="fieseros-ai" />
     </>
   );
 }

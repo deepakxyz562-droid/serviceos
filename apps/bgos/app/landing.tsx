@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   ArrowRight,
   Check,
@@ -30,6 +31,11 @@ import QRCode from 'qrcode';
 import s from './landing.module.css';
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fieseros.bgos';
+
+const NativeAgentChatEmbed = dynamic(
+  () => import('@/components/public/native-agent-chat-embed').then((m) => ({ default: m.NativeAgentChatEmbed })),
+  { ssr: false }
+);
 
 function GooglePlayIcon({ size = 20 }: { size?: number }) {
   return (
@@ -1349,6 +1355,7 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+      <NativeAgentChatEmbed agentSlug="bgos-ai" />
     </div>
   );
 }
