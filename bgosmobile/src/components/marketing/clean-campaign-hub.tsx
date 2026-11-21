@@ -128,6 +128,7 @@ export function CleanCampaignHub({ businessName, onPostUpdated }: CleanCampaignH
       }>('/api/social/ai-batch-campaign', {
         method: 'POST',
         body: JSON.stringify({ goal: goal.trim(), daysCount: 30 }),
+        timeoutMs: 120000,
       });
 
       if (res?.success) {

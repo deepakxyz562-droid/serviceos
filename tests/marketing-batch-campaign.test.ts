@@ -115,6 +115,30 @@ describe('Clean Marketing Suite APIs', () => {
     expect(prepareGoogleAccount).toHaveBeenCalledWith('tnt_test123');
   });
 
+  it('guarantees campaign generation even if AI synthesis throws an exception', async () => {
+    const { callAI } = await import('@/lib/ai-client');
+    (callAI as any).mockRejectedValueOnce(new Error('AI Provider Offline / Rate Limit'));
+
+    const { POST: batchCampaignPost } = await import('../src/app/api/social/ai-batch-campaign/route');
+
+    const req = new NextRequest('http://localhost:3000/api/social/ai-batch-campaign', {
+      method: 'POST',
+      body: JSON.stringify({
+        goal: 'Promote dinner specials',
+        daysCount: 30,
+      }),
+    });
+
+    const response = await batchCampaignPost(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.count).toBe(30);
+    expect(data.posts).toHaveLength(30);
+    expect(data.posts[0].content).toContain('The Golden Bistro');
+  });
+
   it('successfully batch approves posts', async () => {
     const { POST: batchApprovePost } = await import('../src/app/api/social/posts/batch-approve/route');
 

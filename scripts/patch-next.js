@@ -48,11 +48,16 @@ for (const filePath of filesToPatch) {
   }
 }
 
-// Patch 2: Forward 4096MB memory to Next.js child worker processes so they do not OOM on memory-constrained VPS instances
+// Patch 2: Forward constrained memory (1536MB) to Next.js child worker processes
+// This prevents child worker processes from demanding 4096MB+ which triggers the
+// host Linux OOM killer right after Webpack compilation when total RAM is exhausted.
 const workerFile = path.join(__dirname, '..', 'node_modules', 'next', 'dist', 'lib', 'worker.js');
 if (fs.existsSync(workerFile)) {
   try {
     let content = fs.readFileSync(workerFile, 'utf8');
+    // Clean up any previously injected duplicate lines
+    content = content.replace(/(?:\s*if \(!nodeOptions\['max-old-space-size'\] && !nodeOptions\['max_old_space_size'\]\) \{\s*nodeOptions\['max-old-space-size'\] = ['"]\d+['"];\s*\})+/g, '');
+
     const workerTarget = `if (isolatedMemory) {
             delete nodeOptions['max-old-space-size'];
             delete nodeOptions['max_old_space_size'];
@@ -62,13 +67,15 @@ if (fs.existsSync(workerFile)) {
             delete nodeOptions['max_old_space_size'];
         }
         if (!nodeOptions['max-old-space-size'] && !nodeOptions['max_old_space_size']) {
-            nodeOptions['max-old-space-size'] = '4096';
+            nodeOptions['max-old-space-size'] = '1536';
         }`;
 
     if (content.includes(workerTarget)) {
       content = content.replace(workerTarget, workerReplacement);
       fs.writeFileSync(workerFile, content, 'utf8');
       console.log(`[Patch-Next] Successfully patched worker memory in ${workerFile}`);
+    } else {
+      console.log(`[Patch-Next] Worker file already patched or target not found: ${workerFile}`);
     }
   } catch (err) {
     console.warn(`[Patch-Next] Could not patch worker memory:`, err.message);
