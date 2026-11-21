@@ -1175,7 +1175,13 @@ function parseProviderImageResponse(
     return null;
   }
 
-  const uri = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  // 1. OpenRouter dedicated /api/v1/images format: { data: [{ b64_json: "..." }] }
+  if (Array.isArray(data?.data) && typeof data.data[0]?.b64_json === 'string' && data.data[0].b64_json.length <= 11_000_000) {
+    return data.data[0].b64_json;
+  }
+
+  // 2. Chat completions format with data URI: choices[0].message.images[0].image_url.url
+  const uri = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
   const match =
     typeof uri === 'string'
       ? /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(uri)
@@ -1186,12 +1192,123 @@ function parseProviderImageResponse(
 
 class UnsupportedImagePayloadError extends Error {}
 
+async function callOpenRouterImage(params: {
+  promptText: string;
+  dims?: ImageDimensions;
+  signal: AbortSignal;
+}): Promise<GeneratedImageResult> {
+  const cred = await resolveProviderCredential('openrouter');
+  if (!cred) {
+    throw new Error('Configure an active openrouter key in Superadmin or OPENROUTER_API_KEY in .env');
+  }
+
+  const configuredModel =
+    cred.modelOverride ||
+    process.env.BGOS_OPENROUTER_IMAGE_MODEL?.trim() ||
+    'recraft/recraft-v4.1-flash-v2:free';
+
+  const isDedicatedImagesEndpoint =
+    !configuredModel.includes('chat') && !configuredModel.includes('completions');
+
+  const requestUrl = isDedicatedImagesEndpoint
+    ? 'https://openrouter.ai/api/v1/images'
+    : 'https://openrouter.ai/api/v1/chat/completions';
+
+  const requestBody: Record<string, any> = isDedicatedImagesEndpoint
+    ? {
+        model: configuredModel,
+        prompt: params.promptText,
+      }
+    : {
+        model: configuredModel,
+        messages: [{ role: 'user', content: params.promptText }],
+        modalities: ['image', 'text'],
+      };
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${cred.secret}`,
+    'HTTP-Referer': 'https://bgos.site',
+    'X-Title': 'BGOS Marketing',
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      method: 'POST',
+      signal: combineSignals(params.signal, 20_000),
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+      throw new ProviderRequestError('openrouter image generation failed (504)', 504);
+    }
+    throw err;
+  }
+
+  if (!response.ok) {
+    const envSecret = envSecretForProvider('openrouter');
+    if (cred.keyRowId && envSecret && envSecret !== cred.secret && (response.status === 429 || response.status === 401 || response.status === 403)) {
+      console.warn(`[image-provider] DB key for openrouter returned ${response.status}, retrying with environment secret`);
+      try {
+        const retryRes = await fetch(requestUrl, {
+          method: 'POST',
+          signal: combineSignals(params.signal, 20_000),
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${envSecret}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        if (retryRes.ok) {
+          response = retryRes;
+        }
+      } catch {}
+    }
+  }
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    const accountQuotaExhausted =
+      response.status === 401 ||
+      response.status === 402 ||
+      response.status === 403 ||
+      (response.status === 429 && /quota|exceeded|credit|balance|limit|rate/i.test(errText));
+    throw new ProviderRequestError(
+      `openrouter image generation failed (${response.status})`,
+      response.status,
+      accountQuotaExhausted,
+    );
+  }
+
+  const data = await response.json();
+  const encoded = parseProviderImageResponse('openrouter', data);
+  if (!encoded) {
+    throw new UnsupportedImagePayloadError('The provider did not return a supported image');
+  }
+
+  await recordProviderKeyUsage(cred.keyRowId);
+
+  return {
+    bytes: Buffer.from(encoded, 'base64'),
+    model: configuredModel,
+    cost: typeof data.usage?.cost === 'number' ? data.usage.cost : 0,
+  };
+}
+
 async function callGeminiOrOpenRouterImage(params: {
   provider: 'gemini' | 'openrouter';
   promptText: string;
   referenceImages: Array<{ mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; base64: string }>;
   signal: AbortSignal;
 }): Promise<GeneratedImageResult> {
+  if (params.provider === 'openrouter' && params.referenceImages.length === 0) {
+    return callOpenRouterImage({
+      promptText: params.promptText,
+      signal: params.signal,
+    });
+  }
   const cred = await resolveProviderCredential(params.provider);
   if (!cred) {
     throw new Error(`Configure an active ${params.provider} key in Superadmin`);
@@ -1728,11 +1845,11 @@ async function callKieImage(params: {
 }
 
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  cloudflare: ['gemini', 'nvidia', 'kie', 'siliconflow', 'openrouter'],
-  nvidia: ['gemini', 'cloudflare', 'kie', 'siliconflow', 'openrouter'],
-  gemini: ['cloudflare', 'nvidia', 'kie', 'siliconflow', 'openrouter'],
-  kie: ['gemini', 'cloudflare', 'nvidia', 'siliconflow', 'openrouter'],
-  siliconflow: ['gemini', 'cloudflare', 'nvidia', 'kie', 'openrouter'],
+  cloudflare: ['openrouter', 'nvidia', 'gemini', 'kie', 'siliconflow'],
+  nvidia: ['openrouter', 'gemini', 'cloudflare', 'kie', 'siliconflow'],
+  gemini: ['openrouter', 'cloudflare', 'nvidia', 'kie', 'siliconflow'],
+  kie: ['openrouter', 'gemini', 'cloudflare', 'nvidia', 'siliconflow'],
+  siliconflow: ['openrouter', 'gemini', 'cloudflare', 'nvidia', 'kie'],
   openrouter: ['gemini', 'cloudflare', 'nvidia', 'kie', 'siliconflow'],
 };
 
@@ -1745,6 +1862,13 @@ async function callSingleTextImageProvider(params: {
 }): Promise<{ bytes: Buffer; model: string; cost: number | null }> {
   if (params.provider === 'cloudflare') {
     return callCloudflareImage(params.promptText, params.signal, params.dims);
+  }
+  if (params.provider === 'openrouter') {
+    return callOpenRouterImage({
+      promptText: params.promptText,
+      dims: params.dims,
+      signal: params.signal,
+    });
   }
   if (params.provider === 'siliconflow') {
     return callSiliconFlowImage(params);
