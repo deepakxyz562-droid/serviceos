@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Linking,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../ui';
 import {
+  COUNTRIES,
   detectDeviceCountryAndTimezone,
   getCountryByCode,
   type CountryItem,
@@ -45,19 +48,14 @@ export function UrgentReviewCard({
   onOpenSeoUpdates,
   onWatchVideo,
 }: UrgentReviewCardProps) {
-  const defaultCountry: CountryItem = useMemo(
+  const initialCountry: CountryItem = useMemo(
     () => (countryCode ? getCountryByCode(countryCode) : detectDeviceCountryAndTimezone().country),
     [countryCode],
   );
+  const [selectedCountry, setSelectedCountry] = useState<CountryItem>(initialCountry);
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<'polite' | 'hinglish' | 'reward'>('polite');
   const [isSending, setIsSending] = useState(false);
-
-  const TEMPLATES = [
-    { id: 'polite' as const, label: '⭐ Polite 30s' },
-    { id: 'hinglish' as const, label: '🤝 Hinglish' },
-    { id: 'reward' as const, label: '🎁 Surprise Gift' },
-  ];
 
   // Calculate true days since last review (null when no review timestamp exists)
   const daysAgo = useMemo<number | null>(() => {
@@ -86,18 +84,13 @@ export function UrgentReviewCard({
 
     setIsSending(true);
     try {
-      let message = `Hi! Thank you for choosing ${businessName}. We’d truly appreciate your feedback! Could you take 30 seconds to leave us a quick Google review? Tap here: ${reviewUrl}`;
-      if (selectedTemplate === 'hinglish') {
-        message = `Namaste! ${businessName} me aane ke liye shukriya. Agar aapko hamari service pasand aayi toh please Google par apna 5-star review dekar support karein: ${reviewUrl}`;
-      } else if (selectedTemplate === 'reward') {
-        message = `Hi! We loved serving you at ${businessName}. Review us on Google and show this on your next visit to get a special thank-you offer! ${reviewUrl}`;
-      }
+      const message = `Hi! Thank you for choosing ${businessName}. We’d truly appreciate your feedback! Could you take a moment to leave us a quick Google review? Tap here: ${reviewUrl}`;
 
       const fullPhone =
         trimmed.startsWith('+')
           ? cleanPhone
-          : cleanPhone.length === defaultCountry.digits || cleanPhone.length === 10
-            ? `${defaultCountry.callingCode}${cleanPhone}`
+          : cleanPhone.length === selectedCountry.digits || cleanPhone.length === 10
+            ? `${selectedCountry.callingCode}${cleanPhone}`
             : cleanPhone;
       const universalWaUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
 
@@ -206,44 +199,18 @@ export function UrgentReviewCard({
         </Text>
       </View>
 
-      {/* ── Message Style Chips ── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {TEMPLATES.map((tpl) => {
-          const isActive = selectedTemplate === tpl.id;
-          return (
-            <Pressable
-              key={tpl.id}
-              onPress={() => setSelectedTemplate(tpl.id)}
-              style={{
-                paddingHorizontal: 9,
-                paddingVertical: 4,
-                borderRadius: 14,
-                backgroundColor: isActive ? colors.brandSoft : colors.background,
-                borderWidth: 1,
-                borderColor: isActive ? colors.brand : colors.line,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: isActive ? '700' : '600',
-                  color: isActive ? colors.brandDark : colors.muted,
-                }}
-              >
-                {tpl.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* ── Direct Customer Phone Input ── */}
+      {/* ── Direct Customer Phone Input with Country Selector ── */}
       <View style={styles.inputContainer}>
-        <View style={styles.countryPill}>
+        <Pressable
+          onPress={() => setCountryPickerOpen(true)}
+          style={styles.countryPill}
+          accessibilityLabel="Select country code"
+        >
           <Text style={styles.countryPillText}>
-            {defaultCountry.flag} +{defaultCountry.callingCode}
+            {selectedCountry.flag} +{selectedCountry.callingCode}
           </Text>
-        </View>
+          <MaterialIcons name="arrow-drop-down" size={16} color={colors.ink} />
+        </Pressable>
         <TextInput
           value={phoneNumber}
           onChangeText={setPhoneNumber}
@@ -317,6 +284,46 @@ export function UrgentReviewCard({
           </Pressable>
         ) : null}
       </View>
+      {/* ── Country Picker Modal ── */}
+      <Modal
+        visible={countryPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCountryPickerOpen(false)}
+      >
+        <View style={styles.countryOverlay}>
+          <View style={styles.countryCard}>
+            <View style={styles.countryHeaderLine}>
+              <Text style={styles.countryHeaderTitle}>Select Country Code</Text>
+              <Pressable onPress={() => setCountryPickerOpen(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={20} color={colors.ink} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {COUNTRIES.map((c) => {
+                const active = c.code === selectedCountry.code;
+                return (
+                  <Pressable
+                    key={c.code}
+                    onPress={() => {
+                      setSelectedCountry(c);
+                      setCountryPickerOpen(false);
+                    }}
+                    style={[styles.countryRow, active && styles.countryRowActive]}
+                  >
+                    <Text style={{ fontSize: 20 }}>{c.flag}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.countryNameText}>{c.name}</Text>
+                      <Text style={styles.countryCodeText}>+{c.callingCode}</Text>
+                    </View>
+                    {active ? <MaterialIcons name="check" size={18} color={colors.brand} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -543,5 +550,59 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '800',
     color: colors.brand,
+  },
+  countryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  countryCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  countryHeaderLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  countryHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  countryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  countryRowActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  countryNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  countryCodeText: {
+    fontSize: 11.5,
+    color: colors.muted,
+    fontWeight: '600',
   },
 });

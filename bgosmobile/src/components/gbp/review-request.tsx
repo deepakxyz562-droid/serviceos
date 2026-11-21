@@ -1500,14 +1500,9 @@ export function ReviewRequestSheet({
         </View>
       </KeyboardAvoidingView>
 
-      {/* Country & Timezone Modal */}
-      <Modal
-        visible={countryPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCountryPickerOpen(false)}
-      >
-        <View style={styles.countryOverlay}>
+      {/* Country & Timezone Overlay (In-Modal absolute sheet to avoid nested modal lockups on Android) */}
+      {countryPickerOpen && (
+        <View style={[StyleSheet.absoluteFill, styles.countryOverlay, { zIndex: 99999 }]}>
           <View style={styles.countryCard}>
             <View style={styles.cardHeaderLine}>
               <Text style={styles.headerTitle}>Country &amp; Schedule Timezone</Text>
@@ -1542,7 +1537,7 @@ export function ReviewRequestSheet({
             </ScrollView>
           </View>
         </View>
-      </Modal>
+      )}
     </Modal>
   );
 }

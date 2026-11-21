@@ -643,7 +643,7 @@ export function getDynamicOfferings(businessName: string, category?: string): Pr
 
 export const BEST_SELLER_OFFERINGS = getDynamicOfferings('My Business', 'General');
 
-const AI_TONES = ['Friendly', 'Professional', 'Hinglish / Local', 'Urgent', 'Luxury'];
+const AI_TONES = ['Friendly', 'Professional', 'Urgent', 'Luxury'];
 const POST_TYPES = ['Promo', 'Announcement', 'Tips', 'Showcase', 'Urgent'];
 
 const CHANNEL_TARGETS = [
@@ -4453,7 +4453,7 @@ export function SocialMediaView({
                     reviewLang === 'hi' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Hinglish (नमस्ते)
+                  Hindi (हिंदी)
                 </button>
               </div>
             </div>

@@ -111,7 +111,41 @@ const DUMMY_TEXT_MARKERS = [
 export function isSeededDummyText(text?: string | null): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();
+  if (
+    lower.includes('texas') &&
+    (lower.includes('gurgaon') ||
+      lower.includes('gurugram') ||
+      lower.includes('haryana') ||
+      lower.includes('delhi') ||
+      lower.includes('patna') ||
+      lower.includes('bihar') ||
+      lower.includes('mumbai') ||
+      lower.includes('bengaluru'))
+  ) {
+    return true;
+  }
   return DUMMY_TEXT_MARKERS.some((marker) => lower.includes(marker));
+}
+
+export function sanitizeBusinessCopy(
+  rawCopy?: string | null,
+  context?: { city?: string | null; country?: string | null; address?: string | null },
+): string {
+  if (!rawCopy) return '';
+  let cleaned = rawCopy.trim();
+  const combinedLocation = `${context?.address || ''} ${context?.city || ''} ${context?.country || ''}`.trim();
+  const isIndianBusiness = INDIAN_HINT_RE.test(combinedLocation) || (context?.country || '').toUpperCase() === 'IN';
+
+  if (isIndianBusiness) {
+    cleaned = cleaned
+      .replace(/,\s*Texas\s+Businesses\b/gi, ' Businesses')
+      .replace(/,\s*Texas\b/gi, '')
+      .replace(/\bin Texas\b/gi, context?.city ? `in ${context.city}` : '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  return cleaned;
 }
 
 interface DummyServiceRule {

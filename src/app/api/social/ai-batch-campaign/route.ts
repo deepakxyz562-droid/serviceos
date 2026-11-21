@@ -89,7 +89,12 @@ export async function POST(request: NextRequest) {
 
     // 2. Fetch Media: Real Google Business Photos + S3 Category Library + Existing DB Library
     let realGooglePhotos: string[] = [];
-    const googleAccount = await prepareGoogleAccount(tenantId, db);
+    let googleAccount = null;
+    try {
+      googleAccount = await prepareGoogleAccount(tenantId);
+    } catch (gErr) {
+      console.warn('[ai-batch-campaign] Could not prepare Google account:', gErr);
+    }
     if (googleAccount) {
       try {
         const mediaRes = await listGoogleBusinessMedia(googleAccount, { pageSize: 15 });
@@ -315,8 +320,10 @@ Respond ONLY with a valid JSON array of ${totalDays} objects:
       aiQuotaRemaining: Math.max(0, remainingAiCredits - aiCreditsUsedThisRun),
       posts: createdPosts,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[POST /api/social/ai-batch-campaign] Internal error:', error);
-    return NextResponse.json({ error: 'Internal campaign generation error' }, { status: 500 });
+    return NextResponse.json({
+      error: error?.message || 'Internal campaign generation error',
+    }, { status: 500 });
   }
 }

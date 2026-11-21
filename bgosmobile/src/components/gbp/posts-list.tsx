@@ -58,11 +58,13 @@ export type SocialPostRow = {
   [key: string]: any;
 };
 
-async function openGooglePostLink(url: string) {
+import { openSocialAppOrWeb } from '../../lib/social-deeplink';
+
+async function openGooglePostLink(url: string, platform?: string) {
   try {
-    await Linking.openURL(url);
+    await openSocialAppOrWeb(platform || 'googlebusiness', url);
   } catch {
-    Alert.alert('Unable to open link', 'Could not open the Google Business post link.');
+    Alert.alert('Unable to open link', 'Could not open the social post link.');
   }
 }
 

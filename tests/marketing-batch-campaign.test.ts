@@ -45,6 +45,13 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('@/lib/ai-client', () => ({
+  extractJson: vi.fn((raw: string) => {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }),
   callAI: vi.fn(async () => {
     return JSON.stringify([
       {
@@ -102,6 +109,10 @@ describe('Clean Marketing Suite APIs', () => {
     expect(data.count).toBe(2);
     expect(data.posts[0].title).toBe('Weekend Dining Special');
     expect(data.posts[0].mediaUrl).toBeDefined();
+
+    // Ensure prepareGoogleAccount is called with (tenantId) and NOT (tenantId, db)
+    const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+    expect(prepareGoogleAccount).toHaveBeenCalledWith('tnt_test123');
   });
 
   it('successfully batch approves posts', async () => {

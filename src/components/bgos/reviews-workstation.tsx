@@ -1032,14 +1032,17 @@ export function ReviewsView({
   // Recipient input mode: direct phone number, recent completed customers, or bulk paste
   const [requestMode, setRequestMode] = useState<'single' | 'recent' | 'bulk'>('single');
   const [directCustomerName, setDirectCustomerName] = useState('');
+  const [directCountryCode, setDirectCountryCode] = useState('91');
   const [directCustomerPhone, setDirectCustomerPhone] = useState('');
   const [bulkPhoneNumbers, setBulkPhoneNumbers] = useState('');
 
   const normalizeDirectPhone = (raw: string): string => {
     let clean = raw.replace(/[^\d+]/g, '');
-    if (clean.startsWith('+')) clean = clean.slice(1);
-    if (clean.length === 10) clean = `91${clean}`;
-    return clean;
+    if (clean.startsWith('+')) return clean.slice(1);
+    const code = directCountryCode.replace(/\D/g, '') || '91';
+    if (clean.length === 10) return `${code}${clean}`;
+    if (clean.startsWith(code) && clean.length >= code.length + 7) return clean;
+    return `${code}${clean}`;
   };
 
   const getDirectMessageText = (name?: string) => {
@@ -5094,14 +5097,29 @@ export function ReviewsView({
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                       <span>Mobile Number</span>
-                      <span className="text-[10px] text-muted-foreground font-normal">with country code</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Country &amp; Phone</span>
                     </label>
-                    <Input
-                      value={directCustomerPhone}
-                      onChange={(e) => setDirectCustomerPhone(e.target.value)}
-                      placeholder="e.g. 98765 43210 or +91..."
-                      className="h-8 text-xs bg-white dark:bg-slate-900"
-                    />
+                    <div className="flex gap-1.5">
+                      <select
+                        value={directCountryCode}
+                        onChange={(e) => setDirectCountryCode(e.target.value)}
+                        className="h-8 w-28 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-semibold"
+                      >
+                        <option value="91">🇮🇳 +91</option>
+                        <option value="1">🇺🇸 +1</option>
+                        <option value="971">🇦🇪 +971</option>
+                        <option value="44">🇬🇧 +44</option>
+                        <option value="61">🇦🇺 +61</option>
+                        <option value="65">🇸🇬 +65</option>
+                        <option value="1">🇨🇦 +1</option>
+                      </select>
+                      <Input
+                        value={directCustomerPhone}
+                        onChange={(e) => setDirectCustomerPhone(e.target.value)}
+                        placeholder="e.g. 98765 43210"
+                        className="h-8 flex-1 text-xs bg-white dark:bg-slate-900"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

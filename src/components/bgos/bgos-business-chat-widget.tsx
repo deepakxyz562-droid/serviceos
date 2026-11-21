@@ -560,10 +560,10 @@ export function BgosBusinessChatWidget({
                 <button
                   type="button"
                   onClick={() => setShowHandoffCard((prev) => !prev)}
-                  className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-white/25"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/30"
                 >
-                  <UserCheck className="h-3 w-3" />
-                  <span>Owner</span>
+                  <UserCheck className="h-3.5 w-3.5" />
+                  <span>Talk to Owner / Staff</span>
                 </button>
               )}
               <button
@@ -615,13 +615,10 @@ export function BgosBusinessChatWidget({
 
           {/* Optional visitor info card before live owner handoff */}
           {showHandoffCard && !liveMode && !aiPaused && (
-            <form
-              onSubmit={handleConfirmOwnerHandoff}
-              className="border-b border-slate-200 bg-slate-50 px-3.5 py-3"
-            >
+            <div className="border-b border-slate-200 bg-slate-50 px-3.5 py-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-900">
-                  Chat directly with {profile.businessName} Owner
+                <p className="text-xs font-bold text-slate-900">
+                  Connect with {profile.businessName} Owner or Team
                 </p>
                 <button
                   type="button"
@@ -631,35 +628,66 @@ export function BgosBusinessChatWidget({
                   Cancel
                 </button>
               </div>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Add your name or phone so the owner can follow up right away (optional).
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={visitorName}
-                  onChange={(e) => setVisitorName(e.target.value)}
-                  placeholder="Your name"
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400"
-                />
-                <input
-                  type="tel"
-                  value={visitorPhone}
-                  onChange={(e) => setVisitorPhone(e.target.value)}
-                  placeholder="Phone / WhatsApp"
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400"
-                />
+
+              {/* Instant WhatsApp & Phone Direct Buttons */}
+              <div className="mt-2 flex items-center gap-2">
+                {defaultWhatsappUrl && (
+                  <a
+                    href={defaultWhatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-2.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#20BD5A]"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    <span>WhatsApp Owner</span>
+                  </a>
+                )}
+                {profile.phone && (
+                  <a
+                    href={`tel:${profile.phone}`}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-100"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>Call Business</span>
+                  </a>
+                )}
               </div>
-              <button
-                type="submit"
-                disabled={sending}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
-                style={{ backgroundColor: accent }}
-              >
-                <UserCheck className="h-3.5 w-3.5" />
-                <span>Start Live Chat with Owner</span>
-              </button>
-            </form>
+
+              <div className="relative my-2.5 flex items-center justify-center">
+                <div className="w-full border-t border-slate-200" />
+                <span className="absolute bg-slate-50 px-2 text-[10px] font-semibold text-slate-400 uppercase">
+                  or chat right here
+                </span>
+              </div>
+
+              <form onSubmit={handleConfirmOwnerHandoff}>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={visitorName}
+                    onChange={(e) => setVisitorName(e.target.value)}
+                    placeholder="Your name"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
+                  <input
+                    type="tel"
+                    value={visitorPhone}
+                    onChange={(e) => setVisitorPhone(e.target.value)}
+                    placeholder="Phone / WhatsApp"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-slate-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
+                  style={{ backgroundColor: accent }}
+                >
+                  <UserCheck className="h-3.5 w-3.5" />
+                  <span>Send Message to Owner Inbox</span>
+                </button>
+              </form>
+            </div>
           )}
 
           {/* Message Feed */}
@@ -819,7 +847,17 @@ export function BgosBusinessChatWidget({
           {/* Suggested Quick Questions & Direct Owner CTA */}
           {showQuickChips && (
             <div className="border-t border-slate-100 bg-white px-3 py-2">
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                {meta?.allowOwnerHandoff !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHandoffCard(true)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 transition hover:bg-emerald-100"
+                  >
+                    <UserCheck className="h-3 w-3 text-emerald-600" />
+                    <span>Chat with Owner / Staff</span>
+                  </button>
+                )}
                 {suggestedQuestions.slice(0, 4).map((q) => (
                   <button
                     key={q}

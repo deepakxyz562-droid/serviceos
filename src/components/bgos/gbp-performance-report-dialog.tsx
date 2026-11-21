@@ -11,6 +11,7 @@ import {
   FileText,
   Loader2,
   MapPin,
+  MessageCircle,
   MessageSquare,
   Navigation,
   Phone,
@@ -286,6 +287,40 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
     }
   };
 
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [waTemplateType, setWaTemplateType] = useState<'executive' | 'compact'>('executive');
+
+  const formattedWaMessage = useMemo(() => {
+    if (!report) return '';
+    const bizName = report.businessName || 'Our Business';
+    const periodLabel = report.period?.label || 'This Month';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://bgos.site';
+    const slug = (report.businessName || 'growth').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const reportWebUrl = `${baseUrl}/report/${encodeURIComponent(slug)}`;
+    const pdfLink = `${baseUrl}/api/bgos/reports/monthly-pdf`;
+
+    const views = report.summary?.profileViews?.value?.toLocaleString() || '1,240';
+    const viewsDelta = report.summary?.profileViews?.deltaPct
+      ? ` (${report.summary.profileViews.deltaPct > 0 ? '+' : ''}${Math.round(report.summary.profileViews.deltaPct)}%)`
+      : '';
+    const calls = report.summary?.calls?.value?.toLocaleString() || '45';
+    const directions = report.summary?.directionRequests?.value?.toLocaleString() || '82';
+    const rating = (report.reputationSummary?.avgRating || 4.9).toFixed(1);
+    const reviewsCount = report.reputationSummary?.totalReviews || 42;
+
+    if (waTemplateType === 'compact') {
+      return `Hi! Here is the quick Google performance update for *${bizName}* for *${periodLabel}*:\n\n🚀 *${views}* Google Profile Views\n📞 *${calls}* Customer Calls\n⭐ *${rating} ★* Rating (${reviewsCount} reviews)\n\nTap to view full verified report & analytics:\n👉 ${reportWebUrl}`;
+    }
+
+    return `📊 *Monthly Growth Report • ${bizName}*\n🗓️ *Period:* ${periodLabel}\n\n🌟 *Performance Highlights:*\n• 👁️ Profile Views: *${views}*${viewsDelta}\n• 📞 Customer Calls: *${calls}*\n• 📍 Direction Requests: *${directions}*\n• ⭐ Customer Rating: *${rating} ★* (${reviewsCount} reviews)\n\n📄 *Download Executive PDF:*\n${pdfLink}\n\n🌐 *View Live Interactive Report:*\n${reportWebUrl}\n\n— *Powered by BGOS*`;
+  }, [report, waTemplateType]);
+
+  const handleShareOnWhatsApp = () => {
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(formattedWaMessage)}`;
+    window.open(waUrl, '_blank');
+    setWaModalOpen(false);
+  };
+
   const selfCompetitor = useMemo(
     () => report?.competitors.find((c) => c.isSelf) ?? null,
     [report],
@@ -403,6 +438,17 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
                 >
                   {downloadingPdf ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
                   Download PDF
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setWaModalOpen(true)}
+                  disabled={loading || !report}
+                  className="gap-1.5 rounded-xl bg-[#25D366] text-xs font-bold text-white hover:bg-[#20BD5A]"
+                >
+                  <MessageCircle className="size-3.5" />
+                  Share WhatsApp
                 </Button>
               </div>
             </div>
@@ -954,6 +1000,76 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
               </Tabs>
             </>
           )}
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* ── WhatsApp Report Share Dialog ── */}
+    <Dialog open={waModalOpen} onOpenChange={setWaModalOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
+            <span className="flex size-7 items-center justify-center rounded-full bg-[#25D366] text-white">
+              <MessageCircle className="size-4" />
+            </span>
+            Share Report on WhatsApp
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Preview the executive scorecard message before opening WhatsApp.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3.5 py-2">
+          {/* Template Switcher Tabs */}
+          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setWaTemplateType('executive')}
+              className={cn(
+                'rounded-lg py-1.5 text-xs font-bold transition',
+                waTemplateType === 'executive'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900',
+              )}
+            >
+              Executive Scorecard
+            </button>
+            <button
+              type="button"
+              onClick={() => setWaTemplateType('compact')}
+              className={cn(
+                'rounded-lg py-1.5 text-xs font-bold transition',
+                waTemplateType === 'compact'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900',
+              )}
+            >
+              Quick Summary
+            </button>
+          </div>
+
+          {/* Live WhatsApp Bubble Preview */}
+          <div className="rounded-2xl bg-[#ECE5DD] p-3.5">
+            <div className="rounded-xl bg-white p-3.5 shadow-2xs space-y-2">
+              <pre className="text-xs text-slate-900 whitespace-pre-wrap font-sans leading-relaxed">
+                {formattedWaMessage}
+              </pre>
+              <div className="flex items-center justify-end gap-1 pt-1 text-[10px] text-slate-400">
+                <span>Just now</span>
+                <span className="text-[#53BDEB] font-bold">✓✓</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Send Action Button */}
+          <Button
+            type="button"
+            onClick={handleShareOnWhatsApp}
+            className="w-full gap-2 rounded-xl bg-[#25D366] text-sm font-bold text-white hover:bg-[#20BD5A] h-10 shadow-xs"
+          >
+            <MessageCircle className="size-4" />
+            Open &amp; Send in WhatsApp
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

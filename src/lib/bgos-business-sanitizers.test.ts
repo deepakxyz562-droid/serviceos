@@ -111,6 +111,9 @@ describe('dummy content sanitizers', () => {
       ),
     ).toBe(true);
     expect(
+      isSeededDummyText('Reliable IT Services Built for Gurgaon, Texas Businesses'),
+    ).toBe(true);
+    expect(
       isSeededDummyText('Kanvi Farmhouse offers private poolside stays in Hapur.'),
     ).toBe(false);
   });

@@ -229,6 +229,15 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
     [profile.socialLinks],
   );
 
+  // Suppress PWA install prompts / mini-infobars on merchant landing pages
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
   // Load QR code whenever share sheet is opened
   useEffect(() => {
     if (!shareOpen || qrDataUrl) return;

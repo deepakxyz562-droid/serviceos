@@ -39,7 +39,12 @@ export async function GET(request: NextRequest) {
 
     // 1. Google Business Media
     let googlePhotos: Array<{ url: string; title: string }> = [];
-    const googleAccount = await prepareGoogleAccount(tenantId, db);
+    let googleAccount = null;
+    try {
+      googleAccount = await prepareGoogleAccount(tenantId);
+    } catch (gErr) {
+      console.warn('[media-library] Could not prepare Google account:', gErr);
+    }
     if (googleAccount) {
       try {
         const mediaRes = await listGoogleBusinessMedia(googleAccount, { pageSize: 30 });

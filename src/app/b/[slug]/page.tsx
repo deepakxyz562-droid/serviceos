@@ -97,6 +97,7 @@ export async function generateMetadata({
   const ogImage = toAbsoluteAssetUrl(profile.coverImage || profile.logoUrl, profile.canonicalUrl);
 
   return {
+    manifest: null, // Merchant landing pages are white-label standalone web pages; suppress Fieseros PWA manifest
     title: profile.seoTitle,
     description: profile.seoDescription,
     robots: { index: true, follow: true },

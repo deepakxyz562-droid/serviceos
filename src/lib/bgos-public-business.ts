@@ -20,6 +20,7 @@ import {
   normalizeWhatsAppDigits,
   resolveBusinessCurrency,
   resolveCountryCode,
+  sanitizeBusinessCopy,
   sanitizePublicImageUrl,
   type BgosBusinessHoursRow,
 } from '@/lib/bgos-business-sanitizers';
@@ -646,10 +647,23 @@ export async function getBgosPublicBusinessProfileUncached(
     }
 
     // Show cover banner image ONLY when manually set by the owner; otherwise render the brand gradient.
-    const coverImage =
+    const rawCover =
       sanitizePublicImageUrl(bookingConfig.coverImage) ||
       sanitizePublicImageUrl(tenant.coverImage) ||
       null;
+
+    // Filter out mismatched seeded stock covers (e.g. Home Services / toolboxes banner on an IT / Marketing company)
+    const isCoverCategoryMismatch = Boolean(
+      rawCover &&
+      (rawCover.toLowerCase().includes('home-service') || rawCover.toLowerCase().includes('home_service') || rawCover.toLowerCase().includes('plumbing') || rawCover.toLowerCase().includes('contractor')) &&
+      !category.toLowerCase().includes('plumb') &&
+      !category.toLowerCase().includes('contract') &&
+      !category.toLowerCase().includes('handyman') &&
+      !category.toLowerCase().includes('hvac') &&
+      !category.toLowerCase().includes('home')
+    );
+
+    const coverImage = isCoverCategoryMismatch ? null : rawCover;
 
     // ── Rating & Reviews ──
     const reviews: BgosPublicReview[] = dbReviews
@@ -699,11 +713,16 @@ export async function getBgosPublicBusinessProfileUncached(
       typeof placeSnap?.openNow === 'boolean' ? placeSnap.openNow : computeOpenNowStatus(hours, timeZone);
 
     // ── Tagline, Description, FAQs & Areas ──
-    const candidateTagline =
+    const rawCandidateTagline =
       bookingConfig.headline?.trim() ||
       (typeof brandDetails.tagline === 'string' ? brandDetails.tagline.trim() : '') ||
       tenant.tagline?.trim() ||
       '';
+    const candidateTagline = sanitizeBusinessCopy(rawCandidateTagline, {
+      city,
+      country: tenant.country,
+      address: tenant.address,
+    });
     const tagline =
       candidateTagline && !isSeededDummyText(candidateTagline)
         ? candidateTagline
@@ -711,13 +730,18 @@ export async function getBgosPublicBusinessProfileUncached(
           ? `${category} in ${city}`
           : category;
 
-    const candidateDesc = stripHtmlTags(
+    const rawCandidateDesc = stripHtmlTags(
       bookingConfig.seoDescription?.trim() ||
         (typeof brandDetails.businessStory === 'string' ? brandDetails.businessStory.trim() : '') ||
         tenant.brandProfile?.aiGeneratedSummary?.trim() ||
         tenant.description ||
         '',
     );
+    const candidateDesc = sanitizeBusinessCopy(rawCandidateDesc, {
+      city,
+      country: tenant.country,
+      address: tenant.address,
+    });
     const description =
       candidateDesc && !isSeededDummyText(candidateDesc)
         ? candidateDesc

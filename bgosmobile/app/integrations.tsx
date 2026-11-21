@@ -154,11 +154,7 @@ function IntegrationsScreen() {
           (token ? `&auth=${encodeURIComponent(token)}` : '');
 
     try {
-      if (channel.key === 'googlebusiness') {
-        await WebBrowser.openAuthSessionAsync(targetUrl, returnUrl);
-      } else {
-        await WebBrowser.openBrowserAsync(targetUrl);
-      }
+      await WebBrowser.openAuthSessionAsync(targetUrl, returnUrl);
     } catch {
       try {
         await Linking.openURL(targetUrl);
