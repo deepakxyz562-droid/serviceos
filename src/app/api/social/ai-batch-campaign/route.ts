@@ -110,9 +110,17 @@ export async function POST(request: NextRequest) {
     const s3Folder = getCategoryStorageFolder(industry);
     let s3Photos: string[] = [];
     try {
-      const s3Res = await getCategoryImagesFromS3(s3Folder, { targetCount: 15 });
-      s3Photos = s3Res.images.map((img) => img.url);
-    } catch {}
+      const s3Res: any = await getCategoryImagesFromS3(s3Folder, 15 as any);
+      if (Array.isArray(s3Res)) {
+        s3Photos = s3Res.filter((u): u is string => typeof u === 'string' && u.startsWith('http'));
+      } else if (s3Res && Array.isArray(s3Res.images)) {
+        s3Photos = s3Res.images
+          .map((img: any) => (typeof img === 'string' ? img : img.url))
+          .filter((u: any): u is string => typeof u === 'string' && u.startsWith('http'));
+      }
+    } catch (s3Err) {
+      console.warn('[ai-batch-campaign] Could not load S3 category images:', s3Err);
+    }
 
     // Existing uploaded photos in tenant ImageLibrary
     let uploadedPhotos: string[] = [];
@@ -254,7 +262,7 @@ Respond ONLY with a valid JSON array of ${totalDays} objects:
           const generatedImg = await generateDesignImage(
             imagePrompt,
             'cloudflare',
-            AbortSignal.timeout(35000),
+            AbortSignal.timeout(6000),
             false,
           );
 

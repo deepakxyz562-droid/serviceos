@@ -123,6 +123,7 @@ export default function CampaignPlannerScreen() {
       }>('/api/social/ai-batch-campaign', {
         method: 'POST',
         body: JSON.stringify({ daysCount: 30 }),
+        timeoutMs: 120000,
       });
 
       if (res?.success) {
