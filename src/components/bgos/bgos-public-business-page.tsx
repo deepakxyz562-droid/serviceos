@@ -231,6 +231,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
 
   // Suppress PWA install prompts / mini-infobars on merchant landing pages
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
     };
