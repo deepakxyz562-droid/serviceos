@@ -1205,14 +1205,14 @@ async function callGeminiOrOpenRouterImage(params: {
     cred.modelOverride ||
     explicitEnvModel ||
     (params.provider === 'gemini'
-      ? 'imagen-3.0-generate-002'
+      ? 'gemini-2.5-flash-image'
       : 'google/gemini-2.5-flash-image');
 
   const candidateModels =
     params.provider === 'gemini' &&
     !cred.modelOverride &&
     !explicitEnvModel
-      ? ['imagen-3.0-generate-002', 'gemini-2.0-flash-exp']
+      ? ['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'imagen-3.0-generate-002']
       : [primaryModel];
 
   let lastError: unknown = null;
@@ -1293,6 +1293,32 @@ async function callGeminiOrOpenRouterImage(params: {
       }
       if (!hasFallbackModel) throw lastError;
       continue;
+    }
+
+    if (!response.ok) {
+      const envSecret = envSecretForProvider(params.provider);
+      if (cred.keyRowId && envSecret && envSecret !== cred.secret && (response.status === 429 || response.status === 401 || response.status === 403)) {
+        console.warn(`[image-provider] DB key for ${params.provider} returned ${response.status}, retrying with environment secret`);
+        try {
+          const retryRes = await fetch(
+            requestUrl,
+            {
+              method: 'POST',
+              signal: combineSignals(params.signal, 20_000),
+              headers: {
+                'Content-Type': 'application/json',
+                ...(params.provider === 'gemini'
+                  ? { 'x-goog-api-key': envSecret }
+                  : { Authorization: `Bearer ${envSecret}` }),
+              },
+              body: JSON.stringify(requestBody),
+            },
+          );
+          if (retryRes.ok) {
+            response = retryRes;
+          }
+        } catch {}
+      }
     }
 
     if (!response.ok) {
@@ -1702,12 +1728,12 @@ async function callKieImage(params: {
 }
 
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  cloudflare: ['nvidia', 'gemini', 'kie', 'siliconflow', 'openrouter'],
-  nvidia: ['cloudflare', 'gemini', 'kie', 'siliconflow', 'openrouter'],
-  gemini: ['nvidia', 'cloudflare', 'kie', 'siliconflow', 'openrouter'],
-  kie: ['nvidia', 'cloudflare', 'gemini', 'siliconflow', 'openrouter'],
-  siliconflow: ['nvidia', 'cloudflare', 'gemini', 'kie', 'openrouter'],
-  openrouter: ['nvidia', 'cloudflare', 'gemini', 'kie', 'siliconflow'],
+  cloudflare: ['gemini', 'nvidia', 'kie', 'siliconflow', 'openrouter'],
+  nvidia: ['gemini', 'cloudflare', 'kie', 'siliconflow', 'openrouter'],
+  gemini: ['cloudflare', 'nvidia', 'kie', 'siliconflow', 'openrouter'],
+  kie: ['gemini', 'cloudflare', 'nvidia', 'siliconflow', 'openrouter'],
+  siliconflow: ['gemini', 'cloudflare', 'nvidia', 'kie', 'openrouter'],
+  openrouter: ['gemini', 'cloudflare', 'nvidia', 'kie', 'siliconflow'],
 };
 
 async function callSingleTextImageProvider(params: {
