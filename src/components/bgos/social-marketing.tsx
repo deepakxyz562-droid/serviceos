@@ -136,6 +136,9 @@ const SocialAnalyticsView = lazy(() =>
 const BrandBrainView = lazy(() =>
   import('@/components/views/tenant/brand-brain-view').then((m) => ({ default: m.BrandBrainView }))
 );
+const WebCampaignPlanner = lazy(() =>
+  import('@/components/bgos/web-campaign-planner').then((m) => ({ default: m.WebCampaignPlanner }))
+);
 
 // ─── Types & constants ──────────────────────────────────────────────────────
 
@@ -148,6 +151,7 @@ import { AiCompetitorGapCard } from '@/components/bgos/ai-competitor-gap-card';
 
 type SocialTab =
   | 'overview'
+  | 'campaign'
   | 'review-replies'
   | 'ai-content'
   | 'google-post'
@@ -3516,7 +3520,8 @@ export function SocialMediaView({
   // ── Tab definitions ───────────────────────────────────────────────────────
 
   const PRIMARY_TABS: { id: SocialTab; label: string; Icon: LucideIcon }[] = [
-    { id: 'composer', label: 'Create', Icon: Sparkles },
+    { id: 'campaign', label: '30-Day Campaign', Icon: Sparkles },
+    { id: 'composer', label: 'Create', Icon: Wand2 },
     { id: 'autopilot', label: 'Autopilot (30d / 1yr)', Icon: Zap },
     { id: 'google-post', label: 'Keyword Planner', Icon: Search },
     { id: 'google-media', label: 'GBP Photos & AI', Icon: ImageIcon },
@@ -3685,8 +3690,17 @@ export function SocialMediaView({
           </div>
         </div>
 
-        {/* Right Action Cluster — single New Creation button matching Canva design */}
+        {/* Right Action Cluster — 30-Day Campaign & New Creation button */}
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setActiveTab('campaign')}
+            className="h-9 gap-1.5 bg-[#009F50] hover:bg-[#009F50]/90 text-white font-semibold text-xs shadow-xs rounded-xl px-4"
+          >
+            <Sparkles className="size-4" />
+            <span>30-Day Campaign</span>
+          </Button>
+
           <Button
             size="sm"
             onClick={() => setActiveTab('composer')}
@@ -3772,6 +3786,13 @@ export function SocialMediaView({
           }}
           onNavigateToPosts={() => setActiveTab('posts')}
         />
+      )}
+
+      {/* ─── TAB: 30-Day Campaign Planner ──── */}
+      {activeTab === 'campaign' && (
+        <Suspense fallback={<TabLoader />}>
+          <WebCampaignPlanner businessName={businessName} />
+        </Suspense>
       )}
 
       {/* ─── TAB: Autopilot (30-Day / 1-Year Daily Autonomous Posting) ──── */}

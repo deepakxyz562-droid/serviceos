@@ -177,11 +177,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });
     }
 
-    // Only drafts can be edited. Scheduled posts must be cancelled first.
-    if (existing.status !== 'draft') {
+    // Only drafts and upcoming scheduled posts can be edited (published or publishing cannot).
+    if (!['draft', 'scheduled'].includes(existing.status)) {
       return NextResponse.json(
         {
-          error: `Cannot edit a post with status '${existing.status}'. Cancel the schedule first to make edits.`,
+          error: `Cannot edit a post with status '${existing.status}'.`,
         },
         { status: 409 },
       );

@@ -729,6 +729,7 @@ export default function HomeScreen() {
   const actionIcons = useMemo(
     () => [
       { id: 'performance', label: 'Performance', icon: 'insights' as const, onPress: () => router.push('/growth-report') },
+      { id: 'ai_marketing', label: '30D Plan', icon: 'auto-awesome' as const, onPress: () => router.push('/campaign-planner') },
       { id: 'edit_profile', label: 'Edit profile', icon: 'edit' as const, onPress: () => router.push('/manage-profile') },
       { id: 'edit_services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
       { id: 'products', label: 'Products', icon: 'shopping-bag' as const, onPress: () => router.push('/products-management') },

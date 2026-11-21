@@ -299,6 +299,7 @@ export default function RootLayout() {
         <Stack.Screen name="seo-growth" />
         <Stack.Screen name="reply-settings" />
         <Stack.Screen name="growth-report" />
+        <Stack.Screen name="campaign-planner" />
         <Stack.Screen name="select-profile" />
         <Stack.Screen name="team-management" />
         <Stack.Screen name="logo-management" />
