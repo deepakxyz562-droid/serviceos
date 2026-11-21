@@ -119,18 +119,7 @@ export default function InstallPrompt() {
   const iosDismissKey = isBgos ? BGOS_IOS_DISMISS_KEY : IOS_DISMISS_KEY;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // When suppressed (e.g. on bgos.site and merchant landing pages), intercept
-    // and prevent default so Chrome on Android does not show its native mini-infobar.
-    if (isInstallPromptSuppressed()) {
-      const suppressNativeBar = (e: Event) => {
-        e.preventDefault();
-      };
-      window.addEventListener('beforeinstallprompt', suppressNativeBar);
-      return () => window.removeEventListener('beforeinstallprompt', suppressNativeBar);
-    }
-
+    if (typeof window === 'undefined' || isInstallPromptSuppressed()) return;
     setIsBgos(detectBgosBrand());
 
     const observer = new MutationObserver(() => {
