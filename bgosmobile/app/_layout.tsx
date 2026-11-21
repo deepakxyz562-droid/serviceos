@@ -171,9 +171,21 @@ export default function RootLayout() {
             continue;
           }
 
+          const isChecklistOrGrowth =
+            (item as any).type === 'social_post' ||
+            (item as any).type === 'daily_growth_tips' ||
+            (typeof (item as any).type === 'string' && (item as any).type.startsWith('checklist_'));
+
           const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : nowMs;
-          if (isFirstRun && Number.isFinite(createdMs) && nowMs - createdMs > 120_000) {
-            continue;
+          if (isFirstRun) {
+            if (isChecklistOrGrowth) {
+              // Surface unread daily checklist / growth advice from today (past 24h)
+              if (Number.isFinite(createdMs) && nowMs - createdMs > 86_400_000) {
+                continue;
+              }
+            } else if (Number.isFinite(createdMs) && nowMs - createdMs > 120_000) {
+              continue;
+            }
           }
 
           let targetRoute = '/inbox';
@@ -183,10 +195,10 @@ export default function RootLayout() {
             actionButtonLabel = 'View Posts';
           } else if ((item as any).type === 'daily_growth_tips') {
             targetRoute = typeof meta.route === 'string' ? meta.route : '/(tabs)/marketing';
-            actionButtonLabel = 'Open Studio';
+            actionButtonLabel = typeof meta.actionLabel === 'string' ? (meta.actionLabel as string) : 'Open Studio';
           } else if (typeof (item as any).type === 'string' && (item as any).type.startsWith('checklist_')) {
             targetRoute = typeof meta.route === 'string' ? meta.route : '/(tabs)/tools';
-            actionButtonLabel = 'View Checklist';
+            actionButtonLabel = typeof meta.actionLabel === 'string' ? (meta.actionLabel as string) : 'View Checklist';
           }
 
           freshEscalations.push({

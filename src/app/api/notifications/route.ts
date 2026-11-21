@@ -36,6 +36,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant context required' }, { status: 400 });
     }
 
+    // On-demand lazy checklist evaluation: ensure today's growth checklist notification exists
+    if (user.role !== 'customer') {
+      try {
+        const { ensureTodayBgosDailyPushEvaluated } = await import('@/lib/bgos-daily-push');
+        await ensureTodayBgosDailyPushEvaluated(user.tenantId, user.id);
+      } catch (lazyErr) {
+        console.warn('[notifications/route] Lazy checklist evaluation notice:', lazyErr);
+      }
+    }
+
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'all'; // all | unread | archived
     const type = searchParams.get('type');

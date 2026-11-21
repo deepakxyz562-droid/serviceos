@@ -17,6 +17,7 @@ import { publishDueSocialPosts } from '@/lib/social/due-publisher';
 let workerInterval: ReturnType<typeof setInterval> | null = null;
 let isTicking = false;
 let bootTimer: ReturnType<typeof setTimeout> | null = null;
+let lastDailyPushRunAtMs = 0;
 
 /**
  * Execute a single autopilot worker tick.
@@ -110,6 +111,20 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       // Quiet-chat followup is optional / non-blocking
     }
 
+    // 3. Process Daily BGOS Growth & Promotional Checklist Push (runs once every 15 minutes)
+    try {
+      const nowMs = now.getTime();
+      if (nowMs - lastDailyPushRunAtMs >= 15 * 60 * 1000) {
+        lastDailyPushRunAtMs = nowMs;
+        const { runBgosDailyPushBatch } = await import('@/lib/bgos-daily-push');
+        void runBgosDailyPushBatch({ now, dryRun: false, ignoreTimeWindow: false }).catch((e) => {
+          console.warn('[Autopilot Daemon] Background daily checklist batch error:', e);
+        });
+      }
+    } catch {
+      // Daily checklist batch is non-blocking
+    }
+
     return {
       tenantsChecked,
       processedCount,
@@ -196,4 +211,5 @@ export function stopBgosAutopilotWorker() {
     workerInterval = null;
   }
   isTicking = false;
+  lastDailyPushRunAtMs = 0;
 }

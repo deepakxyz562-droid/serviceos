@@ -413,7 +413,7 @@ export async function runBgosDailyPushBatch(
         ? (db as any).user
             .findMany({
               where: { tenantId: { in: chunkIds }, isActive: true, role: { not: 'customer' } },
-              select: { id: true, tenantId: true, name: true, role: true },
+              select: { id: true, tenantId: true, name: true, role: true, email: true },
             })
             .catch(() => [])
         : Promise.resolve([]),
@@ -475,6 +475,7 @@ export async function runBgosDailyPushBatch(
                 createdAt: true,
                 scheduledAt: true,
                 publishedAt: true,
+                mediaUrls: true,
               },
               orderBy: { createdAt: 'desc' },
               take: 500,
@@ -694,6 +695,7 @@ export async function runBgosDailyPushBatch(
       let tenantRecipientsNotified = 0;
       let tenantPushesSent = 0;
       let skipReasonForTenant: string | undefined;
+      let emailSentForTenant = false;
 
       for (const user of recipients) {
         const alreadySentToday = (Array.isArray(recentDailyNotifs) ? recentDailyNotifs : []).some(
@@ -745,12 +747,43 @@ export async function runBgosDailyPushBatch(
           metadataJson: JSON.stringify({
             themeKey: copy.themeKey,
             url: effectiveActionUrl,
+            route: mobileDeepLink,
+            actionLabel: effectiveActionLabel,
           }),
         }).catch(() => null);
 
         if (created) {
           notificationsCreated++;
           tenantRecipientsNotified++;
+
+          // Dispatch the 3-Minute Growth Checklist Email (once per tenant per day)
+          const recipientEmail = (user.email || tenant.email || '').trim();
+          if (!emailSentForTenant && recipientEmail && !recipientEmail.endsWith('@placeholder.internal') && !recipientEmail.endsWith('@example.com')) {
+            try {
+              const { sendBgosDailyActionChecklistEmail } = await import('@/lib/emails/bgos/sender');
+              let posterImageUrl: string | undefined;
+              try {
+                const mediaUrls = JSON.parse(lastPost?.mediaUrls || '[]');
+                if (Array.isArray(mediaUrls) && mediaUrls[0]) posterImageUrl = mediaUrls[0];
+              } catch {}
+
+              const emailRes = await sendBgosDailyActionChecklistEmail({
+                to: recipientEmail,
+                businessName,
+                tenantId: tenant.id,
+                unrepliedReviewsCount: unrepliedCount,
+                daysSinceLastPhoto,
+                posterHeadline: copy.title,
+                posterImageUrl,
+                todayTasksCount: 4,
+              });
+              if (emailRes.sent) {
+                emailSentForTenant = true;
+              }
+            } catch (emailErr) {
+              console.warn('[bgos-daily-push] Checklist email dispatch notice:', emailErr);
+            }
+          }
         }
 
         const pushEnabledForUser = pref ? pref.pushEnabled !== false : true;
@@ -819,3 +852,64 @@ export async function runBgosDailyPushBatch(
     results,
   };
 }
+
+/**
+ * Fast fail-safe to evaluate and synthesize today's daily checklist notification
+ * on-the-fly when a user opens the mobile app or web notifications inbox.
+ */
+export async function ensureTodayBgosDailyPushEvaluated(
+  tenantId: string,
+  userId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  if (!tenantId || !userId) return false;
+  try {
+    const tenant = await (db as any).tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        country: true,
+        settingsJson: true,
+        suspendedAt: true,
+      },
+    });
+
+    if (!tenant || tenant.suspendedAt) return false;
+
+    const locale = resolveTenantLocale({
+      tenantCountry: tenant.country,
+      settingsJson: tenant.settingsJson,
+    });
+
+    const { dayStartUtc } = computeLocalDayBoundsUtc(now, locale.timeZone);
+
+    // Fast check: has this user received daily_growth_tips today?
+    const existing = await (db as any).appNotification.findFirst({
+      where: {
+        tenantId,
+        recipientId: userId,
+        type: 'daily_growth_tips',
+        createdAt: { gte: dayStartUtc },
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return false;
+    }
+
+    const report = await runBgosDailyPushBatch({
+      now,
+      dryRun: false,
+      ignoreTimeWindow: true,
+      tenantIdFilter: tenantId,
+      limit: 1,
+    });
+
+    return report.notificationsCreated > 0;
+  } catch (err) {
+    console.warn('[bgos-daily-push] Lazy evaluation error:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
