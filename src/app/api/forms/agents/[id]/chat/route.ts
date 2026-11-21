@@ -36,13 +36,67 @@ function parseConfigJson(raw: unknown): Partial<FormAgentData> {
  * Load the full FormAgent config from DB.
  */
 async function loadAgentFromDb(id: string, fallback: FormAgentData | undefined): Promise<FormAgentData> {
-  if (!id || id === 'preview') {
-    return fallback || DEFAULT_FORM_AGENT;
+  const lower = (id || '').toLowerCase();
+  if (
+    !id ||
+    lower === 'preview' ||
+    lower === 'demo' ||
+    lower === 'bgos-ai' ||
+    lower === 'bgos' ||
+    lower === 'default'
+  ) {
+    return fallback || {
+      ...DEFAULT_FORM_AGENT,
+      name: 'BGOS AI Assistant',
+      welcomeGreeting: 'Hi! Welcome to BGOS. How can I assist you today?',
+    };
   }
   try {
-    const agent = await db.formAgent.findFirst({
-      where: { OR: [{ id }, { slug: id }] },
+    const trimmed = id.replace(/^-+|-+$/g, '');
+    let agent = await db.formAgent.findFirst({
+      where: {
+        OR: [
+          { id },
+          { slug: id },
+          { id: trimmed },
+          { slug: trimmed },
+        ],
+      },
     });
+
+    if (!agent) {
+      // Check if id is a business / tenant slug (e.g. singh-web-services)
+      const tenant = await db.tenant.findFirst({
+        where: {
+          OR: [
+            { slug: id },
+            { publicSlug: id },
+            { slug: trimmed },
+            { publicSlug: trimmed },
+          ],
+        },
+        select: { id: true, name: true, brandColor: true },
+      });
+
+      if (tenant) {
+        agent = await db.formAgent.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (!agent) {
+          return {
+            ...DEFAULT_FORM_AGENT,
+            id: `bot-${tenant.id}`,
+            tenantId: tenant.id,
+            name: `${tenant.name} AI Assistant`,
+            welcomeGreeting: `Hi! Welcome to ${tenant.name}. How can I assist you today?`,
+            brandColor: tenant.brandColor || DEFAULT_FORM_AGENT.brandColor,
+          };
+        }
+      }
+    }
+
     if (!agent) {
       return fallback || DEFAULT_FORM_AGENT;
     }

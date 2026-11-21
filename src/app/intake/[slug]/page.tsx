@@ -25,7 +25,10 @@ function parseConfigJson(raw: unknown): Partial<FormAgentData> {
 async function getAgent(identifier: string): Promise<FormAgentData | null> {
   try {
     const trimmed = identifier.replace(/^-+|-+$/g, '');
-    const agent = await db.formAgent.findFirst({
+    const lower = identifier.toLowerCase();
+
+    // 1. Direct formAgent lookup by id or slug
+    let agent = await db.formAgent.findFirst({
       where: {
         OR: [
           { slug: identifier },
@@ -36,11 +39,69 @@ async function getAgent(identifier: string): Promise<FormAgentData | null> {
       },
     });
 
+    // 2. Business / Tenant lookup by business slug (e.g. /intake/singh-web-services)
     if (!agent) {
-      if (identifier === 'preview' || identifier === 'demo') {
-        return DEFAULT_FORM_AGENT;
+      const tenant = await db.tenant.findFirst({
+        where: {
+          OR: [
+            { slug: identifier },
+            { publicSlug: identifier },
+            { slug: trimmed },
+            { publicSlug: trimmed },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          logo: true,
+          brandColor: true,
+          industry: true,
+        },
+      });
+
+      if (tenant) {
+        agent = await db.formAgent.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (!agent) {
+          return {
+            ...DEFAULT_FORM_AGENT,
+            id: `bot-${tenant.id}`,
+            tenantId: tenant.id,
+            name: `${tenant.name} AI Assistant`,
+            roleTitle: '24/7 Customer Concierge & Booking Specialist',
+            welcomeGreeting: `Hi! Welcome to ${tenant.name}. How can I assist you today?`,
+            brandColor: tenant.brandColor || DEFAULT_FORM_AGENT.brandColor,
+          };
+        }
       }
-      return null;
+    }
+
+    // 3. Known global & preview aliases
+    if (!agent) {
+      if (
+        lower === 'bgos-ai' ||
+        lower === 'bgos' ||
+        lower === 'preview' ||
+        lower === 'demo' ||
+        lower === 'default' ||
+        lower === 'assistant'
+      ) {
+        return {
+          ...DEFAULT_FORM_AGENT,
+          name: 'BGOS AI Assistant',
+          roleTitle: '24/7 Customer Concierge & Booking Specialist',
+          welcomeGreeting: 'Hi! Welcome to BGOS. How can I assist you today?',
+        };
+      }
+      return {
+        ...DEFAULT_FORM_AGENT,
+        name: 'AI Customer Assistant',
+        roleTitle: '24/7 Customer Assistant',
+        welcomeGreeting: 'Hi! How can I help you today?',
+      };
     }
 
     const config = parseConfigJson(agent.configJson);
@@ -58,7 +119,7 @@ async function getAgent(identifier: string): Promise<FormAgentData | null> {
     return merged;
   } catch (err) {
     console.error('[intake-page] Failed to load agent:', err);
-    return null;
+    return DEFAULT_FORM_AGENT;
   }
 }
 

@@ -175,6 +175,76 @@ export async function GET(
     });
 
     if (!agent) {
+      const lower = slugOrId.toLowerCase();
+      if (
+        lower === 'bgos-ai' ||
+        lower === 'bgos' ||
+        lower === 'preview' ||
+        lower === 'demo' ||
+        lower === 'default'
+      ) {
+        return NextResponse.json(
+          {
+            agent: sanitizePublicAgent({
+              ...DEFAULT_FORM_AGENT,
+              id: slugOrId,
+              slug: slugOrId,
+              name: 'BGOS AI Assistant',
+              welcomeGreeting: 'Hi! Welcome to BGOS. How can I assist you today?',
+            }),
+          },
+          {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+            },
+          },
+        );
+      }
+
+      // Check if slugOrId refers to a Tenant / Business
+      const tenant = await db.tenant.findFirst({
+        where: {
+          OR: [{ slug: slugOrId }, { publicSlug: slugOrId }],
+        },
+        select: { id: true, name: true, brandColor: true, logo: true },
+      });
+
+      if (tenant) {
+        agent = await db.formAgent.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        if (!agent) {
+          return NextResponse.json(
+            {
+              agent: sanitizePublicAgent({
+                ...DEFAULT_FORM_AGENT,
+                id: `bot-${tenant.id}`,
+                slug: slugOrId,
+                tenantId: tenant.id,
+                name: `${tenant.name} AI Assistant`,
+                welcomeGreeting: `Hi! Welcome to ${tenant.name}. How can I assist you today?`,
+                brandColor: tenant.brandColor || DEFAULT_FORM_AGENT.brandColor,
+              }),
+            },
+            {
+              headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+              },
+            },
+          );
+        }
+      }
+    }
+
+    if (!agent) {
       // Check if slugOrId refers to a Form with agentConfig
       const form = await db.form.findFirst({
         where: {

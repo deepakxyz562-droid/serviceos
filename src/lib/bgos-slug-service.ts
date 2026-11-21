@@ -57,6 +57,15 @@ export const BGOS_RESERVED_SLUGS = new Set([
   'store',
   'manifest.json',
   'not-found',
+  'intake',
+  'agent',
+  'chatbot',
+  'form',
+  'forms',
+  'request',
+  'tools',
+  'ai-agent',
+  'ai-employee',
 ]);
 
 /**

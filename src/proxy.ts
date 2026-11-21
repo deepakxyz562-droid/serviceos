@@ -294,7 +294,8 @@ export async function proxy(request: NextRequest) {
         'gbp-callback', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
         'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',
         'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json', 'report',
-        'bgos', 'bos', 'brand', 'icons', 'fonts'
+        'bgos', 'bos', 'brand', 'icons', 'fonts', 'intake', 'agent', 'chatbot', 'form',
+        'forms', 'request', 'requests', 'bookings', 'tools', 'ai-agent', 'ai-employee'
       ]);
       if (!BGOS_RESERVED.has(slugCandidate)) {
         const subPath = match[2] || '';
