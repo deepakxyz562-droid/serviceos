@@ -355,7 +355,8 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
   }, [report]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] w-[96vw] overflow-y-auto rounded-2xl p-0 sm:max-w-5xl">
         <div className="sticky top-0 z-20 border-b bg-background/95 px-6 py-4 backdrop-blur-sm">
           <DialogHeader className="gap-1.5 pr-8 text-left">
@@ -1073,5 +1074,6 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
