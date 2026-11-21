@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
 import { uploadFileToStorage, normalizePendingUpload } from '../../lib/upload';
@@ -133,11 +134,21 @@ export function CleanCampaignHub({ businessName, onPostUpdated }: CleanCampaignH
 
       if (res?.success) {
         Alert.alert(
-          '30-Day Campaign Created!',
-          `Generated ${res.count || 30} posts with captions and photos. Review them below or tap Approve All.`,
+          '30-Day Campaign Created! 🎉',
+          `Generated ${res.count || 30} posts with captions and photos. Taking you to Pending Review...`,
+          [
+            {
+              text: 'View Pending Posts',
+              onPress: () => {
+                router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+              },
+            },
+          ],
         );
         setGoal('');
-        await fetchCampaignPosts();
+        setTimeout(() => {
+          router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+        }, 1200);
         if (onPostUpdated) onPostUpdated();
       }
     } catch (err: unknown) {

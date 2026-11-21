@@ -233,12 +233,9 @@ export async function POST(request: NextRequest) {
       let imageBytes: Buffer | null = null;
 
       // Smart initial provider selection:
-      // If NVIDIA or KIE is configured in env, prefer it over rate-limited Cloudflare.
-      // The automatic fallback cascade will try: Cloudflare <-> NVIDIA -> Gemini -> KIE
-      const preferredProvider: ImageProvider =
-        process.env.NVIDIA_API_KEY ? 'nvidia' :
-        process.env.KIE_API_KEY ? 'kie' :
-        'cloudflare';
+      // Prefer fast zero-cost OpenRouter Recraft (2s) or Gemini, avoiding rate-limited Cloudflare and timed-out NVIDIA.
+      // The automatic fallback cascade will try: OpenRouter -> Gemini -> Cloudflare -> KIE -> SiliconFlow -> NVIDIA.
+      const preferredProvider: ImageProvider = 'openrouter';
 
       try {
         const result = await generateDesignImage(

@@ -17,7 +17,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card, Empty, ErrorNotice, colors, ui } from '../ui';
+import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../lib/api';
+import { normalizePendingUpload, uploadFileToStorage } from '../../lib/upload';
 import { getGooglePostUrl } from '../../lib/social-links';
 import { relativeDate } from './bits';
 
@@ -580,6 +582,23 @@ export function PostDetailModal({
   const [isPublishing, setIsPublishing] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
 
+  // Photo Switcher state
+  const [currentMediaUrl, setCurrentMediaUrl] = useState<string | null>(null);
+  const [photoSwitcherVisible, setPhotoSwitcherVisible] = useState(false);
+  const [mediaTab, setMediaTab] = useState<'google' | 'uploaded' | 'category' | 'ai'>('google');
+  const [googlePhotos, setGooglePhotos] = useState<Array<{ url: string; title: string }>>([]);
+  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; url: string; title: string }>>([]);
+  const [categoryPhotos, setCategoryPhotos] = useState<Array<{ url: string; title: string }>>([]);
+  const [aiQuota, setAiQuota] = useState<{ used: number; limit: number; remaining: number; isTrial: boolean }>({
+    used: 0,
+    limit: 5,
+    remaining: 5,
+    isTrial: false,
+  });
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+  const [isGeneratingAiPhoto, setIsGeneratingAiPhoto] = useState(false);
+  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
+
   const [editTitle, setEditTitle] = useState('');
   const [editIntro, setEditIntro] = useState('');
   const [editBullets, setEditBullets] = useState('');
@@ -592,6 +611,7 @@ export function PostDetailModal({
 
   useEffect(() => {
     if (post) {
+      setCurrentMediaUrl(post.mediaUrls?.[0] || null);
       const p = parsePostStructure(post.content || '', post.title || (post.designJson as any)?.headline || 'Standard Post');
       setEditTitle(p.title);
       setEditIntro(p.intro);
@@ -611,6 +631,148 @@ export function PostDetailModal({
       setCtaUrl(post.ctaUrl || defaultBookingUrl || defaultWebsiteUrl || '');
     }
   }, [post, defaultBookingUrl, defaultWebsiteUrl]);
+
+  const fetchMediaLibrary = useCallback(async () => {
+    try {
+      setIsLoadingMedia(true);
+      const res = await apiRequest<{
+        googlePhotos: Array<{ url: string; title: string }>;
+        uploadedPhotos: Array<{ id: string; url: string; title: string }>;
+        categoryPhotos: Array<{ url: string; title: string }>;
+        aiQuota: { used: number; limit: number; remaining: number; isTrial: boolean };
+      }>('/api/social/media-library');
+
+      if (res) {
+        setGooglePhotos(res.googlePhotos || []);
+        setUploadedPhotos(res.uploadedPhotos || []);
+        setCategoryPhotos(res.categoryPhotos || []);
+        if (res.aiQuota) setAiQuota(res.aiQuota);
+      }
+    } catch (err) {
+      console.warn('[PostDetailModal] Error fetching media library:', err);
+    } finally {
+      setIsLoadingMedia(false);
+    }
+  }, []);
+
+  const openPhotoSwitcher = () => {
+    setPhotoSwitcherVisible(true);
+    setMenuVisible(false);
+    void fetchMediaLibrary();
+  };
+
+  const handleSelectNewPhoto = async (newUrl: string) => {
+    if (!post || !newUrl) return;
+    try {
+      setIsUpdatingPhoto(true);
+      if (post.id && !post.id.startsWith('ai_post_') && !post.id.startsWith('up-')) {
+        await apiRequest(`/api/social/posts/${post.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ mediaUrls: [newUrl] }),
+        });
+      }
+
+      const updatedPost: SocialPostRow = {
+        ...post,
+        mediaUrls: [newUrl],
+      };
+
+      setCurrentMediaUrl(newUrl);
+      setPhotoSwitcherVisible(false);
+
+      if (onEditSave) {
+        onEditSave(updatedPost);
+      }
+
+      Alert.alert('Photo Updated! 📸', 'The post image has been updated.');
+    } catch (err: unknown) {
+      Alert.alert('Photo Update Failed', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setIsUpdatingPhoto(false);
+    }
+  };
+
+  const handlePickFromDevice = async (fromCamera: boolean) => {
+    try {
+      let result;
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Camera Permission Required', 'Please enable camera access in your device settings.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.85,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Gallery Permission Required', 'Please enable photo library access in your device settings.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.85,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const pending = normalizePendingUpload({
+          uri: asset.uri,
+          name: asset.fileName || 'post_photo.jpg',
+          mimeType: asset.mimeType || 'image/jpeg',
+          fileSize: asset.fileSize,
+        });
+
+        setIsLoadingMedia(true);
+        const uploadedUrl = await uploadFileToStorage(pending, { folder: 'campaign-photos' });
+        if (uploadedUrl) {
+          await handleSelectNewPhoto(uploadedUrl);
+        }
+      }
+    } catch (err: unknown) {
+      Alert.alert('Upload Failed', err instanceof Error ? err.message : 'Could not upload photo.');
+    } finally {
+      setIsLoadingMedia(false);
+    }
+  };
+
+  const handleGenerateAiPhoto = async () => {
+    if (aiQuota.remaining <= 0) {
+      Alert.alert('Daily Limit Reached', 'You have used all 5 AI photo generations today. Quota resets tomorrow at midnight!');
+      return;
+    }
+
+    try {
+      setIsGeneratingAiPhoto(true);
+      const res = await apiRequest<{
+        success: boolean;
+        url: string;
+        quota: { used: number; remaining: number };
+      }>('/api/social/media-library', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: post?.title || editTitle || 'Business Commercial Photo',
+          prompt: post?.content || editIntro || '',
+        }),
+      });
+
+      if (res?.success && res.url) {
+        setAiQuota((prev) => ({
+          ...prev,
+          used: res.quota?.used ?? prev.used + 1,
+          remaining: res.quota?.remaining ?? Math.max(0, prev.remaining - 1),
+        }));
+        await handleSelectNewPhoto(res.url);
+      }
+    } catch (err: unknown) {
+      Alert.alert('AI Generation Failed', err instanceof Error ? err.message : 'Could not generate photo.');
+    } finally {
+      setIsGeneratingAiPhoto(false);
+    }
+  };
 
   if (!post || !visible) return null;
 
@@ -906,6 +1068,17 @@ export function PostDetailModal({
             <Pressable
               onPress={() => {
                 setMenuVisible(false);
+                openPhotoSwitcher();
+              }}
+              style={styles.menuItem}
+            >
+              <MaterialIcons name="photo-camera" size={18} color="#009F50" />
+              <Text style={[styles.menuItemText, { color: '#009F50', fontWeight: '700' }]}>Change Photo</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setMenuVisible(false);
                 void handleCopyCaption();
               }}
               style={styles.menuItem}
@@ -939,6 +1112,33 @@ export function PostDetailModal({
             /* ── EDIT POST MODE ── */
             <View style={{ padding: 18, gap: 14 }}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Edit Post Content</Text>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 }}>
+                {currentMediaUrl || media ? (
+                  <Image source={{ uri: currentMediaUrl || media }} style={{ width: 64, height: 64, borderRadius: 10 }} resizeMode="cover" />
+                ) : (
+                  <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="image" size={28} color="#94A3B8" />
+                  </View>
+                )}
+                <Pressable
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#F0FDF4',
+                    borderWidth: 1,
+                    borderColor: '#BBF7D0',
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                  onPress={openPhotoSwitcher}
+                >
+                  <MaterialIcons name="photo-camera" size={17} color="#009F50" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534' }}>Change Post Photo</Text>
+                </Pressable>
+              </View>
 
               <View>
                 <Text style={styles.editLabel}>Headline (H1)</Text>
@@ -1028,12 +1228,27 @@ export function PostDetailModal({
           ) : (
             /* ── VIEW POST MODE (Matching Screenshots 1 & 3) ── */
             <>
-              {/* Full Hero Image (Matching Screenshot - clean, rounded corners, no dark overlay badge) */}
-              {media ? (
+              {/* Full Hero Image (Matching Screenshot with Change Photo Floating Button) */}
+              {currentMediaUrl || media ? (
                 <View style={styles.heroImageWrap}>
-                  <Image source={{ uri: media }} style={styles.heroImage} resizeMode="cover" />
+                  <Image source={{ uri: currentMediaUrl || media }} style={styles.heroImage} resizeMode="cover" />
+                  <Pressable
+                    style={styles.changePhotoFloatingBtn}
+                    onPress={openPhotoSwitcher}
+                    accessibilityLabel="Change post photo"
+                  >
+                    <MaterialIcons name="photo-camera" size={14} color="#FFFFFF" />
+                    <Text style={styles.changePhotoFloatingText}>Change Photo</Text>
+                  </Pressable>
                 </View>
-              ) : null}
+              ) : (
+                <View style={[styles.heroImageWrap, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Pressable style={styles.addPhotoPromptWrap} onPress={openPhotoSwitcher}>
+                    <MaterialIcons name="add-a-photo" size={26} color="#009F50" />
+                    <Text style={styles.addPhotoPromptText}>Add Photo to Post</Text>
+                  </Pressable>
+                </View>
+              )}
 
               <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 16 }}>
                 {/* Standard Post / Offer / Event Badge */}
@@ -1304,6 +1519,130 @@ export function PostDetailModal({
             </>
           )}
         </ScrollView>
+
+        {/* ── Photo Switcher Modal ── */}
+        <Modal visible={photoSwitcherVisible} animationType="slide" transparent onRequestClose={() => setPhotoSwitcherVisible(false)}>
+          <View style={styles.photoModalOverlay}>
+            <View style={styles.photoModalContent}>
+              {/* Header */}
+              <View style={styles.photoModalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialIcons name="photo-camera" size={20} color="#009F50" />
+                  <Text style={styles.photoModalTitle}>Change Post Photo</Text>
+                </View>
+                <Pressable onPress={() => setPhotoSwitcherVisible(false)} style={styles.photoModalCloseBtn}>
+                  <MaterialIcons name="close" size={22} color="#475569" />
+                </Pressable>
+              </View>
+
+              {/* Quick Actions: Camera & Gallery */}
+              <View style={styles.photoDeviceActionsRow}>
+                <Pressable style={styles.photoDeviceBtn} onPress={() => handlePickFromDevice(true)}>
+                  <MaterialIcons name="photo-camera" size={18} color="#009F50" />
+                  <Text style={styles.photoDeviceBtnText}>Take Camera Photo</Text>
+                </Pressable>
+                <Pressable style={styles.photoDeviceBtn} onPress={() => handlePickFromDevice(false)}>
+                  <MaterialIcons name="photo-library" size={18} color="#009F50" />
+                  <Text style={styles.photoDeviceBtnText}>Device Gallery</Text>
+                </Pressable>
+              </View>
+
+              {/* Tabs */}
+              <View style={styles.photoTabRow}>
+                <Pressable
+                  style={[styles.photoTabBtn, mediaTab === 'google' && styles.photoTabBtnActive]}
+                  onPress={() => setMediaTab('google')}
+                >
+                  <Text style={[styles.photoTabBtnText, mediaTab === 'google' && styles.photoTabBtnTextActive]}>
+                    📍 Google ({googlePhotos.length})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.photoTabBtn, mediaTab === 'uploaded' && styles.photoTabBtnActive]}
+                  onPress={() => setMediaTab('uploaded')}
+                >
+                  <Text style={[styles.photoTabBtnText, mediaTab === 'uploaded' && styles.photoTabBtnTextActive]}>
+                    📁 Uploaded ({uploadedPhotos.length})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.photoTabBtn, mediaTab === 'category' && styles.photoTabBtnActive]}
+                  onPress={() => setMediaTab('category')}
+                >
+                  <Text style={[styles.photoTabBtnText, mediaTab === 'category' && styles.photoTabBtnTextActive]}>
+                    🏷️ Stock ({categoryPhotos.length})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.photoTabBtn, mediaTab === 'ai' && styles.photoTabBtnActive]}
+                  onPress={() => setMediaTab('ai')}
+                >
+                  <Text style={[styles.photoTabBtnText, mediaTab === 'ai' && styles.photoTabBtnTextActive]}>
+                    ✨ AI Photo ({aiQuota.remaining}/5)
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Tab Content */}
+              {isLoadingMedia || isUpdatingPhoto ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <ActivityIndicator color="#009F50" size="large" />
+                  <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '600' }}>
+                    {isUpdatingPhoto ? 'Updating post photo...' : 'Loading media library...'}
+                  </Text>
+                </View>
+              ) : mediaTab === 'ai' ? (
+                <View style={styles.photoAiTabWrap}>
+                  <MaterialIcons name="auto-awesome" size={36} color="#009F50" />
+                  <Text style={styles.photoAiTabTitle}>Generate Fresh AI Commercial Photo</Text>
+                  <Text style={styles.photoAiTabSub}>
+                    BGOS uses Recraft v4.1 diffusion to create a photo tailored to this post in seconds.
+                  </Text>
+                  <View style={styles.photoQuotaPill}>
+                    <Text style={styles.photoQuotaText}>
+                      {aiQuota.remaining} of 5 daily AI photos remaining
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[styles.photoAiGenerateBtn, isGeneratingAiPhoto && { opacity: 0.7 }]}
+                    onPress={handleGenerateAiPhoto}
+                    disabled={isGeneratingAiPhoto || aiQuota.remaining <= 0}
+                  >
+                    {isGeneratingAiPhoto ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.photoAiGenerateBtnText}>Generate AI Photo (~2s)</Text>
+                    )}
+                  </Pressable>
+                </View>
+              ) : (
+                <ScrollView style={styles.photoGridScroll} contentContainerStyle={styles.photoGrid}>
+                  {((mediaTab === 'google' ? googlePhotos : mediaTab === 'category' ? categoryPhotos : uploadedPhotos).length === 0) ? (
+                    <View style={{ padding: 30, alignItems: 'center', width: '100%' }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
+                        {mediaTab === 'google'
+                          ? 'No Google Business media found. Use Camera or Gallery above!'
+                          : mediaTab === 'category'
+                            ? 'No stock photos found for this category.'
+                            : 'No uploaded photos yet. Use Camera or Gallery above!'}
+                      </Text>
+                    </View>
+                  ) : (
+                    (mediaTab === 'google' ? googlePhotos : mediaTab === 'category' ? categoryPhotos : uploadedPhotos).map((item, idx) => (
+                      <Pressable
+                        key={idx}
+                        style={styles.photoGridThumbWrap}
+                        onPress={() => handleSelectNewPhoto(item.url)}
+                      >
+                        <Image source={{ uri: item.url }} style={styles.photoGridThumb} resizeMode="cover" />
+                      </Pressable>
+                    ))
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </Modal>
   );
@@ -1567,7 +1906,7 @@ export function PostsBoard({
             board.setRows((prev) =>
               prev ? prev.map((r) => (r.id === updatedPost.id ? updatedPost : r)) : null,
             );
-            setInspectPost(null);
+            setInspectPost(updatedPost);
           }}
         />
       ) : null}
@@ -2256,5 +2595,171 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  changePhotoFloatingBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  changePhotoFloatingText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  addPhotoPromptWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 8,
+  },
+  addPhotoPromptText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#009F50',
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  photoModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 18,
+    maxHeight: '82%',
+  },
+  photoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  photoModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  photoModalCloseBtn: {
+    padding: 4,
+  },
+  photoDeviceActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  photoDeviceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  photoDeviceBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  photoTabRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  photoTabBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+  },
+  photoTabBtnActive: {
+    backgroundColor: '#009F50',
+  },
+  photoTabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  photoTabBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  photoAiTabWrap: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
+  },
+  photoAiTabTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  photoAiTabSub: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  photoQuotaPill: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginVertical: 6,
+  },
+  photoQuotaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  photoAiGenerateBtn: {
+    backgroundColor: '#009F50',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  photoAiGenerateBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  photoGridScroll: {
+    maxHeight: 280,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  photoGridThumbWrap: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  photoGridThumb: {
+    width: '100%',
+    height: '100%',
   },
 });

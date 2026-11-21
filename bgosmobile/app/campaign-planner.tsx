@@ -128,10 +128,20 @@ export default function CampaignPlannerScreen() {
 
       if (res?.success) {
         Alert.alert(
-          '30-Day Campaign Ready!',
-          `Generated ${res.count || 30} high-converting posts for ${businessName}. Review them below or tap Approve All.`,
+          '30-Day Campaign Ready! 🎉',
+          `Generated ${res.count || 30} high-converting posts for ${businessName}. Taking you to Pending Review...`,
+          [
+            {
+              text: 'View Pending Posts',
+              onPress: () => {
+                router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+              },
+            },
+          ],
         );
-        await fetchPosts();
+        setTimeout(() => {
+          router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+        }, 1200);
       }
     } catch (err: unknown) {
       Alert.alert('Campaign Creation Failed', err instanceof Error ? err.message : 'Could not generate campaign.');

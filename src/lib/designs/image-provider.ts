@@ -1645,7 +1645,7 @@ async function callNvidiaImage(params: {
   try {
     response = await fetch(`${baseUrl}/${modelPath}`, {
       method: 'POST',
-      signal: combineSignals(params.signal, 35_000),
+      signal: combineSignals(params.signal, 10_000),
       headers: {
         Authorization: `Bearer ${cred.secret}`,
         Accept: 'application/json',

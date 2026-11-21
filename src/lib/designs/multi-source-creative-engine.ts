@@ -217,8 +217,13 @@ export async function getMultiSourceCategoryVisuals(
 
   const stride = getCoprimeStride(pool.length);
   const out: MultiSourceCreativeVisual[] = [];
+  let lastIdx = -1;
   for (let i = 0; i < requestedCount; i++) {
-    const idx = (i * stride + Math.floor(i / pool.length)) % pool.length;
+    let idx = (i * stride + Math.floor(i / pool.length)) % pool.length;
+    if (pool.length > 1 && idx === lastIdx) {
+      idx = (idx + 1) % pool.length;
+    }
+    lastIdx = idx;
     out.push(pool[idx]);
   }
   return out;
