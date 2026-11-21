@@ -150,6 +150,18 @@ const nextConfig: NextConfig = {
     config.devtool = false;
     if (!dev) {
       config.cache = false; // Disable heavy Webpack memory cache during production build
+      config.plugins = config.plugins || [];
+      config.plugins.push({
+        apply(compiler: any) {
+          compiler.hooks.done.tap('GCCleanup', () => {
+            if (typeof global.gc === 'function') {
+              try {
+                global.gc();
+              } catch {}
+            }
+          });
+        },
+      });
       if (config.optimization && Array.isArray(config.optimization.minimizer)) {
         config.optimization.minimizer.forEach((minimizer: any) => {
           if (minimizer?.options?.parallel) {
