@@ -63,6 +63,7 @@ import { loadJson, saveJson } from '../../src/lib/device-storage';
 import { PostsBoard, PostDetailModal, type PostPill, type SocialPostRow } from '../../src/components/gbp/posts-list';
 import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
+import { CleanCampaignHub } from '../../src/components/marketing/clean-campaign-hub';
 import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
 import { CreateGbpPostModal, type GeneratedPostData } from '../../src/components/gbp/create-gbp-post-modal';
 import { PostReviewEditModal } from '../../src/components/gbp/post-review-edit-modal';
@@ -2737,23 +2738,53 @@ export default function MarketingScreen() {
           </View>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            Alert.alert(
-              'Posts & Updates Help',
-              'BGOS automatically crafts SEO-optimized Google Business Profile posts to boost your local search ranking and Maps visibility.\n\nTap "Create Post with AI" to generate a tailored post with reference photos in seconds.',
-            );
-          }}
-          style={{
-            backgroundColor: '#009F50',
-            paddingHorizontal: 14,
-            paddingVertical: 6,
-            borderRadius: 16,
-          }}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Help</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open 30-Day Campaign Planner"
+            onPress={() => router.push('/campaign-planner')}
+            style={{
+              backgroundColor: '#009F50',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              shadowColor: '#009F50',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.2,
+              shadowRadius: 3,
+              elevation: 2,
+            }}
+          >
+            <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>30-Day Plan</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Help"
+            onPress={() => {
+              Alert.alert(
+                'Posts & Updates Help',
+                'BGOS automatically crafts SEO-optimized Google Business Profile posts to boost your local search ranking and Maps visibility.\n\nTap "30-Day Plan" above to autonomously generate a full month of posts tailored to your business.',
+              );
+            }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: '#F1F5F9',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+            }}
+          >
+            <MaterialIcons name="help-outline" size={18} color="#64748B" />
+          </Pressable>
+        </View>
       </View>
 
       {/* ── Main Content Container ────────────────────────────────────────── */}
@@ -3100,6 +3131,40 @@ export default function MarketingScreen() {
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'posts' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
+          {/* Quick-Launch 30-Day Autonomous Campaign Banner */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open 30-Day Campaign Planner"
+            onPress={() => router.push('/campaign-planner')}
+            style={{
+              backgroundColor: '#ECFDF5',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              marginBottom: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderWidth: 1,
+              borderColor: '#A7F3D0',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#009F50', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#065F46' }}>
+                  30-Day Autonomous Campaign
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#047857', marginTop: 1 }}>
+                  Tap to generate or review your month&apos;s posts
+                </Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#009F50" />
+          </Pressable>
+
           {/* Benchmark: Upcoming Posts Carousel (Screenshot 1) */}
           <UpcomingPostsCarousel
             businessName={effectiveBusinessName}
