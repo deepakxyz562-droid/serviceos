@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, Film, Loader2, Maximize2, Pencil, Play, Trash2, Zap } from 'lucide-react';
+import { Clock, ExternalLink, Film, Loader2, Maximize2, Pencil, Play, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/auth-fetch';
 import { Button } from '@/components/ui/button';
@@ -112,14 +112,17 @@ export function WebMediaPreviewDialog({
   const queueId = item.postId || item.id;
   const isQueue = item.source === 'queue' && Boolean(queueId);
   const canEdit = isQueue && Boolean(onEdit);
+  const isPendingReview = item.reviewStatus === 'in_review' || (Boolean(item.id) && String(item.id).includes('CIAB'));
   const statusLabel =
-    item.source === 'google'
-      ? 'Published on Google'
-      : item.status === 'failed'
-        ? 'Failed'
-        : item.status === 'scheduled' || item.status === 'publishing'
-          ? 'Scheduled'
-          : 'Draft (Not Posted)';
+    isPendingReview
+      ? 'In Google Review (12–48h)'
+      : item.source === 'google'
+        ? 'Published on Google'
+        : item.status === 'failed'
+          ? 'Failed'
+          : item.status === 'scheduled' || item.status === 'publishing'
+            ? 'Scheduled'
+            : 'Draft (Not Posted)';
 
   const handlePublishNow = async () => {
     if (!isQueue || busyAction) return;
@@ -265,8 +268,28 @@ export function WebMediaPreviewDialog({
           </div>
 
           <div className="space-y-2.5 text-xs">
+            {isPendingReview && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                  <Clock className="size-4 text-amber-600 shrink-0" />
+                  <span>Google Moderation Review (12–48 hours)</span>
+                </div>
+                <p className="text-amber-800/90 leading-relaxed">
+                  This photo was submitted to your Google Business Profile photo album. Google runs automated Vision and safety checks before making new album photos visible to the public on Google Maps and Search.
+                </p>
+                <div className="text-[11px] text-amber-700/80 font-mono">
+                  Google Asset ID: {item.id}
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold ${
+                isPendingReview
+                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-primary/10 text-primary'
+              }`}>
+                {isPendingReview && <Clock className="size-3 text-amber-600" />}
                 {statusLabel}
               </span>
               {item.scheduledFor && (

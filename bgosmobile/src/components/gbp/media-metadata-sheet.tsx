@@ -115,7 +115,7 @@ export function MediaMetadataSheet({
   pendingAssets = [],
   editingItem = null,
   selectedTemplate = null,
-  initialScheduleMode = 'daily',
+  initialScheduleMode = 'instant',
   initialMode = 'upload',
   workspaceLocale = null,
   onSaved,
@@ -147,7 +147,10 @@ export function MediaMetadataSheet({
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [category, setCategory] = useState<GbpCategoryType>('ADDITIONAL');
-  const [scheduleMode, setScheduleMode] = useState<MediaScheduleMode>(initialScheduleMode);
+  const [postDestination, setPostDestination] = useState<'photo_media' | 'whats_new'>('photo_media');
+  const [scheduleMode, setScheduleMode] = useState<MediaScheduleMode>(
+    initialScheduleMode || (pendingAssets.length > 1 ? 'daily' : 'instant'),
+  );
   const [preferredTime] = useState('10:00');
   const [selectedCountry] = useState<CountryItem>(
     workspaceLocale?.country ? getCountryByCode(workspaceLocale.country) : detected.country,
@@ -213,6 +216,8 @@ export function MediaMetadataSheet({
     const reqKey = sessionKeyRef.current;
     setErrorMsg(null);
     setIsEditingDescription(false);
+    setScheduleMode(initialScheduleMode || (pendingAssets.length > 1 ? 'daily' : 'instant'));
+    setPostDestination('photo_media');
 
     // Initial image selection
     if (editingItem) {
@@ -481,7 +486,7 @@ export function MediaMetadataSheet({
         method: isEditMode ? 'PATCH' : 'POST',
         body: {
           postId: editingItem?.postId || editingItem?.id,
-          postType: 'photo_media',
+          postType: postDestination,
           title: title.trim() || `${effectiveBusinessName} Post`,
           description: description.trim(),
           tags,
@@ -902,6 +907,130 @@ export function MediaMetadataSheet({
                   </View>
                 )}
               </View>
+
+              {/* ── CARD 5: GOOGLE PLACEMENT & TIMING ── */}
+              <View style={styles.cardContainer}>
+                <View style={styles.cardHeaderRow}>
+                  <MaterialIcons name="tune" size={18} color="#2563EB" />
+                  <Text style={styles.cardTitle}>Google Placement & Timing</Text>
+                </View>
+
+                {/* Placement Selector */}
+                <Text style={styles.sectionSublabel}>Where to post on Google</Text>
+                <View style={styles.optionsRow}>
+                  <Pressable
+                    onPress={() => setPostDestination('photo_media')}
+                    style={[
+                      styles.choiceOption,
+                      postDestination === 'photo_media' && styles.choiceOptionSelected,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="photo-library"
+                      size={20}
+                      color={postDestination === 'photo_media' ? '#2563EB' : '#64748B'}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.choiceOptionTitle,
+                          postDestination === 'photo_media' && styles.choiceOptionTitleSelected,
+                        ]}
+                      >
+                        Photos Gallery
+                      </Text>
+                      <Text style={styles.choiceOptionDesc}>
+                        Google Maps Album · 12–48h safety review
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setPostDestination('whats_new')}
+                    style={[
+                      styles.choiceOption,
+                      postDestination === 'whats_new' && styles.choiceOptionSelected,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="campaign"
+                      size={20}
+                      color={postDestination === 'whats_new' ? '#2563EB' : '#64748B'}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.choiceOptionTitle,
+                          postDestination === 'whats_new' && styles.choiceOptionTitleSelected,
+                        ]}
+                      >
+                        Update Post
+                      </Text>
+                      <Text style={styles.choiceOptionDesc}>
+                        Live in Updates tab with Call button
+                      </Text>
+                    </View>
+                  </Pressable>
+                </View>
+
+                {/* Timing Selector */}
+                <Text style={[styles.sectionSublabel, { marginTop: 4 }]}>Publishing Schedule</Text>
+                <View style={styles.optionsRow}>
+                  <Pressable
+                    onPress={() => setScheduleMode('instant')}
+                    style={[
+                      styles.choiceOption,
+                      scheduleMode === 'instant' && styles.choiceOptionSelected,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="bolt"
+                      size={20}
+                      color={scheduleMode === 'instant' ? '#2563EB' : '#64748B'}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.choiceOptionTitle,
+                          scheduleMode === 'instant' && styles.choiceOptionTitleSelected,
+                        ]}
+                      >
+                        Post Now
+                      </Text>
+                      <Text style={styles.choiceOptionDesc}>
+                        Immediate upload to Google
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setScheduleMode('daily')}
+                    style={[
+                      styles.choiceOption,
+                      scheduleMode === 'daily' && styles.choiceOptionSelected,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="event-repeat"
+                      size={20}
+                      color={scheduleMode === 'daily' ? '#2563EB' : '#64748B'}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.choiceOptionTitle,
+                          scheduleMode === 'daily' && styles.choiceOptionTitleSelected,
+                        ]}
+                      >
+                        Schedule Daily
+                      </Text>
+                      <Text style={styles.choiceOptionDesc}>
+                        Drip 1 post/day at 10:00 AM
+                      </Text>
+                    </View>
+                  </Pressable>
+                </View>
+              </View>
             </ScrollView>
 
             {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST TO GOOGLE) ── */}
@@ -939,7 +1068,13 @@ export function MediaMetadataSheet({
                   <>
                     <MaterialIcons name="publish" size={18} color="#FFFFFF" />
                     <Text style={styles.actionPrimaryBtnText}>
-                      {isEditMode ? 'Update' : 'Post to Google'}
+                      {isEditMode
+                        ? 'Update'
+                        : scheduleMode === 'daily' || scheduleMode === 'weekly'
+                          ? 'Schedule Post'
+                          : postDestination === 'whats_new'
+                            ? 'Post Update Live'
+                            : 'Upload Photo'}
                     </Text>
                   </>
                 )}
@@ -1567,5 +1702,42 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  sectionSublabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  optionsRow: {
+    gap: 8,
+  },
+  choiceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  choiceOptionSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  choiceOptionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  choiceOptionTitleSelected: {
+    color: '#1D4ED8',
+  },
+  choiceOptionDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
 });

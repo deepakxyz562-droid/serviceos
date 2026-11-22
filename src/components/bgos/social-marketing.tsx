@@ -6265,22 +6265,26 @@ export function SocialMediaView({
                         )}
                         <span
                           className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            photo.source === 'google'
-                              ? 'bg-emerald-600/90 text-white'
-                              : photo.status === 'failed'
-                                ? 'bg-rose-600/90 text-white'
-                                : photo.status === 'scheduled'
-                                  ? 'bg-amber-500/95 text-white'
-                                  : 'bg-slate-800/85 text-white'
+                            photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB'))
+                              ? 'bg-amber-600/95 text-white'
+                              : photo.source === 'google'
+                                ? 'bg-emerald-600/90 text-white'
+                                : photo.status === 'failed'
+                                  ? 'bg-rose-600/90 text-white'
+                                  : photo.status === 'scheduled'
+                                    ? 'bg-amber-500/95 text-white'
+                                    : 'bg-slate-800/85 text-white'
                           }`}
                         >
-                          {photo.source === 'google'
-                            ? 'Live'
-                            : photo.status === 'failed'
-                              ? 'Failed'
-                              : photo.status === 'scheduled'
-                                ? 'Scheduled'
-                                : 'Draft'}
+                          {photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB'))
+                            ? 'In Review (12–48h)'
+                            : photo.source === 'google'
+                              ? 'Live'
+                              : photo.status === 'failed'
+                                ? 'Failed'
+                                : photo.status === 'scheduled'
+                                  ? 'Scheduled'
+                                  : 'Draft'}
                         </span>
                       </div>
                       <div className="space-y-1 px-0.5">
@@ -7076,7 +7080,7 @@ export function SocialMediaView({
         businessName={businessName}
         initialFiles={selectedMediaFiles}
         editingItem={editingMediaItem}
-        defaultScheduleMode="daily"
+        defaultScheduleMode="instant"
         initialMode={mediaDialogMode}
         onViewMedia={(mediaId, mediaTab) => {
           setActiveTab('google-media');

@@ -99,6 +99,7 @@ export interface WebMediaItem {
   status?: string;
   caption?: string;
   failureReason?: string;
+  reviewStatus?: string;
 }
 
 interface PreviousPhotoRef {
@@ -288,7 +289,7 @@ export function WebMediaMetadataDialog({
   businessName,
   initialFiles,
   editingItem = null,
-  defaultScheduleMode = 'daily',
+  defaultScheduleMode = 'instant',
   initialMode = 'upload',
   onSaved,
   onViewMedia,
@@ -313,6 +314,7 @@ export function WebMediaMetadataDialog({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [category, setCategory] = useState<WebGbpCategoryType>('ADDITIONAL');
+  const [postType, setPostType] = useState<'photo_media' | 'whats_new'>('photo_media');
   const [scheduleMode, setScheduleMode] = useState<WebScheduleMode>(defaultScheduleMode);
   const [preferredTime, setPreferredTime] = useState<string>('10:00');
   const [intent, setIntent] = useState<WebAiMediaIntent>('local_seo');
@@ -703,7 +705,10 @@ export function WebMediaMetadataDialog({
     setSelectedRefUrls([]);
     setAiPrompt('');
     setAiStylePreset('real_photo');
-    setScheduleMode(defaultScheduleMode);
+    const effectiveDefaultMode: WebScheduleMode =
+      defaultScheduleMode || (chosen.length > 1 ? 'daily' : 'instant');
+    setScheduleMode(effectiveDefaultMode);
+    setPostType('photo_media');
     setIntent('local_seo');
     setTitle('');
     setDescription('');
@@ -1162,6 +1167,7 @@ export function WebMediaMetadataDialog({
     const descSnapshot = description.trim() || undefined;
     const tagsSnapshot = [...tags];
     const categorySnapshot = category;
+    const postTypeSnapshot = postType;
     const scheduleModeSnapshot = scheduleMode;
     const preferredTimeSnapshot = preferredTime;
     const tzSnapshot = localTimeZone;
@@ -1217,6 +1223,7 @@ export function WebMediaMetadataDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          postType: postTypeSnapshot,
           items: uploadedItems,
           photos: uploadedItems.map((i) => i.url),
           title: titleSnapshot,
@@ -2364,6 +2371,21 @@ export function WebMediaMetadataDialog({
                           {c.label}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">
+                    Google Placement
+                  </label>
+                  <Select value={postType} onValueChange={(v) => setPostType(v as 'photo_media' | 'whats_new')}>
+                    <SelectTrigger className="rounded-xl text-xs h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="photo_media">📸 Photos Gallery (Maps Photo Album · 12–48h Review)</SelectItem>
+                      <SelectItem value="whats_new">📝 Update Post (Live in Google Updates Tab with Call button)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

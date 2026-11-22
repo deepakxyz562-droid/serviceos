@@ -72,8 +72,9 @@ export function MediaPreviewModal({
   const canManageQueue = item.source === 'queue' && Boolean(item.postId || item.id);
   const canEdit = canManageQueue && Boolean(onEdit);
   const queueItemId = item.postId || item.id;
+  const isPendingReview = item.reviewStatus === 'in_review' || (Boolean(item.id) && String(item.id).includes('CIAB'));
   const statusLabel =
-    item.reviewStatus === 'in_review'
+    isPendingReview
       ? 'In Google Review (12–48h)'
       : item.statusLabel
         ? item.statusLabel
@@ -366,10 +367,26 @@ export function MediaPreviewModal({
             </Pressable>
           )}
 
+          {isPendingReview ? (
+            <View style={styles.reviewNoticeCard}>
+              <View style={styles.reviewNoticeHeader}>
+                <MaterialIcons name="schedule" size={16} color="#B45309" />
+                <Text style={styles.reviewNoticeTitle}>Google Moderation Review (12–48h)</Text>
+              </View>
+              <Text style={styles.reviewNoticeText}>
+                This photo is uploaded to your Google Business Profile photo album. Google runs automated Vision and safety checks before making album photos public on Google Maps.
+              </Text>
+              <Text style={styles.reviewNoticeId}>Google Asset ID: {item.id}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.metaCard}>
             <View style={styles.metaTopRow}>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusPillText}>{statusLabel}</Text>
+              <View style={[styles.statusPill, isPendingReview && styles.statusPillReview]}>
+                {isPendingReview && <MaterialIcons name="schedule" size={12} color="#B45309" style={{ marginRight: 3 }} />}
+                <Text style={[styles.statusPillText, isPendingReview && styles.statusPillTextReview]}>
+                  {statusLabel}
+                </Text>
               </View>
               {item.scheduledFor ? (
                 <Text style={styles.dateText}>
@@ -730,5 +747,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     lineHeight: 15,
+  },
+  reviewNoticeCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 14,
+    gap: 6,
+  },
+  reviewNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  reviewNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  reviewNoticeText: {
+    fontSize: 12,
+    color: '#78350F',
+    lineHeight: 17,
+  },
+  reviewNoticeId: {
+    fontSize: 10.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#B45309',
+    marginTop: 2,
+  },
+  statusPillReview: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusPillTextReview: {
+    color: '#92400E',
   },
 });

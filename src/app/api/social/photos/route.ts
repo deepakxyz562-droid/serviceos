@@ -1029,14 +1029,18 @@ export async function POST(request: NextRequest) {
           : scheduleMode === 'instant'
             ? savedLocalCount > 0 && publishedCount === 0
               ? `Saved ${uploadedPhotos.length} media item(s) in BGOS (connect Google Business Profile to publish live).`
-              : uploadedPhotos.some((p: any) => p.reviewStatus === 'in_review')
+              : requestedPostType === 'whats_new'
                 ? items.length > 1
-                  ? `Uploaded photo to Google (in review: 12–48h). Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                  : `Photo uploaded to Google Business Profile and is now in Google Review (12–48h).`
-                : items.length > 1
-                  ? `Published 1 photo live. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                  : `Published photo to Google Business Profile.`
-            : `Scheduled ${uploadedPhotos.length} media item(s) (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
+                  ? `Published update post live. Scheduled remaining ${items.length - 1} item(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                  : `Update post published live to Google Business Profile (Visible in Updates tab).`
+                : uploadedPhotos.some((p: any) => p.reviewStatus === 'in_review')
+                  ? items.length > 1
+                    ? `Uploaded photo to Google Photos gallery (in review: 12–48h). Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                    : `Photo uploaded to Google Photos gallery and is currently in Google Review (12–48h).`
+                  : items.length > 1
+                    ? `Published 1 photo to gallery. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                    : `Published photo to Google Maps Photos gallery.`
+            : `Scheduled ${uploadedPhotos.length} ${requestedPostType === 'whats_new' ? 'update post(s)' : 'photo(s)'} (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
     });
   } catch (error: unknown) {
     console.error('Error in photo upload/schedule:', error);

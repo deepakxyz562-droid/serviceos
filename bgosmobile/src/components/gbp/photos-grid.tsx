@@ -175,7 +175,7 @@ function PhotoCell({
         ) : null}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          {photo.reviewStatus === 'in_review' ? (
+          {photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB')) ? (
             <View
               style={{
                 backgroundColor: '#D97706',
@@ -211,6 +211,21 @@ function PhotoCell({
               }}
             >
               <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>Scheduled</Text>
+            </View>
+          ) : photo.source === 'google' ? (
+            <View
+              style={{
+                backgroundColor: '#059669',
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 2,
+              }}
+            >
+              <MaterialIcons name="check" size={10} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>Live on Maps</Text>
             </View>
           ) : null}
 

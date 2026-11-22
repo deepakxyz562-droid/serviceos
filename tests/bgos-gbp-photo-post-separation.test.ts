@@ -172,6 +172,42 @@ describe('GBP Photos & Posts Separation, Concurrency & Review Status', () => {
     expect(uploadBody.results[0].statusLabel).toBe('In Google Review (12–48h)');
   });
 
+  it('POST /api/social/photos honors postType: whats_new when user chooses Update Post destination', async () => {
+    mocks.postFindFirst.mockResolvedValueOnce(null);
+    mocks.postFindUnique.mockResolvedValueOnce({
+      id: 'post-new-whats-new',
+      status: 'published',
+      publishTargets: JSON.stringify([
+        {
+          platform: 'googlebusiness',
+          externalPostId: 'accounts/112/locations/456/localPosts/987654321',
+          permalink: 'https://local.google.com/place?id=123&use=posts',
+        },
+      ]),
+    });
+
+    const updatePostReq = new NextRequest('https://serviceos.com/api/social/photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://images.unsplash.com/update-banner.jpg',
+        title: 'Flash Sale: Oil Change Special',
+        description: 'Call us now or stop by today!',
+        postType: 'whats_new',
+        scheduleMode: 'instant',
+      }),
+    });
+
+    const updatePostRes = await postPhotos(updatePostReq);
+    expect(updatePostRes.status).toBe(200);
+    const body = await updatePostRes.json();
+
+    expect(mocks.postCreate).toHaveBeenCalled();
+    const createdData = mocks.postCreate.mock.calls[0][0].data;
+    expect(createdData.gbpPostType).toBe('whats_new');
+    expect(body.message).toContain('Update post published live to Google Business Profile');
+  });
+
   it('POST /api/social/posts enforces in-flight lock and throttles same-day GBP posts', async () => {
     // 1. In-flight lock
     mocks.postFindFirst.mockResolvedValueOnce({ id: 'in-flight-photo-1', status: 'publishing' });
