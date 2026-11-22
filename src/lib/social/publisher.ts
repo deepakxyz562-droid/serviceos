@@ -430,6 +430,7 @@ export async function publishPost(postId: string): Promise<void> {
     finalStatus,
     failureReason,
     isScheduled: post.status === 'scheduled',
+    gbpPostType: post.gbpPostType ?? publishParams.gbpPostType,
   });
 }
 
@@ -778,6 +779,7 @@ async function notifyScheduledPostCompleted(params: {
   finalStatus: 'published' | 'partial' | 'failed';
   failureReason: string | null;
   isScheduled?: boolean;
+  gbpPostType?: string | null;
 }): Promise<void> {
   try {
     if (typeof (db as any).user?.findMany !== 'function') {
@@ -804,30 +806,87 @@ async function notifyScheduledPostCompleted(params: {
       params.finalStatus,
     );
 
-    const cleanSnippet = (params.content || (params.isScheduled ? 'Scheduled post' : 'Post')).replace(/\s+/g, ' ').trim().slice(0, 75);
+    const gbpTarget = params.results.find((r) => r.platform === 'googlebusiness');
+    const isPhotoMedia =
+      params.gbpPostType === 'photo_media' ||
+      Boolean(gbpTarget?.externalPostId && gbpTarget.externalPostId.includes('/media/'));
+    const isGbpReview = Boolean(
+      isPhotoMedia &&
+      gbpTarget?.status === 'published' &&
+      gbpTarget?.externalPostId &&
+      gbpTarget.externalPostId.includes('CIAB'),
+    );
+
+    const cleanSnippet = (params.content || (params.isScheduled ? 'Scheduled post' : 'Post'))
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 75);
     const prefix = params.isScheduled ? 'Scheduled post' : 'Post';
-    const title =
-      params.finalStatus === 'published'
-        ? `${prefix} published`
-        : params.finalStatus === 'partial'
-        ? `${prefix} partially published`
-        : `${prefix} failed to publish`;
 
-    const message =
-      params.finalStatus === 'published'
-        ? googleUrl
-          ? `"${cleanSnippet}" is now live on Google. Tap to view your post.`
-          : `"${cleanSnippet}" has been published successfully.`
-        : params.finalStatus === 'partial'
-        ? `"${cleanSnippet}" published to some channels with errors.`
-        : `Could not publish "${cleanSnippet}": ${(params.failureReason || 'Check connected channels').slice(0, 110)}`;
+    let title: string;
+    let message: string;
+    let actionLabel: string;
+    let actionUrl: string;
+    let notificationMode: 'photos' | 'posts';
+    let notificationPill: string;
 
-    const actionUrl = `/app?product=bgos&view=socialMedia&socialTab=posts&postId=${encodeURIComponent(params.postId)}`;
+    if (isPhotoMedia) {
+      notificationMode = 'photos';
+      actionUrl = `/app?product=bgos&view=socialMedia&socialTab=photos`;
+
+      if (params.finalStatus === 'published') {
+        if (isGbpReview) {
+          title = 'Photo uploaded · In Google Review';
+          message =
+            'Your photo was uploaded to Google Business Profile and is currently in Google Review (12–48h) before appearing on Google Maps.';
+          actionLabel = 'View Photos Gallery';
+          notificationPill = 'uploaded';
+        } else {
+          title = 'Photo live on Google Maps';
+          message = 'Your photo is live on your Google Business Profile photo gallery.';
+          actionLabel = 'View Photos Gallery';
+          notificationPill = 'uploaded';
+        }
+      } else if (params.finalStatus === 'partial') {
+        title = 'Photo partially published';
+        message = 'Your photo was uploaded with errors on some channels.';
+        actionLabel = 'View Photos';
+        notificationPill = 'unposted';
+      } else {
+        title = 'Photo failed to upload';
+        message = `Could not upload photo: ${(params.failureReason || 'Check connected channels').slice(0, 110)}`;
+        actionLabel = 'View Photos';
+        notificationPill = 'unposted';
+      }
+    } else {
+      notificationMode = 'posts';
+      actionUrl = `/app?product=bgos&view=socialMedia&socialTab=posts&postId=${encodeURIComponent(params.postId)}`;
+      actionLabel = googleUrl ? 'View Post on Google' : 'View Post';
+      notificationPill = params.finalStatus === 'failed' ? 'failed' : 'posted';
+
+      title =
+        params.finalStatus === 'published'
+          ? `${prefix} published`
+          : params.finalStatus === 'partial'
+          ? `${prefix} partially published`
+          : `${prefix} failed to publish`;
+
+      message =
+        params.finalStatus === 'published'
+          ? googleUrl
+            ? `"${cleanSnippet}" is now live on Google. Tap to view your post.`
+            : `"${cleanSnippet}" has been published successfully.`
+          : params.finalStatus === 'partial'
+          ? `"${cleanSnippet}" published to some channels with errors.`
+          : `Could not publish "${cleanSnippet}": ${(params.failureReason || 'Check connected channels').slice(0, 110)}`;
+    }
+
     const metadataJson = JSON.stringify({
       postId: params.postId,
       status: params.finalStatus,
       googleUrl: googleUrl || null,
       url: actionUrl,
+      reviewStatus: isGbpReview ? 'in_review' : 'approved',
     });
 
     const canCreateNotif = typeof (db as any).appNotification?.create === 'function';
@@ -848,7 +907,7 @@ async function notifyScheduledPostCompleted(params: {
           title,
           message,
           actionUrl,
-          actionLabel: googleUrl ? 'View Post on Google' : 'View Post',
+          actionLabel,
           priority: params.finalStatus === 'failed' ? 'high' : 'normal',
           metadataJson,
         }).catch(() => {});
@@ -862,8 +921,8 @@ async function notifyScheduledPostCompleted(params: {
           tag: `social-post-${params.postId}`,
           data: {
             route: '/(tabs)/marketing',
-            mode: 'posts',
-            pill: params.finalStatus === 'failed' ? 'failed' : 'posted',
+            mode: notificationMode,
+            pill: notificationPill,
             postId: params.postId,
             ...(googleUrl ? { googleUrl } : {}),
           },

@@ -73,25 +73,32 @@ export function MediaPreviewModal({
   const canEdit = canManageQueue && Boolean(onEdit);
   const queueItemId = item.postId || item.id;
   const statusLabel =
-    item.source === 'google'
-      ? 'Published on Google'
-      : item.status === 'failed'
-        ? 'Failed to Post'
-        : item.status === 'scheduled' || item.status === 'publishing'
-          ? 'Scheduled'
-          : 'Draft (Not Posted)';
+    item.reviewStatus === 'in_review'
+      ? 'In Google Review (12–48h)'
+      : item.statusLabel
+        ? item.statusLabel
+        : item.source === 'google'
+          ? 'Live on Google Maps'
+          : item.status === 'failed'
+            ? 'Failed to Post'
+            : item.status === 'scheduled' || item.status === 'publishing'
+              ? 'Scheduled'
+              : 'Draft (Not Posted)';
 
   const handlePublishNow = async () => {
     if (!canManageQueue || busyAction) return;
     setBusyAction('publish');
     try {
-      await apiRequest<{ success?: boolean }>('/api/social/photos', {
+      const res = await apiRequest<{ success?: boolean; message?: string; reviewStatus?: string }>('/api/social/photos', {
         method: 'PATCH',
         body: { postId: queueItemId, publishNow: true },
       });
       await onPublished?.(item);
       onClose();
-      Alert.alert('Published!', `${isVideo ? 'Video' : 'Photo'} uploaded live to Google Business Profile.`);
+      Alert.alert(
+        res?.reviewStatus === 'in_review' ? 'Uploaded to Google' : 'Published!',
+        res?.message || `${isVideo ? 'Video' : 'Photo'} uploaded to Google Business Profile.`,
+      );
     } catch (err: unknown) {
       Alert.alert('Publish Failed', err instanceof Error ? err.message : 'Could not publish media to Google.');
     } finally {

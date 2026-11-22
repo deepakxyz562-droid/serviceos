@@ -275,6 +275,8 @@ export type GbpPhoto = {
   createdAt: string;
   source: 'google' | 'queue';
   status?: string;
+  reviewStatus?: 'in_review' | 'approved';
+  statusLabel?: string;
   caption?: string;
   failureReason?: string;
   /** ISO date the scheduler will publish this queued photo (server-computed). */
@@ -285,6 +287,10 @@ export type PhotosResponse = {
   photos: GbpPhoto[];
   liveCount: number;
   queuedCount: number;
+  scheduledCount?: number;
+  notPostedCount?: number;
+  hasInReviewPhoto?: boolean;
+  hasActivePublishing?: boolean;
   isConnected?: boolean;
   connectionState?: GbpConnectionState;
   locale?: {

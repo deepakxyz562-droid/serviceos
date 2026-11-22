@@ -331,6 +331,8 @@ export async function GET(request: NextRequest) {
             (mediaFormat !== 'VIDEO' || m.thumbnailUrl !== m.googleUrl)
               ? m.thumbnailUrl
               : undefined;
+          const shortId = m.name ? m.name.split('/').pop() || '' : '';
+          const isPendingReview = shortId.startsWith('CIAB');
           return {
             id: m.name || `gmedia-${idx}`,
             url: m.googleUrl,
@@ -340,6 +342,9 @@ export async function GET(request: NextRequest) {
             source: 'google' as const,
             mediaFormat,
             caption: m.category ? `Google Business Profile · ${m.category}` : undefined,
+            reviewStatus: isPendingReview ? ('in_review' as const) : ('approved' as const),
+            status: isPendingReview ? 'in_review' : 'published',
+            statusLabel: isPendingReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
           };
         });
       } catch (err: unknown) {
@@ -434,6 +439,8 @@ export async function GET(request: NextRequest) {
     const notPostedCount = queuedPhotos.filter(
       (p) => p.status === 'draft' || p.status === 'failed',
     ).length;
+    const hasInReviewPhoto = livePhotos.some((p: any) => p.reviewStatus === 'in_review');
+    const hasActivePublishing = candidatePosts.some((p) => p.status === 'publishing');
 
     return NextResponse.json({
       photos: [...livePhotos, ...queuedPhotos],
@@ -441,6 +448,8 @@ export async function GET(request: NextRequest) {
       queuedCount: queuedPhotos.length,
       scheduledCount,
       notPostedCount,
+      hasInReviewPhoto,
+      hasActivePublishing,
       isConnected,
       connectionState,
       locale,
@@ -552,6 +561,24 @@ export async function POST(request: NextRequest) {
       body.scheduleMode || 'instant';
     const requestedPostType = typeof body.postType === 'string' ? body.postType.trim() : undefined;
 
+    // Concurrency guard: block simultaneous instant publishing while another post/photo is in-flight
+    if (scheduleMode === 'instant') {
+      const activePublishing = await db.socialPost.findFirst({
+        where: { tenantId: user.tenantId, status: 'publishing' },
+        select: { id: true },
+      });
+      if (activePublishing) {
+        return NextResponse.json(
+          {
+            error:
+              'Another post or photo is currently being published to Google. Please wait a moment for it to complete.',
+            code: 'PUBLISH_IN_PROGRESS',
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
       select: {
@@ -618,110 +645,37 @@ export async function POST(request: NextRequest) {
     });
 
     if (scheduleMode === 'instant') {
-      for (const item of items) {
-        const publicItemUrl = toPublicMediaUrl(item.url, request);
-        const effectiveDescription = buildDescriptionWithKeywords(
-          item.description || `Recent work and services at ${businessName}`,
-          item.title,
-          item.tags,
-        );
-        const seoFields = buildSeoFields(item);
-        const isVideo = item.mediaFormat === 'VIDEO';
-        const effectivePostType = isVideo
-          ? 'photo_media'
-          : requestedPostType === 'photo_media'
-          ? 'photo_media'
-          : 'whats_new';
-        const mediaMetaObj: StoredMediaMeta = {
-          gbpPostType: effectivePostType,
-          title: item.title || `${businessName} Showcase`,
-          ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
-          tags: item.tags || [],
-          category: item.category || 'ADDITIONAL',
-          mediaFormat: item.mediaFormat || 'PHOTO',
-          ...seoFields,
-        };
-        const mediaMetaJson = JSON.stringify(mediaMetaObj);
+      // In instant mode: publish the first photo immediately.
+      // If multiple photos are submitted, auto-schedule subsequent photos into the daily drip queue
+      // to avoid Google automated spam filters and Cloud Vision rate limits.
+      const firstItem = items[0];
+      const publicItemUrl = toPublicMediaUrl(firstItem.url, request);
+      const effectiveDescription = buildDescriptionWithKeywords(
+        firstItem.description || `Recent work and services at ${businessName}`,
+        firstItem.title,
+        firstItem.tags,
+      );
+      const seoFields = buildSeoFields(firstItem);
+      const isVideo = firstItem.mediaFormat === 'VIDEO';
+      const effectivePostType = isVideo
+        ? 'photo_media'
+        : requestedPostType === 'whats_new' || requestedPostType === 'offer'
+        ? requestedPostType
+        : 'photo_media';
+      const mediaMetaObj: StoredMediaMeta = {
+        gbpPostType: effectivePostType,
+        title: firstItem.title || `${businessName} Showcase`,
+        ...(firstItem.thumbnailUrl ? { thumbnailUrl: firstItem.thumbnailUrl } : {}),
+        tags: firstItem.tags || [],
+        category: firstItem.category || 'ADDITIONAL',
+        mediaFormat: firstItem.mediaFormat || 'PHOTO',
+        ...seoFields,
+      };
+      const mediaMetaJson = JSON.stringify(mediaMetaObj);
 
-        if (googleAccount) {
-          try {
-            const postRecord = await db.socialPost.create({
-              data: {
-                tenantId: user.tenantId,
-                status: 'draft',
-                content: effectiveDescription,
-                mediaUrls: JSON.stringify([publicItemUrl]),
-                publishTargets: JSON.stringify([
-                  {
-                    platform: 'googlebusiness',
-                    socialAccountId: googleAccount.id,
-                    status: 'pending',
-                    mediaMeta: mediaMetaObj,
-                  },
-                ]),
-                scheduledAt: null,
-                gbpPostType: effectivePostType,
-                gbpOfferData: mediaMetaJson,
-                createdById: user.id || 'system',
-              },
-            });
-
-            await publishPost(postRecord.id);
-
-            const finished = await db.socialPost.findUnique({
-              where: { id: postRecord.id },
-              select: { status: true, publishTargets: true, failureReason: true },
-            });
-            const finishedTargets = parsePublishTargetsRaw(finished?.publishTargets);
-            const gbpRes = finishedTargets.find((t) => t.platform === 'googlebusiness');
-
-            uploadedPhotos.push({
-              id: postRecord.id,
-              url: gbpRes?.permalink || publicItemUrl,
-              thumbnailUrl: item.thumbnailUrl,
-              status: finished?.status === 'published' ? 'published' : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
-              title: item.title,
-              tags: item.tags,
-              ...seoFields,
-            });
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.warn('[social/photos] Instant publish warning:', msg);
-            // Persist in Not Posted queue with failure reason so user never loses media or metadata
-            const savedDraft = await db.socialPost.create({
-              data: {
-                tenantId: user.tenantId,
-                status: 'draft',
-                content: effectiveDescription,
-                mediaUrls: JSON.stringify([publicItemUrl]),
-                publishTargets: JSON.stringify([
-                  {
-                    platform: 'googlebusiness',
-                    socialAccountId: googleAccount.id,
-                    status: 'pending',
-                    error: msg,
-                    mediaMeta: mediaMetaObj,
-                  },
-                ]),
-                scheduledAt: null,
-                gbpPostType: effectivePostType,
-                gbpOfferData: mediaMetaJson,
-                failureReason: msg.slice(0, 500),
-                createdById: user.id || 'system',
-              },
-            });
-            uploadedPhotos.push({
-              id: savedDraft.id,
-              url: publicItemUrl,
-              thumbnailUrl: item.thumbnailUrl,
-              status: `saved_locally: ${msg}`,
-              title: item.title,
-              tags: item.tags,
-              ...seoFields,
-            });
-          }
-        } else {
-          const savedDraft = await db.socialPost.create({
+      if (googleAccount) {
+        try {
+          const postRecord = await db.socialPost.create({
             data: {
               tenantId: user.tenantId,
               status: 'draft',
@@ -730,7 +684,7 @@ export async function POST(request: NextRequest) {
               publishTargets: JSON.stringify([
                 {
                   platform: 'googlebusiness',
-                  socialAccountId: '',
+                  socialAccountId: googleAccount.id,
                   status: 'pending',
                   mediaMeta: mediaMetaObj,
                 },
@@ -741,14 +695,172 @@ export async function POST(request: NextRequest) {
               createdById: user.id || 'system',
             },
           });
+
+          await publishPost(postRecord.id);
+
+          const finished = await db.socialPost.findUnique({
+            where: { id: postRecord.id },
+            select: { status: true, publishTargets: true, failureReason: true },
+          });
+          const finishedTargets = parsePublishTargetsRaw(finished?.publishTargets);
+          const gbpRes = finishedTargets.find((t) => t.platform === 'googlebusiness');
+          const isReview = Boolean(
+            gbpRes?.externalPostId && gbpRes.externalPostId.includes('CIAB'),
+          );
+
+          uploadedPhotos.push({
+            id: postRecord.id,
+            url: gbpRes?.permalink || publicItemUrl,
+            thumbnailUrl: firstItem.thumbnailUrl,
+            status:
+              finished?.status === 'published'
+                ? isReview
+                  ? 'in_review'
+                  : 'published'
+                : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
+            reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
+            statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
+            title: firstItem.title,
+            tags: firstItem.tags,
+            ...seoFields,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn('[social/photos] Instant publish warning:', msg);
+          const savedDraft = await db.socialPost.create({
+            data: {
+              tenantId: user.tenantId,
+              status: 'draft',
+              content: effectiveDescription,
+              mediaUrls: JSON.stringify([publicItemUrl]),
+              publishTargets: JSON.stringify([
+                {
+                  platform: 'googlebusiness',
+                  socialAccountId: googleAccount.id,
+                  status: 'pending',
+                  error: msg,
+                  mediaMeta: mediaMetaObj,
+                },
+              ]),
+              scheduledAt: null,
+              gbpPostType: effectivePostType,
+              gbpOfferData: mediaMetaJson,
+              failureReason: msg.slice(0, 500),
+              createdById: user.id || 'system',
+            },
+          });
           uploadedPhotos.push({
             id: savedDraft.id,
             url: publicItemUrl,
+            thumbnailUrl: firstItem.thumbnailUrl,
+            status: `saved_locally: ${msg}`,
+            title: firstItem.title,
+            tags: firstItem.tags,
+            ...seoFields,
+          });
+        }
+      } else {
+        const savedDraft = await db.socialPost.create({
+          data: {
+            tenantId: user.tenantId,
+            status: 'draft',
+            content: effectiveDescription,
+            mediaUrls: JSON.stringify([publicItemUrl]),
+            publishTargets: JSON.stringify([
+              {
+                platform: 'googlebusiness',
+                socialAccountId: '',
+                status: 'pending',
+                mediaMeta: mediaMetaObj,
+              },
+            ]),
+            scheduledAt: null,
+            gbpPostType: effectivePostType,
+            gbpOfferData: mediaMetaJson,
+            createdById: user.id || 'system',
+          },
+        });
+        uploadedPhotos.push({
+          id: savedDraft.id,
+          url: publicItemUrl,
+          thumbnailUrl: firstItem.thumbnailUrl,
+          status: 'saved_locally (Google account not connected)',
+          title: firstItem.title,
+          tags: firstItem.tags,
+          ...seoFields,
+        });
+      }
+
+      // If more than 1 item was selected, schedule remaining items daily to avoid Google spam flags
+      if (items.length > 1) {
+        const now = new Date();
+        for (let i = 1; i < items.length; i++) {
+          const item = items[i];
+          const itemPublicUrl = toPublicMediaUrl(item.url, request);
+          const scheduledTime = computeLocalScheduledDate({
+            dayOffset: i,
+            hour: preferredHour,
+            minute: preferredMinute,
+            timeZone: locale.timeZone,
+            now,
+          });
+          const caption = buildDescriptionWithKeywords(
+            item.description || `Recent work and services at ${businessName}`,
+            item.title,
+            item.tags,
+          );
+          const subSeoFields = buildSeoFields(item);
+          const subIsVideo = item.mediaFormat === 'VIDEO';
+          const subPostType = subIsVideo
+            ? 'photo_media'
+            : requestedPostType === 'whats_new' || requestedPostType === 'offer'
+            ? requestedPostType
+            : 'photo_media';
+
+          const subMetaObj: StoredMediaMeta = {
+            gbpPostType: subPostType,
+            title: item.title || `${businessName} Showcase`,
+            ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
+            tags: item.tags || [],
+            category: item.category || 'ADDITIONAL',
+            mediaFormat: item.mediaFormat || 'PHOTO',
+            scheduledFor: scheduledTime.toISOString(),
+            timeZone: locale.timeZone,
+            country: locale.country,
+            ...subSeoFields,
+          };
+
+          const created = await db.socialPost.create({
+            data: {
+              tenantId: user.tenantId,
+              status: 'scheduled',
+              content: caption,
+              mediaUrls: JSON.stringify([itemPublicUrl]),
+              publishTargets: JSON.stringify([
+                {
+                  platform: 'googlebusiness',
+                  socialAccountId: googleAccount?.id || '',
+                  status: 'pending',
+                  mediaMeta: subMetaObj,
+                },
+              ]),
+              scheduledAt: scheduledTime,
+              gbpPostType: subPostType,
+              gbpOfferData: JSON.stringify(subMetaObj),
+              createdById: user.id || 'system',
+            },
+          });
+
+          uploadedPhotos.push({
+            id: created.id,
+            url: itemPublicUrl,
             thumbnailUrl: item.thumbnailUrl,
-            status: 'saved_locally (Google account not connected)',
+            status: 'scheduled',
+            statusLabel: `Scheduled for ${scheduledTime.toLocaleDateString()}`,
+            scheduledAt: scheduledTime.toISOString(),
             title: item.title,
             tags: item.tags,
-            ...seoFields,
+            ...subSeoFields,
           });
         }
       }
@@ -764,9 +876,9 @@ export async function POST(request: NextRequest) {
         const isVideo = item.mediaFormat === 'VIDEO';
         const effectivePostType = isVideo
           ? 'photo_media'
-          : requestedPostType === 'photo_media'
-          ? 'photo_media'
-          : 'whats_new';
+          : requestedPostType === 'whats_new' || requestedPostType === 'offer'
+          ? requestedPostType
+          : 'photo_media';
         const mediaMetaObj: StoredMediaMeta = {
           gbpPostType: effectivePostType,
           title: item.title || `${businessName} Media`,
@@ -840,9 +952,9 @@ export async function POST(request: NextRequest) {
         const isVideo = item.mediaFormat === 'VIDEO';
         const effectivePostType = isVideo
           ? 'photo_media'
-          : requestedPostType === 'photo_media'
-          ? 'photo_media'
-          : 'whats_new';
+          : requestedPostType === 'whats_new' || requestedPostType === 'offer'
+          ? requestedPostType
+          : 'photo_media';
 
         const mediaMetaObj: StoredMediaMeta = {
           gbpPostType: effectivePostType,
@@ -917,7 +1029,13 @@ export async function POST(request: NextRequest) {
           : scheduleMode === 'instant'
             ? savedLocalCount > 0 && publishedCount === 0
               ? `Saved ${uploadedPhotos.length} media item(s) in BGOS (connect Google Business Profile to publish live).`
-              : `Published ${publishedCount} media item(s) to Google Business Profile.`
+              : uploadedPhotos.some((p: any) => p.reviewStatus === 'in_review')
+                ? items.length > 1
+                  ? `Uploaded photo to Google (in review: 12–48h). Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                  : `Photo uploaded to Google Business Profile and is now in Google Review (12–48h).`
+                : items.length > 1
+                  ? `Published 1 photo live. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                  : `Published photo to Google Business Profile.`
             : `Scheduled ${uploadedPhotos.length} media item(s) (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
     });
   } catch (error: unknown) {
@@ -983,11 +1101,11 @@ export async function PATCH(request: NextRequest) {
     const isVideo = mediaFormat === 'VIDEO';
     const effectivePostType = isVideo
       ? 'photo_media'
-      : requestedPostType === 'photo_media'
-      ? 'photo_media'
-      : (existing.gbpPostType === 'photo_media' && !body.description && !existing.content)
-      ? 'photo_media'
-      : (requestedPostType || (existing.gbpPostType && existing.gbpPostType !== 'photo_media' ? existing.gbpPostType : 'whats_new'));
+      : requestedPostType === 'whats_new' || requestedPostType === 'offer'
+      ? requestedPostType
+      : (existing.gbpPostType === 'whats_new' || existing.gbpPostType === 'offer') && !requestedPostType
+      ? existing.gbpPostType
+      : 'photo_media';
 
     const nextMeta: StoredMediaMeta = {
       ...meta,
@@ -1010,6 +1128,22 @@ export async function PATCH(request: NextRequest) {
     const wantPublishNow = body.publishNow === true || body.status === 'published';
 
     if (wantPublishNow) {
+      // In-flight concurrency lock
+      const activePublishing = await db.socialPost.findFirst({
+        where: { tenantId: user.tenantId, status: 'publishing' },
+        select: { id: true },
+      });
+      if (activePublishing) {
+        return NextResponse.json(
+          {
+            error:
+              'Another post or media item is currently being published to Google. Please wait a moment for it to complete.',
+            code: 'PUBLISH_IN_PROGRESS',
+          },
+          { status: 409 },
+        );
+      }
+
       if (!rawUrl) {
         return NextResponse.json({ error: 'Media URL is missing on this queued item.' }, { status: 400 });
       }
@@ -1058,17 +1192,28 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: errMsg }, { status: 502 });
       }
 
+      const isReview = Boolean(
+        gbpTarget?.externalPostId && gbpTarget.externalPostId.includes('CIAB'),
+      );
+
       return NextResponse.json({
         success: true,
         published: true,
         googleUrl: gbpTarget?.permalink || sourceUrl,
+        reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
+        statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
+        message: isReview
+          ? 'Photo uploaded to Google Business Profile and is now in Google Review (takes 12–48h).'
+          : 'Photo published live to Google Business Profile.',
         item: {
           id: existing.id,
           title: baseMeta.title,
           description: publishedPost?.content || effectiveDescription,
           tags: baseMeta.tags || [],
           category: baseMeta.category || 'ADDITIONAL',
-          status: publishedPost?.status || 'published',
+          status: isReview ? 'in_review' : publishedPost?.status || 'published',
+          reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
+          statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
           url: gbpTarget?.permalink || sourceUrl,
           scheduledFor: null,
         },

@@ -448,7 +448,7 @@ export const useMediaUploadStore = create<MediaUploadStoreState>((set, get) => {
         }>('/api/social/photos', {
           method: 'POST',
           body: {
-            postType: 'whats_new',
+            postType: 'photo_media',
             items: payloadItems,
             photos: payloadItems.map((i) => i.url),
             title: config.title.trim(),

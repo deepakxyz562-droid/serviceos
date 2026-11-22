@@ -175,7 +175,22 @@ function PhotoCell({
         ) : null}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          {unposted ? (
+          {photo.reviewStatus === 'in_review' ? (
+            <View
+              style={{
+                backgroundColor: '#D97706',
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              <MaterialIcons name="schedule" size={10} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>In Review (12–48h)</Text>
+            </View>
+          ) : unposted ? (
             <View
               style={{
                 backgroundColor: colors.danger,
@@ -536,6 +551,20 @@ export function PhotosBoard({
           <Text style={{ color: colors.success, fontWeight: '700', fontSize: 13 }}>✓ {notice}</Text>
         </Card>
       ) : null}
+
+      {data?.hasInReviewPhoto && (
+        <Card style={{ backgroundColor: '#FEF3C7', borderColor: '#F59E0B', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialIcons name="schedule" size={16} color="#B45309" />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400E' }}>
+              Photos in Google Review (12–48h)
+            </Text>
+          </View>
+          <Text style={{ fontSize: 12, lineHeight: 18, color: '#92400E' }}>
+            Google is currently reviewing recent photo uploads through automated moderation before making them public on Google Maps. New photos will appear on Google Maps once approved.
+          </Text>
+        </Card>
+      )}
 
       {!connected ? (
         <Card style={{ backgroundColor: colors.note, borderColor: colors.noteBorder, gap: 8 }}>

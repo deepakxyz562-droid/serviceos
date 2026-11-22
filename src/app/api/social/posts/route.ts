@@ -526,9 +526,66 @@ export async function POST(request: NextRequest) {
       requestedStatus === 'published' ||
       (requestedStatus === 'scheduled' && (!scheduledAt || scheduledAt.getTime() <= now.getTime()));
 
-    // The publisher must claim a queued post itself. Persisting 'publishing' here
-    // previously made publishPost skip it forever. Scheduled-now is also recoverable by cron.
-    const initialStatus = publishNow ? 'scheduled' : requestedStatus;
+    // In-flight concurrency lock: prevent concurrent instant publishes
+    if (publishNow && typeof (db as any).socialPost?.findFirst === 'function') {
+      const activePublishing = await db.socialPost.findFirst({
+        where: { tenantId, status: 'publishing' },
+        select: { id: true },
+      });
+      if (activePublishing) {
+        return NextResponse.json(
+          {
+            error:
+              'Another post or media item is currently being published to Google. Please wait a moment for it to complete.',
+            code: 'PUBLISH_IN_PROGRESS',
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // Rate-limiting / Safe throttling: If an update was published to GBP today,
+    // auto-schedule subsequent updates for tomorrow 10:00 AM unless forced.
+    const targetsGbp = body.targets.some((t) => t.platform === 'googlebusiness');
+    let effectiveScheduledAt = publishNow ? now : scheduledAt;
+    let autoScheduledMessage: string | undefined;
+
+    if (
+      publishNow &&
+      targetsGbp &&
+      (body as any).forcePublishNow !== true &&
+      typeof (db as any).socialPost?.findFirst === 'function'
+    ) {
+      const recentGbpPost = await db.socialPost.findFirst({
+        where: {
+          tenantId,
+          status: 'published',
+          publishedAt: { gte: new Date(Date.now() - 18 * 60 * 60 * 1000) },
+          gbpPostType: { not: 'photo_media' },
+        },
+        select: { id: true, publishedAt: true },
+      });
+
+      if (recentGbpPost) {
+        const { resolveTenantLocale, computeLocalScheduledDate } = await import('@/lib/locale-timezone');
+        const locale = resolveTenantLocale({
+          tenantCountry: tenantRecord?.country,
+          settingsJson: tenantRecord?.settingsJson,
+        });
+        effectiveScheduledAt = computeLocalScheduledDate({
+          dayOffset: 1,
+          hour: 10,
+          minute: 0,
+          timeZone: locale.timeZone,
+          now,
+        });
+        autoScheduledMessage = `An update was already published to Google today. To protect search ranking and prevent spam penalties, this post has been scheduled for tomorrow at 10:00 AM (${locale.timeZone}).`;
+      }
+    }
+
+    const isAutoScheduled = Boolean(autoScheduledMessage);
+    const effectivePublishNow = publishNow && !isAutoScheduled;
+    const initialStatus = effectivePublishNow ? 'scheduled' : (isAutoScheduled ? 'scheduled' : requestedStatus);
 
     // Build the initial publishTargets JSON (all targets 'pending').
     const publishTargets: PublishTarget[] = body.targets.map((t) => ({
@@ -587,7 +644,7 @@ export async function POST(request: NextRequest) {
         mediaUrls: JSON.stringify(body.mediaUrls || []),
         linkUrl: body.linkUrl || null,
         publishTargets: JSON.stringify(publishTargets),
-        scheduledAt: publishNow ? now : scheduledAt,
+        scheduledAt: effectiveScheduledAt,
         publishedAt: null,
         failureReason: null,
         gbpPostType: body.gbpPostType || (body.gbpOfferData ? 'offer' : null),
@@ -646,7 +703,7 @@ export async function POST(request: NextRequest) {
 
     // If publish-now, fire the orchestrator.
     // The orchestrator runs in background and the UI polls /api/social/posts/[id] for completion.
-    if (publishNow) {
+    if (effectivePublishNow) {
       if (typeof after === 'function') {
         try {
           after(() => publishPost(post.id));
@@ -669,6 +726,7 @@ export async function POST(request: NextRequest) {
           mediaUrls: safeJsonArray(post.mediaUrls),
           publishTargets: safeJsonArray(post.publishTargets),
         },
+        ...(autoScheduledMessage ? { message: autoScheduledMessage, autoScheduled: true } : {}),
       },
       { status: 201 },
     );
