@@ -6,6 +6,7 @@ import {
   getPublicAppUrl,
   renderOAuthErrorPage,
   renderOAuthSuccessPage,
+  resolveOAuthOrigin,
 } from '@/lib/social/oauth-page';
 import { logActivity } from '@/lib/activity-log';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
@@ -49,6 +50,15 @@ export async function GET(request: NextRequest) {
 
   // 1. Provider-side error (user denied, app misconfigured, etc.)
   if (errorParam) {
+    if (stateParam) {
+      const decodedEarly = decodeOAuthState(stateParam, 'linkedin');
+      const mobileReturn = (decodedEarly?.v as any)?.returnUrl;
+      if (mobileReturn && mobileReturn.startsWith('bgos://')) {
+        const mobileRedirect = new URL(mobileReturn);
+        mobileRedirect.searchParams.set('error', errorDescription || errorParam);
+        return NextResponse.redirect(mobileRedirect.toString());
+      }
+    }
     return renderOAuthErrorPage({
       provider: 'linkedin',
       message: `LinkedIn denied authorization: ${errorDescription || errorParam}`,
@@ -74,7 +84,7 @@ export async function GET(request: NextRequest) {
   // 3. Look up the superadmin OAuth app credentials.
   const cred = await db.integrationCredential.findFirst({
     where: { provider: 'linkedin', status: 'active' },
-    select: { clientId: true, clientSecret: true },
+    select: { clientId: true, clientSecret: true, redirectUri: true },
   });
 
   const clientId =
@@ -97,8 +107,12 @@ export async function GET(request: NextRequest) {
   }
 
   const meta = OAUTH_PROVIDERS.linkedin;
-  const appUrl = getPublicAppUrl(request);
-  const redirectUri = `${appUrl}/api/oauth/linkedin/callback`;
+  const stateRedirectUri = (state.v as any)?.redirectUri;
+  const stateOrigin = (state.v as any)?.originHost;
+  const redirectUri =
+    stateRedirectUri ||
+    cred?.redirectUri?.trim() ||
+    `${resolveOAuthOrigin(request, stateOrigin)}/api/oauth/linkedin/callback`;
 
   // 4. Exchange code for tokens.
   let tokenResponse: {
@@ -411,12 +425,22 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 8. Render success page.
+  // 8. Render success page or mobile app redirect.
   const primaryLabel = accountsConnected[0] || personalName;
   const note =
     accountsConnected.length > 1
       ? `${accountsConnected.length} accounts connected: ${accountsConnected.join(', ')}`
       : undefined;
+
+  const returnUrl = (state.v as any)?.returnUrl;
+  if (returnUrl && returnUrl.startsWith('bgos://')) {
+    const mobileRedirect = new URL(returnUrl);
+    mobileRedirect.searchParams.set('connected', 'linkedin');
+    mobileRedirect.searchParams.set('status', 'success');
+    mobileRedirect.searchParams.set('accounts', String(accountsConnected.length));
+    mobileRedirect.searchParams.set('accountLabel', primaryLabel);
+    return NextResponse.redirect(mobileRedirect.toString());
+  }
 
   return renderOAuthSuccessPage({
     provider: 'linkedin',

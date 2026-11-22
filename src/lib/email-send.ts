@@ -28,6 +28,8 @@ export interface SendEmailOptions {
   // When provided, overrides the provider's default from-address.
   // Format: "Name <email@domain.com>" or just "email@domain.com"
   from?: string
+  // Display name override (e.g. "BGOS Growth Team") while retaining the provider's verified fromEmail
+  fromName?: string
   // Reply-To address (defaults to the from-address)
   replyTo?: string
   // Specific EmailProvider ID (new model)
@@ -659,13 +661,20 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       }
     }
 
+    const effectiveFromName = (options.fromName || config.fromName || '').trim()
+    const fromAddress = options.from
+      ? options.from
+      : effectiveFromName
+        ? `"${effectiveFromName}" <${config.fromEmail}>`
+        : config.fromEmail
+
     const info = await transporter.sendMail({
-      from: `"${config.fromName}" <${config.fromEmail}>`,
+      from: fromAddress,
       to,
       subject,
       html: finalHtml || finalText,
       text: finalText || undefined,
-      replyTo: config.replyTo,
+      replyTo: options.replyTo || config.replyTo,
       ...(options.attachments?.length ? { attachments: options.attachments } : {}),
       ...(Object.keys(mailHeaders).length ? { headers: mailHeaders } : {}),
     })

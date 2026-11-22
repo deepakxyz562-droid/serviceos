@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import {
   encodeOAuthState,
   getPublicAppUrl,
+  resolveOAuthOrigin,
 } from '@/lib/social/oauth-page';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
   // 2. Look up superadmin-configured OAuth app credentials.
   const cred = await db.integrationCredential.findFirst({
     where: { provider: 'linkedin', status: 'active' },
-    select: { clientId: true, clientSecret: true, scopes: true },
+    select: { clientId: true, clientSecret: true, scopes: true, redirectUri: true },
   });
 
   const clientId =
@@ -68,25 +69,36 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 3. Build state (CSRF token — tenantId + userId + provider + ts).
+  // 3. Resolve redirect URI and context
+  const searchParams = request.nextUrl.searchParams;
+  const originHostParam = searchParams.get('originHost');
+  const returnUrlParam = searchParams.get('returnUrl') || searchParams.get('redirectUri');
+  const effectiveOrigin = resolveOAuthOrigin(request, originHostParam);
+  const redirectUri = cred?.redirectUri?.trim() || `${effectiveOrigin}/api/oauth/linkedin/callback`;
+
+  // 4. Build state (CSRF token — tenantId + userId + provider + ts + v context).
   const state = encodeOAuthState({
     tenantId: authUser.tenantId,
     userId: authUser.id,
     provider: 'linkedin',
+    v: {
+      redirectUri,
+      originHost: effectiveOrigin,
+      returnUrl: returnUrlParam || undefined,
+    },
     ts: Date.now(),
   });
 
-  // 4. Build the authorization URL.
+  // 5. Build the authorization URL.
   const meta = OAUTH_PROVIDERS.linkedin;
-  const appUrl = getPublicAppUrl(request);
-  const redirectUri = `${appUrl}/api/oauth/linkedin/callback`;
+  const scopes = cred?.scopes?.trim() || meta.scopes;
 
   const authUrl = new URL(meta.authUrl);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   // LinkedIn scopes are space-separated in the URL.
-  authUrl.searchParams.set('scope', meta.scopes);
+  authUrl.searchParams.set('scope', scopes);
   authUrl.searchParams.set('state', state);
 
   return NextResponse.redirect(authUrl.toString());

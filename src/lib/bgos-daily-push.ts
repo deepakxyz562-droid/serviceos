@@ -25,6 +25,43 @@ export interface DailyPromoCopy {
   actionLabel?: string;
 }
 
+/**
+ * Safely resolves the display business name for BGOS push/email campaigns,
+ * ensuring internal/support placeholder names (e.g. "Fieseros Support", "Support Workspace")
+ * are cleaned and GBP active business titles are prioritized.
+ */
+export function resolveEffectiveBusinessName(
+  tenant?: { name?: string | null; settingsJson?: string | null } | null,
+  brand?: { businessName?: string | null } | null,
+): string {
+  if (tenant?.settingsJson) {
+    try {
+      const parsed = JSON.parse(tenant.settingsJson);
+      if (typeof parsed?.activeGbpTitle === 'string' && parsed.activeGbpTitle.trim()) {
+        const title = parsed.activeGbpTitle.trim();
+        if (!/^(support|test|demo|placeholder)/i.test(title)) {
+          return title;
+        }
+      }
+    } catch {}
+  }
+
+  const rawCandidate = (brand?.businessName || tenant?.name || '').trim();
+  if (!rawCandidate) return 'Your Business';
+
+  // Strip trailing internal artifacts like " Support", " Support Workspace", " Workspace"
+  const cleaned = rawCandidate
+    .replace(/\s+(support\s+workspace|support|workspace|team)$/i, '')
+    .trim();
+
+  // Normalize casing for known platforms like "fieseros" -> "FieserOS"
+  if (/^fieseros$/i.test(cleaned)) {
+    return 'FieserOS';
+  }
+
+  return cleaned || rawCandidate || 'Your Business';
+}
+
 export interface DailyPushRunOptions {
   now?: Date;
   dryRun?: boolean;
@@ -533,7 +570,7 @@ export async function runBgosDailyPushBatch(
       const brand = (Array.isArray(brandProfiles) ? brandProfiles : []).find(
         (b: any) => b.tenantId === tenant.id,
       );
-      const businessName = brand?.businessName || tenant.name || 'Your Business';
+      const businessName = resolveEffectiveBusinessName(tenant, brand);
       const locale = resolveTenantLocale({
         tenantCountry: tenant.country,
         settingsJson: tenant.settingsJson,

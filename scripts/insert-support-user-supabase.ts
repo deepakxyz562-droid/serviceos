@@ -41,7 +41,7 @@ async function run() {
       method: 'POST',
       body: JSON.stringify({
         id: 'clsupporttenant00000000001',
-        name: 'Fieseros Support',
+        name: 'FieserOS',
         slug: 'fieseros-support-tenant',
         email,
         phone: '+91 61279 67087',
@@ -84,7 +84,7 @@ async function run() {
       method: 'POST',
       body: JSON.stringify({
         id: 'clsupportws0000000000001',
-        name: 'Fieseros Support Workspace',
+        name: 'FieserOS Workspace',
         slug: 'fieseros-support-bgos',
         productType: 'bgos',
         tenantId,

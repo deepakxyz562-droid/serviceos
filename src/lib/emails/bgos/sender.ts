@@ -295,6 +295,7 @@ export async function sendBgosVerificationEmail(params: {
 
   const res = await sendEmail({
     to: params.to.trim(),
+    fromName: 'BGOS Security',
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -341,6 +342,7 @@ export async function sendBgosPasswordResetEmail(params: {
 
   const res = await sendEmail({
     to: params.to.trim(),
+    fromName: 'BGOS Security',
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -421,6 +423,7 @@ export async function sendBgosWelcomeEmail(params: {
 
   const res = await sendEmail({
     to: email,
+    fromName: 'BGOS Growth Team',
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -492,6 +495,7 @@ export async function dispatchBgosEmail(params: {
 
   const res = await sendEmail({
     to: email,
+    fromName: 'BGOS Growth Team',
     subject: params.subject,
     html: params.html,
     text: params.text,
@@ -553,6 +557,7 @@ export async function sendBgosDailyActionChecklistEmail(params: {
 
   const res = await sendEmail({
     to: params.to.trim(),
+    fromName: 'BGOS Growth Team',
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -626,6 +631,7 @@ export async function sendBgosGbpUpdatePendingEmail(params: {
 
   const res = await sendEmail({
     to: targetEmail.trim(),
+    fromName: 'BGOS Growth Team',
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,

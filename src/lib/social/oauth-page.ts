@@ -205,3 +205,53 @@ export function getPublicAppUrl(request: {
 
   return 'http://localhost:3000';
 }
+
+/**
+ * Validate that an originHost is on an allowed domain (*.fieseros.com,
+ * *.bgos.site, canonical app URL, or localhost).
+ */
+export function isAllowedOAuthOriginHost(uriOrHost?: string | null): boolean {
+  if (!uriOrHost) return false;
+  try {
+    const raw = uriOrHost.trim();
+    const url = raw.startsWith('http://') || raw.startsWith('https://')
+      ? new URL(raw)
+      : new URL(`https://${raw}`);
+    const host = url.host.toLowerCase();
+    const canonical = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com').replace(/\/+$/, '');
+    const canonicalHost = new URL(canonical).host.toLowerCase();
+    if (host === canonicalHost) return true;
+    if (host === 'fieseros.com' || host.endsWith('.fieseros.com')) return true;
+    if (host === 'bgos.site' || host.endsWith('.bgos.site')) return true;
+    if (host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves the effective origin URL for OAuth redirect URIs.
+ * If originHostParam is given and matches an allowed domain, use it.
+ * Otherwise, if the request header (host / x-forwarded-host) matches an allowed domain, use it.
+ * Otherwise fall back to getPublicAppUrl(request).
+ */
+export function resolveOAuthOrigin(
+  request: { headers: { get(name: string): string | null }; url?: string },
+  originHostParam?: string | null,
+): string {
+  if (originHostParam && isAllowedOAuthOriginHost(originHostParam)) {
+    return originHostParam.replace(/\/+$/, '');
+  }
+
+  const headers = request.headers;
+  const forwardedProto = headers.get('x-forwarded-proto');
+  const forwardedHost = headers.get('x-forwarded-host');
+  const host = forwardedHost || headers.get('host');
+  if (host && isAllowedOAuthOriginHost(host)) {
+    const proto = forwardedProto || (host.startsWith('localhost') ? 'http' : 'https');
+    return `${proto}://${host}`.replace(/\/+$/, '');
+  }
+
+  return getPublicAppUrl(request);
+}

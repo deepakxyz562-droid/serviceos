@@ -27,7 +27,7 @@ async function main() {
   if (!tenant) {
     tenant = await db.tenant.create({
       data: {
-        name: 'Fieseros Support',
+        name: 'FieserOS',
         slug: 'fieseros-support-tenant',
         email,
         phone: '+91 61279 67087',
@@ -73,7 +73,7 @@ async function main() {
     } else {
       workspace = await db.workspace.create({
         data: {
-          name: 'Fieseros Support Workspace',
+          name: 'FieserOS Workspace',
           slug: 'fieseros-support-bgos',
           productType: 'bgos',
           tenantId: tenant.id,
