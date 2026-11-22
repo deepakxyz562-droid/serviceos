@@ -8,6 +8,7 @@ import {
   uploadGoogleBusinessMedia,
   listGoogleBusinessMedia,
 } from '@/lib/social/adapters/googlebusiness';
+import { publishPost } from '@/lib/social/publisher';
 import {
   resolveTenantLocale,
   computeLocalScheduledDate,
@@ -146,7 +147,6 @@ function isPhotoMediaRow(post: {
   mediaUrls?: unknown;
 }): boolean {
   if (post.gbpPostType === 'photo_media') return true;
-  if (post.gbpPostType && post.gbpPostType !== 'photo_media') return false;
 
   const targetMeta = parseMediaMetaFromTargets(post.publishTargets);
   if (targetMeta.gbpPostType === 'photo_media' || targetMeta.mediaFormat) {
@@ -158,9 +158,13 @@ function isPhotoMediaRow(post: {
     return true;
   }
 
-  // Fallback for rows saved before Supabase SQL migration stripped gbpPostType/gbpOfferData:
-  // non-designed media posts targeting only GBP (or empty pre-connection target) with mediaUrls.
-  if (!post.gbpPostType && !post.designJson && !post.linkUrl) {
+  // Posts created through media/photos composer carrying category/tags metadata
+  if (targetMeta.category || (targetMeta.tags && targetMeta.tags.length > 0)) {
+    return true;
+  }
+
+  // Media posts targeting GBP without multi-platform social distributions or structured designs
+  if (!post.designJson && !post.linkUrl) {
     const urls = parseMediaUrls(post.mediaUrls);
     if (urls.length > 0) {
       const targets = parsePublishTargetsRaw(post.publishTargets);
@@ -546,6 +550,7 @@ export async function POST(request: NextRequest) {
 
     const scheduleMode: 'instant' | 'daily' | 'weekly' | 'staggered' | 'draft' =
       body.scheduleMode || 'instant';
+    const requestedPostType = typeof body.postType === 'string' ? body.postType.trim() : undefined;
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
@@ -621,8 +626,14 @@ export async function POST(request: NextRequest) {
           item.tags,
         );
         const seoFields = buildSeoFields(item);
+        const isVideo = item.mediaFormat === 'VIDEO';
+        const effectivePostType = isVideo
+          ? 'photo_media'
+          : requestedPostType === 'photo_media'
+          ? 'photo_media'
+          : 'whats_new';
         const mediaMetaObj: StoredMediaMeta = {
-          gbpPostType: 'photo_media',
+          gbpPostType: effectivePostType,
           title: item.title || `${businessName} Showcase`,
           ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
@@ -634,24 +645,48 @@ export async function POST(request: NextRequest) {
 
         if (googleAccount) {
           try {
-            const uploaded = await uploadGoogleBusinessMedia(googleAccount, {
-              sourceUrl: publicItemUrl,
-              mediaFormat: item.mediaFormat || 'PHOTO',
-              category: item.category || 'ADDITIONAL',
-              description: effectiveDescription,
+            const postRecord = await db.socialPost.create({
+              data: {
+                tenantId: user.tenantId,
+                status: 'draft',
+                content: effectiveDescription,
+                mediaUrls: JSON.stringify([publicItemUrl]),
+                publishTargets: JSON.stringify([
+                  {
+                    platform: 'googlebusiness',
+                    socialAccountId: googleAccount.id,
+                    status: 'pending',
+                    mediaMeta: mediaMetaObj,
+                  },
+                ]),
+                scheduledAt: null,
+                gbpPostType: effectivePostType,
+                gbpOfferData: mediaMetaJson,
+                createdById: user.id || 'system',
+              },
             });
+
+            await publishPost(postRecord.id);
+
+            const finished = await db.socialPost.findUnique({
+              where: { id: postRecord.id },
+              select: { status: true, publishTargets: true, failureReason: true },
+            });
+            const finishedTargets = parsePublishTargetsRaw(finished?.publishTargets);
+            const gbpRes = finishedTargets.find((t) => t.platform === 'googlebusiness');
+
             uploadedPhotos.push({
-              id: uploaded.name || uploaded.googleUrl || publicItemUrl,
-              url: uploaded.googleUrl,
-              thumbnailUrl: uploaded.thumbnailUrl || item.thumbnailUrl,
-              status: 'published',
+              id: postRecord.id,
+              url: gbpRes?.permalink || publicItemUrl,
+              thumbnailUrl: item.thumbnailUrl,
+              status: finished?.status === 'published' ? 'published' : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
               title: item.title,
               tags: item.tags,
               ...seoFields,
             });
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.warn('[social/photos] Google media upload warning:', msg);
+            console.warn('[social/photos] Instant publish warning:', msg);
             // Persist in Not Posted queue with failure reason so user never loses media or metadata
             const savedDraft = await db.socialPost.create({
               data: {
@@ -669,7 +704,7 @@ export async function POST(request: NextRequest) {
                   },
                 ]),
                 scheduledAt: null,
-                gbpPostType: 'photo_media',
+                gbpPostType: effectivePostType,
                 gbpOfferData: mediaMetaJson,
                 failureReason: msg.slice(0, 500),
                 createdById: user.id || 'system',
@@ -701,7 +736,7 @@ export async function POST(request: NextRequest) {
                 },
               ]),
               scheduledAt: null,
-              gbpPostType: 'photo_media',
+              gbpPostType: effectivePostType,
               gbpOfferData: mediaMetaJson,
               createdById: user.id || 'system',
             },
@@ -726,8 +761,14 @@ export async function POST(request: NextRequest) {
           item.tags,
         );
         const seoFields = buildSeoFields(item);
+        const isVideo = item.mediaFormat === 'VIDEO';
+        const effectivePostType = isVideo
+          ? 'photo_media'
+          : requestedPostType === 'photo_media'
+          ? 'photo_media'
+          : 'whats_new';
         const mediaMetaObj: StoredMediaMeta = {
-          gbpPostType: 'photo_media',
+          gbpPostType: effectivePostType,
           title: item.title || `${businessName} Media`,
           ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
@@ -750,15 +791,8 @@ export async function POST(request: NextRequest) {
               },
             ]),
             scheduledAt: null,
-            gbpPostType: 'photo_media',
-            gbpOfferData: JSON.stringify({
-              title: mediaMetaObj.title,
-              ...(mediaMetaObj.thumbnailUrl ? { thumbnailUrl: mediaMetaObj.thumbnailUrl } : {}),
-              tags: mediaMetaObj.tags,
-              category: mediaMetaObj.category,
-              mediaFormat: mediaMetaObj.mediaFormat,
-              ...seoFields,
-            }),
+            gbpPostType: effectivePostType,
+            gbpOfferData: JSON.stringify(mediaMetaObj),
             createdById: user.id || 'system',
           },
         });
@@ -803,9 +837,15 @@ export async function POST(request: NextRequest) {
           item.tags,
         );
         const seoFields = buildSeoFields(item);
+        const isVideo = item.mediaFormat === 'VIDEO';
+        const effectivePostType = isVideo
+          ? 'photo_media'
+          : requestedPostType === 'photo_media'
+          ? 'photo_media'
+          : 'whats_new';
 
         const mediaMetaObj: StoredMediaMeta = {
-          gbpPostType: 'photo_media',
+          gbpPostType: effectivePostType,
           title: item.title || `${businessName} Showcase`,
           ...(item.thumbnailUrl ? { thumbnailUrl: item.thumbnailUrl } : {}),
           tags: item.tags || [],
@@ -834,7 +874,7 @@ export async function POST(request: NextRequest) {
             mediaUrls: JSON.stringify([publicItemUrl]),
             publishTargets: JSON.stringify(publishTargets),
             scheduledAt: scheduledTime,
-            gbpPostType: 'photo_media',
+            gbpPostType: effectivePostType,
             gbpOfferData: JSON.stringify({
               title: mediaMetaObj.title,
               ...(mediaMetaObj.thumbnailUrl ? { thumbnailUrl: mediaMetaObj.thumbnailUrl } : {}),
@@ -935,9 +975,24 @@ export async function PATCH(request: NextRequest) {
     const offerMeta = parseOfferMeta(existing.gbpOfferData);
     const targetMeta = parseMediaMetaFromTargets(existing.publishTargets);
     const meta: StoredMediaMeta = { ...targetMeta, ...offerMeta };
+    const requestedPostType = typeof body.postType === 'string' ? body.postType.trim() : undefined;
+    const mediaUrls = parseMediaUrls(existing.mediaUrls);
+    const rawUrl = mediaUrls[0];
+    const inferredFormat = rawUrl ? inferMediaFormat(toPublicMediaUrl(rawUrl, request)) : 'PHOTO';
+    const mediaFormat = meta.mediaFormat || inferredFormat;
+    const isVideo = mediaFormat === 'VIDEO';
+    const effectivePostType = isVideo
+      ? 'photo_media'
+      : requestedPostType === 'photo_media'
+      ? 'photo_media'
+      : (existing.gbpPostType === 'photo_media' && !body.description && !existing.content)
+      ? 'photo_media'
+      : (requestedPostType || (existing.gbpPostType && existing.gbpPostType !== 'photo_media' ? existing.gbpPostType : 'whats_new'));
+
     const nextMeta: StoredMediaMeta = {
       ...meta,
-      gbpPostType: 'photo_media',
+      gbpPostType: effectivePostType,
+      mediaFormat,
       ...(typeof body.title === 'string' ? { title: body.title.trim() } : {}),
       ...(body.tags !== undefined ? { tags: normalizeTags(body.tags) } : {}),
       ...(typeof body.category === 'string' ? { category: body.category.trim().toUpperCase() } : {}),
@@ -945,6 +1000,7 @@ export async function PATCH(request: NextRequest) {
 
     const updateData: Record<string, any> = {
       gbpOfferData: JSON.stringify(nextMeta),
+      gbpPostType: effectivePostType,
     };
 
     if (typeof body.description === 'string') {
@@ -954,13 +1010,10 @@ export async function PATCH(request: NextRequest) {
     const wantPublishNow = body.publishNow === true || body.status === 'published';
 
     if (wantPublishNow) {
-      const mediaUrls = parseMediaUrls(existing.mediaUrls);
-      const rawUrl = mediaUrls[0];
       if (!rawUrl) {
         return NextResponse.json({ error: 'Media URL is missing on this queued item.' }, { status: 400 });
       }
       const sourceUrl = toPublicMediaUrl(rawUrl, request);
-      const mediaFormat = nextMeta.mediaFormat || inferMediaFormat(sourceUrl);
       const effectiveDescription = buildDescriptionWithKeywords(
         typeof body.description === 'string' && body.description.trim()
           ? body.description.trim()
@@ -970,132 +1023,56 @@ export async function PATCH(request: NextRequest) {
       );
 
       const googleAccount = await prepareGoogleAccount(user.tenantId);
-      const existingTargets = parsePublishTargetsRaw(existing.publishTargets);
-      const baseMeta = { ...nextMeta, gbpPostType: 'photo_media' as const };
+      const baseMeta = { ...nextMeta, gbpPostType: effectivePostType };
 
       if (!googleAccount) {
-        const nextTargets =
-          existingTargets.length > 0
-            ? existingTargets.map((t, idx) =>
-                idx === 0 || t.platform === 'googlebusiness'
-                  ? { ...t, status: 'failed', error: 'Google Business Profile not connected', mediaMeta: baseMeta }
-                  : t,
-              )
-            : [
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: '',
-                  status: 'failed',
-                  error: 'Google Business Profile not connected',
-                  mediaMeta: baseMeta,
-                },
-              ];
-        await db.socialPost.update({
-          where: { id: existing.id },
-          data: {
-            content: effectiveDescription,
-            gbpOfferData: JSON.stringify(baseMeta),
-            publishTargets: JSON.stringify(nextTargets),
-            failureReason: 'Connect your Google Business Profile to publish media live.',
-          },
-        });
         return NextResponse.json(
           { error: 'Connect your Google Business Profile first to publish this media live.' },
           { status: 400 },
         );
       }
 
-      try {
-        const uploaded = await uploadGoogleBusinessMedia(googleAccount, {
-          sourceUrl,
-          mediaFormat,
-          category: (baseMeta.category || 'ADDITIONAL') as GbpMediaCategory,
-          description: effectiveDescription,
-        });
-        const nextTargets =
-          existingTargets.length > 0
-            ? existingTargets.map((t, idx) =>
-                idx === 0 || t.platform === 'googlebusiness'
-                  ? {
-                      ...t,
-                      socialAccountId: googleAccount.id,
-                      status: 'published',
-                      platformPostId: uploaded.name,
-                      permalink: uploaded.googleUrl,
-                      error: undefined,
-                      mediaMeta: baseMeta,
-                    }
-                  : t,
-              )
-            : [
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: googleAccount.id,
-                  status: 'published',
-                  platformPostId: uploaded.name,
-                  permalink: uploaded.googleUrl,
-                  mediaMeta: baseMeta,
-                },
-              ];
+      await db.socialPost.update({
+        where: { id: existing.id },
+        data: {
+          content: effectiveDescription,
+          gbpPostType: effectivePostType,
+          gbpOfferData: JSON.stringify(baseMeta),
+          status: 'draft',
+          failureReason: null,
+        },
+      });
 
-        const updated = await db.socialPost.update({
-          where: { id: existing.id },
-          data: {
-            status: 'published',
-            publishedAt: new Date(),
-            scheduledAt: null,
-            failureReason: null,
-            content: effectiveDescription,
-            gbpOfferData: JSON.stringify(baseMeta),
-            publishTargets: JSON.stringify(nextTargets),
-          },
-        });
+      await publishPost(existing.id);
 
-        return NextResponse.json({
-          success: true,
-          published: true,
-          googleUrl: uploaded.googleUrl,
-          item: {
-            id: updated.id,
-            title: baseMeta.title,
-            description: updated.content,
-            tags: baseMeta.tags || [],
-            category: baseMeta.category || 'ADDITIONAL',
-            status: 'published',
-            url: uploaded.googleUrl || sourceUrl,
-            scheduledFor: null,
-          },
-        });
-      } catch (pubErr: unknown) {
-        const msg = pubErr instanceof Error ? pubErr.message : 'Google media upload failed';
-        const failTargets =
-          existingTargets.length > 0
-            ? existingTargets.map((t, idx) =>
-                idx === 0 || t.platform === 'googlebusiness'
-                  ? { ...t, status: 'failed', error: msg, mediaMeta: baseMeta }
-                  : t,
-              )
-            : [
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: googleAccount.id,
-                  status: 'failed',
-                  error: msg,
-                  mediaMeta: baseMeta,
-                },
-              ];
-        await db.socialPost.update({
-          where: { id: existing.id },
-          data: {
-            status: 'failed',
-            failureReason: msg.slice(0, 500),
-            content: effectiveDescription,
-            gbpOfferData: JSON.stringify(baseMeta),
-            publishTargets: JSON.stringify(failTargets),
-          },
-        });
-        return NextResponse.json({ error: msg }, { status: 502 });
+      const publishedPost = await db.socialPost.findUnique({
+        where: { id: existing.id },
+        select: { id: true, status: true, publishTargets: true, failureReason: true, content: true },
+      });
+
+      const targets = parsePublishTargetsRaw(publishedPost?.publishTargets);
+      const gbpTarget = targets.find((t) => t.platform === 'googlebusiness');
+
+      if (publishedPost?.status === 'failed' || gbpTarget?.status === 'failed') {
+        const errMsg = publishedPost?.failureReason || gbpTarget?.error || 'Google publish failed';
+        return NextResponse.json({ error: errMsg }, { status: 502 });
       }
+
+      return NextResponse.json({
+        success: true,
+        published: true,
+        googleUrl: gbpTarget?.permalink || sourceUrl,
+        item: {
+          id: existing.id,
+          title: baseMeta.title,
+          description: publishedPost?.content || effectiveDescription,
+          tags: baseMeta.tags || [],
+          category: baseMeta.category || 'ADDITIONAL',
+          status: publishedPost?.status || 'published',
+          url: gbpTarget?.permalink || sourceUrl,
+          scheduledFor: null,
+        },
+      });
     }
 
     if (body.scheduledAt !== undefined) {

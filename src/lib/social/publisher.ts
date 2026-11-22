@@ -181,10 +181,13 @@ export function toPublishParams(
     }
   }
 
+  const isVideoMedia = mediaFormat === 'VIDEO' || targetMediaMeta?.mediaFormat === 'VIDEO';
   const resolvedGbpPostType =
     post.gbpPostType ??
-    (targetMediaMeta?.gbpPostType === 'photo_media' || gbpMediaCategory || mediaFormat
+    (isVideoMedia || targetMediaMeta?.gbpPostType === 'photo_media'
       ? 'photo_media'
+      : post.content
+      ? 'whats_new'
       : undefined);
 
   return {
@@ -301,7 +304,9 @@ export async function publishPost(postId: string): Promise<void> {
             socialAccountId: googleAccount.id,
             status: 'pending',
           });
-          publishParams.gbpPostType = publishParams.gbpPostType || 'photo_media';
+          publishParams.gbpPostType =
+            publishParams.gbpPostType ||
+            (post.content && publishParams.mediaFormat !== 'VIDEO' ? 'whats_new' : 'photo_media');
         }
       } catch (lookupErr) {
         console.warn('[social/publisher] Pre-connection Google lookup warning:', lookupErr);
@@ -702,13 +707,29 @@ async function resolveGooglePostUrlForNotification(
   results: PublishTarget[],
   finalStatus: 'published' | 'partial' | 'failed',
 ): Promise<string | null> {
+  const isImageFileUrl = (url: string) =>
+    url.includes('lh3.googleusercontent.com') ||
+    url.includes('.s3.') ||
+    url.includes('amazonaws.com') ||
+    /\.(jpe?g|png|webp|gif|bmp)(\?|$)/i.test(url);
+
   const gbpTarget = results.find(
-    (r) => r.platform === 'googlebusiness' && r.status === 'published' && typeof r.permalink === 'string' && r.permalink.trim(),
+    (r) =>
+      r.platform === 'googlebusiness' &&
+      r.status === 'published' &&
+      typeof r.permalink === 'string' &&
+      r.permalink.trim(),
   );
-  if (gbpTarget?.permalink) return gbpTarget.permalink.trim();
+  if (gbpTarget?.permalink && !isImageFileUrl(gbpTarget.permalink)) {
+    return gbpTarget.permalink.trim();
+  }
 
   const anyTarget = results.find(
-    (r) => r.status === 'published' && typeof r.permalink === 'string' && r.permalink.trim(),
+    (r) =>
+      r.status === 'published' &&
+      typeof r.permalink === 'string' &&
+      r.permalink.trim() &&
+      !isImageFileUrl(r.permalink),
   );
   if (anyTarget?.permalink) return anyTarget.permalink.trim();
 

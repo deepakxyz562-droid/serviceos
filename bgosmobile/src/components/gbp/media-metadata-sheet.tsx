@@ -481,6 +481,7 @@ export function MediaMetadataSheet({
         method: isEditMode ? 'PATCH' : 'POST',
         body: {
           postId: editingItem?.postId || editingItem?.id,
+          postType: 'whats_new',
           title: title.trim() || `${effectiveBusinessName} Post`,
           description: description.trim(),
           tags,
