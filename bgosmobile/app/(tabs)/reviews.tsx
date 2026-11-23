@@ -359,8 +359,6 @@ export default function ReviewRepliesScreen() {
       return;
     }
 
-    const reviewIds = unreplied.map((r) => r.id);
-
     Alert.alert(
       'Auto-Reply All to Google',
       `AI will generate tailored responses and publish them directly to Google Maps for ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}. Continue?`,
@@ -371,26 +369,61 @@ export default function ReviewRepliesScreen() {
           onPress: async () => {
             setAutoReplyBusy(true);
             setLocalError(null);
-            setNotice(`Generating AI replies and publishing for ${unrepliedCount} review${unrepliedCount === 1 ? '' : 's'}...`);
+            setNotice(`Auto-replying to ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}...`);
+
+            let publishedCount = 0;
+            let localCount = 0;
+            let failureCount = 0;
+
             try {
-              const res = await apiRequest<{
-                success: boolean;
-                processedCount: number;
-                publishedCount?: number;
-                localCount?: number;
-                message: string;
-              }>('/api/reviews/auto-reply', {
-                method: 'POST',
-                body: { reviewIds, minRating: 1 },
-              });
-              const count = res.processedCount ?? 0;
-              const msg = res.message || `Processed ${count} auto-replies.`;
-              setNotice(msg);
-              if (count > 0) {
+              for (let i = 0; i < unreplied.length; i++) {
+                const rev = unreplied[i];
+                setNotice(`Auto-replying review ${i + 1} of ${unreplied.length} to Google Maps...`);
+                try {
+                  const res = await apiRequest<{
+                    success: boolean;
+                    processedCount: number;
+                    publishedCount?: number;
+                    localCount?: number;
+                    message?: string;
+                  }>('/api/reviews/auto-reply', {
+                    method: 'POST',
+                    body: { reviewId: rev.id, minRating: 1 },
+                    timeoutMs: 45000,
+                    retryTransient: 1,
+                  });
+
+                  if ((res.publishedCount ?? 0) > 0) {
+                    publishedCount++;
+                  } else if ((res.processedCount ?? 0) > 0) {
+                    localCount++;
+                  } else {
+                    failureCount++;
+                  }
+                } catch (itemErr) {
+                  console.warn(`Failed auto-reply for review ${rev.id}:`, itemErr);
+                  failureCount++;
+                }
+              }
+
+              const totalSuccess = publishedCount + localCount;
+              if (totalSuccess > 0) {
+                let msg = `Successfully processed ${totalSuccess} of ${unreplied.length} review${unreplied.length === 1 ? '' : 's'}.`;
+                if (publishedCount > 0 && localCount === 0) {
+                  msg = `Published ${publishedCount} review ${publishedCount === 1 ? 'reply' : 'replies'} directly to Google Maps! 🎉`;
+                } else if (publishedCount > 0 && localCount > 0) {
+                  msg = `Processed ${totalSuccess} replies: ${publishedCount} published to Google Maps, ${localCount} saved in BGOS.`;
+                } else {
+                  msg = `Generated and saved ${localCount} AI ${localCount === 1 ? 'reply' : 'replies'} in BGOS.`;
+                }
+                setNotice(msg);
                 Alert.alert('AI Auto-Reply Published 🎉', msg);
               } else {
-                Alert.alert('No Reviews Processed', msg);
+                const errMsg = 'Could not complete auto-replies. Check your internet connection and try again.';
+                setLocalError(errMsg);
+                Alert.alert('No Reviews Processed', errMsg);
               }
+
               await Promise.all([reviews.refresh(), pendingFeed.refresh(), pendingCount.refresh()]);
             } catch (err: unknown) {
               const errMsg = (err as Error).message || 'AI Auto-reply failed.';

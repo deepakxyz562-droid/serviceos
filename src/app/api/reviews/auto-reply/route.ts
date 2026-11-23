@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
     let processedCount = 0;
     const processedReviews: Array<{ id: string; replyText: string; publishedToGoogle: boolean }> = [];
 
-    for (const review of toReply) {
+    const processReview = async (review: (typeof toReply)[0]) => {
       try {
         const author = review.authorName || 'Valued Customer';
         const rating = review.rating || 5;
@@ -268,10 +268,18 @@ export async function POST(request: NextRequest) {
           seoKeywords: reviewSeoKeywords,
         });
 
-        const aiRes = await callAI([
-          { role: 'system', content: promptConfig.systemPrompt },
-          { role: 'user', content: promptConfig.userPrompt },
-        ]);
+        let aiRes: any = null;
+        try {
+          aiRes = await callAI({
+            messages: [
+              { role: 'system', content: promptConfig.systemPrompt },
+              { role: 'user', content: promptConfig.userPrompt },
+            ],
+            timeoutMs: 7000,
+          });
+        } catch {
+          aiRes = null;
+        }
 
         let replyText = (typeof aiRes === 'string' ? aiRes : (aiRes as any)?.content || (aiRes as any)?.text || '').trim();
         // Remove any quotes added by AI
@@ -326,14 +334,23 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        processedCount++;
-        processedReviews.push({
+        return {
           id: review.id,
           replyText,
           publishedToGoogle,
-        });
+        };
       } catch (itemErr) {
         console.error(`[reviews/auto-reply] Error processing review ${review.id}:`, itemErr);
+        return null;
+      }
+    };
+
+    // Process reviews concurrently to prevent serial waterfall timeouts
+    const results = await Promise.all(toReply.map(processReview));
+    for (const res of results) {
+      if (res) {
+        processedCount++;
+        processedReviews.push(res);
       }
     }
 
