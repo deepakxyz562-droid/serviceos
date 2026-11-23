@@ -42,6 +42,10 @@ export const API_BASE_URL = resolveDefaultHost();
 // Always use live HTTPS domain (https://fieseros.com) so Razorpay, UPI & OAuth work seamlessly
 export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com').replace(/\/$/, '');
 
+// Dedicated Payment Gateway host for Razorpay Standard Checkout & UPI.
+// Razorpay merchant accounts enforce strict origin verification locked to the registered website (https://fieseros.com).
+export const PAYMENT_WEB_URL = (process.env.EXPO_PUBLIC_PAYMENT_URL || 'https://fieseros.com').replace(/\/$/, '');
+
 // Standalone BGOS Business Page & Booking Card host (never redirects to Marketplace)
 export const BGOS_PUBLIC_WEB_URL = (
   process.env.EXPO_PUBLIC_BGOS_WEB_URL || 'https://bgos.site'

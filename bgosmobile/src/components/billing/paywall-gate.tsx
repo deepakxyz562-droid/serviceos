@@ -18,7 +18,7 @@ import { useResource } from '../../hooks/use-resource';
 import { apiRequest } from '../../lib/api';
 import { getToken } from '../../lib/auth';
 import { useAuthStore } from '../../stores/auth-store';
-import { WEB_URL } from '../../lib/constants';
+import { PAYMENT_WEB_URL, WEB_URL } from '../../lib/constants';
 import { detectDeviceCountryAndTimezone } from '../../lib/country-codes';
 
 interface BillingResponse {
@@ -220,7 +220,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
       if (token) params.set('token', token);
       if (user?.email) params.set('email', user.email);
       if (user?.name) params.set('name', user.name);
-      const checkoutUrl = `${WEB_URL}/checkout/razorpay?${params.toString()}`;
+      const checkoutUrl = `${PAYMENT_WEB_URL}/checkout/razorpay?${params.toString()}`;
 
       await WebBrowser.openBrowserAsync(checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -235,7 +235,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
           fallbackParams.set('plan', planCode);
           fallbackParams.set('product', 'bgos');
           if (user?.email) fallbackParams.set('email', user.email);
-          await Linking.openURL(`${WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
+          await Linking.openURL(`${PAYMENT_WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
           return;
         } catch {
           // fall through

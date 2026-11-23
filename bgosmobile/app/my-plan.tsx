@@ -13,7 +13,7 @@ import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { useAuthStore } from '../src/stores/auth-store';
-import { WEB_URL } from '../src/lib/constants';
+import { PAYMENT_WEB_URL, WEB_URL } from '../src/lib/constants';
 import { detectDeviceCountryAndTimezone } from '../src/lib/country-codes';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -175,7 +175,7 @@ export default function MyPlanScreen() {
       if (token) params.set('token', token);
       if (user?.email) params.set('email', user.email);
       if (user?.name) params.set('name', user.name);
-      const checkoutUrl = `${WEB_URL}/checkout/razorpay?${params.toString()}`;
+      const checkoutUrl = `${PAYMENT_WEB_URL}/checkout/razorpay?${params.toString()}`;
 
       await WebBrowser.openBrowserAsync(checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -190,7 +190,7 @@ export default function MyPlanScreen() {
           fallbackParams.set('plan', planCode);
           fallbackParams.set('product', 'bgos');
           if (user?.email) fallbackParams.set('email', user.email);
-          await Linking.openURL(`${WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
+          await Linking.openURL(`${PAYMENT_WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
           return;
         } catch {
           // fall through to alert
