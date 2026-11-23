@@ -157,4 +157,29 @@ describe('BGOS Review Replies & Auto-Reply Pipeline', () => {
     expect(json.mapsUrl).toBe('https://maps.google.com/?cid=12345');
     expect(json.message).toContain('Reply saved locally');
   });
+
+  it('POST /api/reviews/auto-reply accepts reviewIds and successfully replies to reviews even with status pending', async () => {
+    vi.mocked(getAuthUser).mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@fieseros.com',
+      tenantId: 'tenant-123',
+      role: 'ADMIN',
+    } as any);
+
+    mockReviews[0].status = 'pending';
+    mockReviews[0].responseJson = null;
+
+    const req = new NextRequest('http://localhost:3000/api/reviews/auto-reply', {
+      method: 'POST',
+      body: JSON.stringify({ reviewIds: ['rev-1'] }),
+    });
+
+    const res = await autoReplyPOST(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.processedCount).toBe(1);
+    expect(json.reviews).toHaveLength(1);
+    expect(json.reviews[0].id).toBe('rev-1');
+  });
 });

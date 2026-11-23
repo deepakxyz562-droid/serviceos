@@ -352,11 +352,14 @@ export default function ReviewRepliesScreen() {
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
-    const unrepliedCount = (pendingFeed.data?.reviews || all).filter(isPending).length;
+    const unreplied = (pendingFeed.data?.reviews || all).filter(isPending);
+    const unrepliedCount = unreplied.length;
     if (unrepliedCount === 0) {
       Alert.alert('All Caught Up 🎉', 'All customer reviews already have replies on Google Maps.');
       return;
     }
+
+    const reviewIds = unreplied.map((r) => r.id);
 
     Alert.alert(
       'Auto-Reply All to Google',
@@ -368,15 +371,26 @@ export default function ReviewRepliesScreen() {
           onPress: async () => {
             setAutoReplyBusy(true);
             setLocalError(null);
-            setNotice('Generating AI replies and publishing to Google Maps...');
+            setNotice(`Generating AI replies and publishing for ${unrepliedCount} review${unrepliedCount === 1 ? '' : 's'}...`);
             try {
-              const res = await apiRequest<{ success: boolean; processedCount: number; message: string }>('/api/reviews/auto-reply', {
+              const res = await apiRequest<{
+                success: boolean;
+                processedCount: number;
+                publishedCount?: number;
+                localCount?: number;
+                message: string;
+              }>('/api/reviews/auto-reply', {
                 method: 'POST',
-                body: { minRating: 1 },
+                body: { reviewIds, minRating: 1 },
               });
-              const msg = res.message || `Processed ${res.processedCount} auto-replies.`;
+              const count = res.processedCount ?? 0;
+              const msg = res.message || `Processed ${count} auto-replies.`;
               setNotice(msg);
-              Alert.alert('AI Auto-Reply Complete', msg);
+              if (count > 0) {
+                Alert.alert('AI Auto-Reply Published 🎉', msg);
+              } else {
+                Alert.alert('No Reviews Processed', msg);
+              }
               await Promise.all([reviews.refresh(), pendingFeed.refresh(), pendingCount.refresh()]);
             } catch (err: unknown) {
               const errMsg = (err as Error).message || 'AI Auto-reply failed.';

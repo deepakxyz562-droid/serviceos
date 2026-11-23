@@ -40,16 +40,20 @@ export async function GET(request: NextRequest) {
     const unrepliedReviews = await db.review.findMany({
       where: {
         tenantId: user.tenantId,
-        source: 'google',
-      status: { not: 'pending' },
+        AND: [
+          { NOT: { responseJson: { contains: '"text":' } } },
+          { NOT: { responseJson: { contains: '"replyText":' } } },
+        ],
       },
       select: { id: true, rating: true, responseJson: true },
     });
 
     const pendingCount = unrepliedReviews.filter((r) => {
       try {
-        const parsed = JSON.parse(r.responseJson || '{}');
-        return !parsed.text && !parsed.replyText;
+        const parsed = typeof r.responseJson === 'string' ? JSON.parse(r.responseJson || '{}') : (r.responseJson || {});
+        if (parsed.text || parsed.replyText) return false;
+        if (parsed.moderationState === 'PENDING') return false;
+        return true;
       } catch {
         return true;
       }
@@ -141,7 +145,13 @@ export async function POST(request: NextRequest) {
     if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
-    const targetReviewId = body.reviewId as string | undefined;
+    const targetReviewIds: string[] | undefined = Array.isArray(body.reviewIds)
+      ? (body.reviewIds as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      : typeof body.reviewId === 'string' && body.reviewId.trim().length > 0
+      ? [body.reviewId.trim()]
+      : undefined;
+
+    const hasExplicitTargets = Boolean(targetReviewIds && targetReviewIds.length > 0);
 
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
@@ -190,31 +200,35 @@ export async function POST(request: NextRequest) {
 
     const whereClause: Record<string, any> = {
       tenantId: user.tenantId,
-      source: 'google',
-      status: { not: 'pending' },
     };
-    if (targetReviewId) {
-      whereClause.id = targetReviewId;
+    if (hasExplicitTargets) {
+      whereClause.id = targetReviewIds!.length === 1 ? targetReviewIds![0] : { in: targetReviewIds };
+    } else {
+      whereClause.AND = [
+        { NOT: { responseJson: { contains: '"text":' } } },
+        { NOT: { responseJson: { contains: '"replyText":' } } },
+      ];
     }
 
     const reviews = await db.review.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: hasExplicitTargets ? targetReviewIds!.length : 50,
     });
 
-    // Filter to unreplied reviews matching the minimum rating
+    // Filter to unreplied reviews matching the criteria
     const toReply = reviews.filter((r) => {
-      if (r.status === 'pending') return false;
       let hasReply = false;
+      let isModerationPending = false;
       try {
-        const parsed = JSON.parse(r.responseJson || '{}');
+        const parsed = typeof r.responseJson === 'string' ? JSON.parse(r.responseJson || '{}') : (r.responseJson || {});
         hasReply = Boolean(parsed.text || parsed.replyText);
+        isModerationPending = parsed.moderationState === 'PENDING';
       } catch {
         hasReply = false;
       }
-      if (hasReply) return false;
-      if (targetReviewId) return true; // If specifically targeted, bypass minRating filter
+      if (hasReply || isModerationPending) return false;
+      if (hasExplicitTargets) return true; // Explicitly selected by user
       return (r.rating || 5) >= minRating;
     });
 
@@ -222,6 +236,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         processedCount: 0,
+        publishedCount: 0,
+        localCount: 0,
+        reviews: [],
         message: 'No pending reviews met the auto-reply criteria.',
       });
     }
@@ -334,11 +351,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const publishedCount = processedReviews.filter((r) => r.publishedToGoogle).length;
+    const localCount = processedReviews.length - publishedCount;
+
+    let responseMessage: string;
+    if (processedCount === 0) {
+      responseMessage = 'No pending reviews met the auto-reply criteria.';
+    } else if (publishedCount > 0 && localCount === 0) {
+      responseMessage = `Successfully published ${publishedCount} AI review ${publishedCount === 1 ? 'reply' : 'replies'} to Google Maps.`;
+    } else if (publishedCount > 0 && localCount > 0) {
+      responseMessage = `Processed ${processedCount} AI replies: ${publishedCount} published to Google Maps, ${localCount} saved in BGOS.`;
+    } else {
+      responseMessage = `Generated and saved ${localCount} AI ${localCount === 1 ? 'reply' : 'replies'} in BGOS.`;
+    }
+
     return NextResponse.json({
       success: true,
       processedCount,
+      publishedCount,
+      localCount,
       reviews: processedReviews,
-      message: `AI Auto-Reply completed for ${processedCount} review${processedCount === 1 ? '' : 's'}.`,
+      message: responseMessage,
     });
   } catch (error: unknown) {
     console.error('[reviews/auto-reply] POST error:', error);
