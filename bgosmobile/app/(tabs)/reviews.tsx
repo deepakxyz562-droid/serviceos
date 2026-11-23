@@ -178,8 +178,8 @@ export default function ReviewRepliesScreen() {
   const [tutorialVideoId, setTutorialVideoId] = useState<TutorialVideoId>('reviews_trust');
   const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
   const [pendingPage,setPendingPage] = useState(1);
-  const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=100&page=${pendingPage}`,0,filter==='needs_reply');
-  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=250');
+  const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=250&page=${pendingPage}`,0,filter==='needs_reply');
+  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=500');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const autoReplyConfig = useResource<{
@@ -295,11 +295,16 @@ export default function ReviewRepliesScreen() {
   const failed = useMemo(() => all.filter(isSyncFailed), [all, isSyncFailed]);
   const replied = useMemo(() => all.filter(isLiveReplied), [all, isLiveReplied]);
   const counts = reviews.data?.counts;
+  const effectiveTotalReviews =
+    counts?.all ??
+    (reviews.data?.pagination?.total && reviews.data.pagination.total > 0
+      ? reviews.data.pagination.total
+      : all.length);
   const totalRatings =
     counts?.all ??
     (gbpPlace.data?.metrics?.totalReviews && gbpPlace.data.metrics.totalReviews > 0
       ? gbpPlace.data.metrics.totalReviews
-      : reviews.data?.pagination?.total ?? all.length);
+      : effectiveTotalReviews);
 
   // Dynamic Average Rating Calculation: Prioritize official Google place metrics, fallback to reviews
   const averageRating = useMemo(() => {
@@ -1022,7 +1027,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                All ({counts?.all ?? (reviews.data?.pagination?.total ?? all.length)})
+                All ({effectiveTotalReviews})
               </Text>
             </Pressable>
 
@@ -2086,8 +2091,8 @@ export default function ReviewRepliesScreen() {
             <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
               {syncBusy
                 ? 'Syncing reviews from Google Maps…'
-                : all.length > 0
-                  ? `${all.length} review${all.length === 1 ? '' : 's'} synced from Google Maps`
+                : effectiveTotalReviews > 0
+                  ? `${effectiveTotalReviews} review${effectiveTotalReviews === 1 ? '' : 's'} synced from Google Maps`
                   : 'Sync latest reviews from Google Maps'}
             </Text>
             <Pressable
@@ -2127,7 +2132,7 @@ export default function ReviewRepliesScreen() {
           <View style={{ gap: 10 }}>
             <Empty
               title={
-                filter === 'needs_reply' && all.length > 0
+                filter === 'needs_reply' && effectiveTotalReviews > 0
                   ? 'No reviews waiting for a reply'
                   : filter === 'needs_reply'
                     ? 'No unreplied reviews found'
@@ -2136,16 +2141,16 @@ export default function ReviewRepliesScreen() {
                       : 'No reviews synced yet'
               }
               detail={
-                filter === 'needs_reply' && all.length > 0
-                  ? `All ${all.length} synced review${all.length === 1 ? '' : 's'} already have a reply. Switch to All to view them.`
+                filter === 'needs_reply' && effectiveTotalReviews > 0
+                  ? `All ${effectiveTotalReviews} synced review${effectiveTotalReviews === 1 ? '' : 's'} already have a reply. Switch to All to view them.`
                   : connectionState === 'connected'
                     ? 'Tap "Sync Google Reviews" below to fetch your latest customer reviews from Google Maps.'
                     : 'Connect or select your Google Business Profile to import reviews.'
               }
             />
-            {filter === 'needs_reply' && all.length > 0 ? (
+            {filter === 'needs_reply' && effectiveTotalReviews > 0 ? (
               <Action
-                label={`View All ${all.length} Reviews`}
+                label={`View All ${effectiveTotalReviews} Reviews`}
                 icon="list"
                 onPress={() => handleSelectFilter('all')}
               />
@@ -2592,12 +2597,12 @@ export default function ReviewRepliesScreen() {
           })
         )}
         {shown.length > displayLimit && (
-          <View style={{ alignItems: 'center', marginVertical: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginVertical: 12 }}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setDisplayLimit((prev) => prev + 25)}
+              onPress={() => setDisplayLimit((prev) => prev + 50)}
               style={({ pressed }) => ({
-                paddingHorizontal: 20,
+                paddingHorizontal: 16,
                 paddingVertical: 10,
                 borderRadius: 20,
                 backgroundColor: '#F1F5F9',
@@ -2607,7 +2612,22 @@ export default function ReviewRepliesScreen() {
               })}
             >
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
-                Show More Reviews ({shown.length - displayLimit} remaining) ↓
+                Show +50 More ({Math.max(0, shown.length - displayLimit)} left) ↓
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setDisplayLimit(shown.length)}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 20,
+                backgroundColor: '#0F172A',
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>
+                Show All ({shown.length})
               </Text>
             </Pressable>
           </View>

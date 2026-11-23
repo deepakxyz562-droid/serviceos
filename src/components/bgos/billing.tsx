@@ -151,8 +151,25 @@ export function BgosBilling() {
 
       // ── 1. Modal checkout flow (INR) ──────────────────────────────────────
       if (data.gateway === 'razorpay' && data.order_id) {
+        // If running on a domain other than fieseros.com (e.g. bgos.site) where Razorpay
+        // website origin policy might block standard checkout, seamlessly route to hosted link
+        if (
+          typeof window !== 'undefined' &&
+          window.location.hostname !== 'fieseros.com' &&
+          window.location.hostname !== 'localhost' &&
+          window.location.hostname !== '127.0.0.1' &&
+          data.payment_link_url
+        ) {
+          window.location.assign(data.payment_link_url);
+          return;
+        }
+
         const scriptOk = await loadRazorpayScript();
         if (!scriptOk) {
+          if (data.payment_link_url) {
+            window.location.assign(data.payment_link_url);
+            return;
+          }
           throw new Error('Could not load secure checkout script.');
         }
 
@@ -201,6 +218,14 @@ export function BgosBilling() {
         };
 
         const razorpayInstance = new (window as any).Razorpay(options);
+        razorpayInstance.on('payment.failed', (resp: any) => {
+          setBusy(false);
+          if (data.payment_link_url) {
+            window.location.assign(data.payment_link_url);
+          } else {
+            toast.error(resp?.error?.description || 'Payment could not be completed.');
+          }
+        });
         razorpayInstance.open();
         return;
       }

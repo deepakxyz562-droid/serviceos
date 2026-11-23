@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const minRating = searchParams.get('minRating');
     const search = searchParams.get('search');
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1') || 1);
-    const limit = Math.min(300, Math.max(1, Number.parseInt(searchParams.get('limit') || '50') || 50));
+    const limit = Math.min(500, Math.max(1, Number.parseInt(searchParams.get('limit') || '50') || 50));
     const sortBy = ['createdAt', 'rating', 'updatedAt'].includes(searchParams.get('sortBy') || '') ? searchParams.get('sortBy')! : 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -136,11 +136,16 @@ export async function GET(request: NextRequest) {
     } | undefined;
 
     try {
+      const scopeConditions = Array.isArray(where.AND)
+        ? (where.AND as Array<Record<string, unknown>>).filter((c: any) => !c.OR)
+        : [];
+
       const baseWhere: Record<string, unknown> = user.role === 'customer'
         ? { customerId: user.id }
         : {
             tenantId: user.tenantId,
             ...(source ? { source: source === 'google' ? 'google' : source } : {}),
+            ...(scopeConditions.length > 0 ? { AND: scopeConditions } : {}),
           };
 
       const [ratingGroups, needsReplyTotal] = await Promise.all([
