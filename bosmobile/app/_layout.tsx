@@ -1,24 +1,42 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as SplashScreen from 'expo-splash-screen';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { registerForPushNotifications, setupNotificationListeners } from '@/lib/notifications';
 
 import { BosSplash } from '@/components/brand/bos-splash';
 
+// Keep the native splash screen visible while loading resources
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export { AppErrorBoundary as ErrorBoundary } from '@/components/app-error-boundary';
 
 export default function RootLayout() {
   const { isBooted, isAuthenticated, user, bootstrap } = useAuthStore();
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   const segments = useSegments();
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     bootstrap();
+    // Allow the animated BOS splash screen to play smoothly for 1.2s minimum
+    const timer = setTimeout(() => {
+      setMinSplashElapsed(true);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [bootstrap]);
+
+  // Once the JS runtime is mounted and active, hide the native static splash screen
+  // so the animated BosSplash takes over seamlessly with no black/white flash
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
+
+  const isReady = isBooted && minSplashElapsed;
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
@@ -54,7 +72,7 @@ export default function RootLayout() {
   }, [bootstrap]);
 
   useEffect(() => {
-    if (!isBooted) return;
+    if (!isReady) return;
     const prevAuth = prevAuthRef.current;
     prevAuthRef.current = isAuthenticated;
 
@@ -68,7 +86,7 @@ export default function RootLayout() {
         router.replace('/(auth)/login');
       }
     }
-  }, [isBooted, isAuthenticated, user?.id, segments]);
+  }, [isReady, isAuthenticated, user?.id, segments]);
 
   useEffect(() => {
     const cleanup = setupNotificationListeners((route) => {
@@ -81,7 +99,7 @@ export default function RootLayout() {
     return cleanup;
   }, []);
 
-  if (!isBooted) {
+  if (!isReady) {
     return <BosSplash statusMessage="Loading BOS..." />;
   }
 

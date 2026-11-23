@@ -40,6 +40,15 @@ export default ({ config }: ConfigContext): any => ({
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#00b290',
     },
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#080C14',
+      dark: {
+        image: './assets/splash.png',
+        backgroundColor: '#080C14',
+      },
+    },
     permissions: [
       'android.permission.RECORD_AUDIO',
       'android.permission.CAMERA',
@@ -54,6 +63,18 @@ export default ({ config }: ConfigContext): any => ({
   plugins: [
     'expo-router',
     'expo-secure-store',
+    [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#080C14',
+        image: './assets/splash.png',
+        dark: {
+          image: './assets/splash.png',
+          backgroundColor: '#080C14',
+        },
+        imageWidth: 200,
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,

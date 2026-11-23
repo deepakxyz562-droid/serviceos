@@ -357,17 +357,19 @@ export default function LoginScreen() {
                       </View>
                     </View>
 
-                    {/* Quick Test Account Fill */}
-                    <TouchableOpacity
-                      style={styles.testAccountPill}
-                      onPress={handleUseTestAccount}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialCommunityIcons name="lightning-bolt" size={14} color="#10B981" />
-                      <Text style={styles.testAccountPillText}>
-                        Test Account: +91 99999 99999 (Code: 123456)
-                      </Text>
-                    </TouchableOpacity>
+                    {/* Quick Test Account Fill (Dev Only) */}
+                    {__DEV__ && (
+                      <TouchableOpacity
+                        style={styles.testAccountPill}
+                        onPress={handleUseTestAccount}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialCommunityIcons name="lightning-bolt" size={14} color="#10B981" />
+                        <Text style={styles.testAccountPillText}>
+                          Test Account: +91 99999 99999 (Code: 123456)
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* Send Code Button */}
                     <TouchableOpacity
@@ -413,15 +415,15 @@ export default function LoginScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Dev OTP Helper Pill */}
-                    {devOtpNotice && (
+                    {/* Dev OTP Helper Pill (Dev Only) */}
+                    {__DEV__ && devOtpNotice ? (
                       <View style={styles.devOtpBox}>
                         <Feather name="key" size={14} color="#10B981" style={{ marginRight: 6 }} />
                         <Text style={styles.devOtpText}>
                           Active Verification Code: <Text style={{ fontWeight: '800' }}>{devOtpNotice}</Text>
                         </Text>
                       </View>
-                    )}
+                    ) : null}
 
                     {/* 6-digit OTP code */}
                     <View style={styles.inputGroup}>

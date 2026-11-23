@@ -156,16 +156,36 @@ export async function POST(request: NextRequest) {
     let sendResult = { success: false, simulated: false };
 
     if (!isTestNumber) {
-      // 1. Try WhatsApp
+      // 1. Try WhatsApp: template first if configured, then fallback to text
       try {
-        sendResult = await sendWhatsAppMessage({
-          to: normalizedPhone,
-          message: otpMessage,
-        });
+        if (process.env.WHATSAPP_OTP_TEMPLATE) {
+          sendResult = await sendWhatsAppMessage({
+            to: normalizedPhone,
+            message: otpMessage,
+            type: 'template',
+            templateName: process.env.WHATSAPP_OTP_TEMPLATE,
+            templateLanguage: process.env.WHATSAPP_OTP_TEMPLATE_LANG || 'en_US',
+            templateComponents: [
+              {
+                type: 'body',
+                parameters: [{ type: 'text', text: otpCode }],
+              },
+            ],
+          });
+        }
       } catch {}
 
-      // 2. If WhatsApp failed, fallback to SMS
-      if (!sendResult.success && !sendResult.simulated) {
+      if (!sendResult.success) {
+        try {
+          sendResult = await sendWhatsAppMessage({
+            to: normalizedPhone,
+            message: otpMessage,
+          });
+        } catch {}
+      }
+
+      // 2. If WhatsApp failed or wasn't delivered, fallback to SMS
+      if (!sendResult.success || sendResult.simulated) {
         try {
           const smsResult = await sendSmsMessage({
             to: normalizedPhone,
@@ -182,12 +202,25 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Merchant OTP] Code for ${normalizedPhone}: ${otpCode}`);
 
+    const isActuallyDelivered = sendResult.success && !sendResult.simulated;
+    const isDevOrTest = process.env.NODE_ENV !== 'production' || isTestNumber;
+
+    if (!isActuallyDelivered && !isDevOrTest) {
+      console.warn(`[Merchant OTP] Real delivery failed for ${normalizedPhone}. Simulated/Failed status.`);
+      return NextResponse.json(
+        {
+          error: 'SMS service is temporarily unavailable for this carrier. Please sign in with Email or Google.',
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Verification code sent successfully.',
       simulated: sendResult.simulated || !sendResult.success,
       phone: formatPhoneForDisplay(normalizedPhone),
-      ...(process.env.NODE_ENV !== 'production' || isTestNumber ? { devOtp: otpCode } : {}),
+      ...(isDevOrTest ? { devOtp: otpCode } : {}),
     });
   } catch (error) {
     console.error('[Merchant Send OTP Error]', error);
