@@ -245,7 +245,11 @@ export async function proxy(request: NextRequest) {
     lowerHost !== 'bgos.site' &&
     lowerHost !== 'www.bgos.site' &&
     !lowerHost.startsWith('api.') &&
-    !lowerHost.startsWith('admin.');
+    !lowerHost.startsWith('admin.') &&
+    !lowerHost.startsWith('app.') &&
+    !lowerHost.startsWith('checkout.') &&
+    !lowerHost.startsWith('billing.') &&
+    !lowerHost.startsWith('pay.');
 
   if (isBgosSubdomain && ['GET', 'HEAD'].includes(request.method)) {
     const slug = lowerHost.replace(/\.bgos\.site$/, '').replace(/^www\./, '');
@@ -295,7 +299,12 @@ export async function proxy(request: NextRequest) {
         'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',
         'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json', 'report',
         'bgos', 'bos', 'brand', 'icons', 'fonts', 'intake', 'agent', 'chatbot', 'form',
-        'forms', 'request', 'requests', 'bookings', 'tools', 'ai-agent', 'ai-employee'
+        'forms', 'request', 'requests', 'bookings', 'tools', 'ai-agent', 'ai-employee',
+        'checkout', 'pay', 'payment', 'payments', 'billing', 'my-plan', 'orders', 'cart',
+        'subscribe', 'subscription', 'subscriptions', 'plan', 'plans', 'verify-payment',
+        'create-order', 'razorpay-demo', 'book', 'signup', 'register', 'logout', 'verify',
+        'customer', 'employee', 'pro', 'superadmin', 'health', 'healthz', 'ping', 'docs',
+        'portal', 'store', 'not-found'
       ]);
       if (!BGOS_RESERVED.has(slugCandidate)) {
         const subPath = match[2] || '';

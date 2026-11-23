@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import { proxy } from '@/proxy';
 import {
   normalizeBgosSlug,
   validateBgosSlug,
@@ -60,7 +62,22 @@ describe('BGOS Short URL & Slug Service', () => {
     });
 
     it('rejects reserved system words', () => {
-      for (const reserved of ['login', 'api', 'app', 'b', 'book', 'terms', 'privacy', 'robots.txt', 'sitemap.xml']) {
+      for (const reserved of [
+        'login',
+        'api',
+        'app',
+        'b',
+        'book',
+        'checkout',
+        'pay',
+        'billing',
+        'my-plan',
+        'subscription',
+        'terms',
+        'privacy',
+        'robots.txt',
+        'sitemap.xml',
+      ]) {
         const res = validateBgosSlug(reserved);
         expect(res.valid).toBe(false);
         expect(res.error).toContain('reserved');
@@ -151,6 +168,23 @@ describe('BGOS Short URL & Slug Service', () => {
       expect(isStaticAsset('/sw.js')).toBe(true);
       expect(isStaticAsset('/owner-8220s-business')).toBe(false);
       expect(isStaticAsset('/shieldhire-sos-app')).toBe(false);
+    });
+
+    it('does not rewrite /checkout/razorpay to /b/checkout/razorpay on bgos.site', async () => {
+      const req = new NextRequest('https://bgos.site/checkout/razorpay?plan=starter&product=bgos', {
+        headers: { host: 'bgos.site' },
+      });
+      const res = await proxy(req);
+      const rewritten = res.headers.get('x-middleware-rewrite');
+      expect(rewritten || '').not.toContain('/b/checkout/razorpay');
+    });
+
+    it('does not rewrite /pay or /billing routes on bgos.site', async () => {
+      const reqPay = new NextRequest('https://bgos.site/pay/EST-2026-01', {
+        headers: { host: 'bgos.site' },
+      });
+      const resPay = await proxy(reqPay);
+      expect(resPay.headers.get('x-middleware-rewrite') || '').not.toContain('/b/pay');
     });
   });
 });

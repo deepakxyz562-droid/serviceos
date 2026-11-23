@@ -12,6 +12,7 @@ import { Screen, Card, Action, Badge, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
+import { useAuthStore } from '../src/stores/auth-store';
 import { WEB_URL } from '../src/lib/constants';
 import { detectDeviceCountryAndTimezone } from '../src/lib/country-codes';
 import * as WebBrowser from 'expo-web-browser';
@@ -106,6 +107,7 @@ const BGOS_DEFAULT_PLANS = [
 
 export default function MyPlanScreen() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
   const [region, setRegion] = useState<'india' | 'international'>(() => {
@@ -167,8 +169,13 @@ export default function MyPlanScreen() {
       }
 
       const token = await getToken();
-      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
+      const params = new URLSearchParams();
+      params.set('plan', planCode);
+      params.set('product', 'bgos');
+      if (token) params.set('token', token);
+      if (user?.email) params.set('email', user.email);
+      if (user?.name) params.set('name', user.name);
+      const checkoutUrl = `${WEB_URL}/checkout/razorpay?${params.toString()}`;
 
       await WebBrowser.openBrowserAsync(checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -179,7 +186,11 @@ export default function MyPlanScreen() {
     } catch (err: any) {
       if (region === 'india') {
         try {
-          await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+          const fallbackParams = new URLSearchParams();
+          fallbackParams.set('plan', planCode);
+          fallbackParams.set('product', 'bgos');
+          if (user?.email) fallbackParams.set('email', user.email);
+          await Linking.openURL(`${WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
           return;
         } catch {
           // fall through to alert

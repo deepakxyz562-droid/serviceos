@@ -214,8 +214,13 @@ export function PaywallGate({ children }: PaywallGateProps) {
       }
 
       const token = await getToken();
-      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      const checkoutUrl = `${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos${tokenParam}`;
+      const params = new URLSearchParams();
+      params.set('plan', planCode);
+      params.set('product', 'bgos');
+      if (token) params.set('token', token);
+      if (user?.email) params.set('email', user.email);
+      if (user?.name) params.set('name', user.name);
+      const checkoutUrl = `${WEB_URL}/checkout/razorpay?${params.toString()}`;
 
       await WebBrowser.openBrowserAsync(checkoutUrl, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
@@ -226,7 +231,11 @@ export function PaywallGate({ children }: PaywallGateProps) {
     } catch (err: any) {
       if (region === 'india') {
         try {
-          await Linking.openURL(`${WEB_URL}/checkout/razorpay?plan=${planCode}&product=bgos`);
+          const fallbackParams = new URLSearchParams();
+          fallbackParams.set('plan', planCode);
+          fallbackParams.set('product', 'bgos');
+          if (user?.email) fallbackParams.set('email', user.email);
+          await Linking.openURL(`${WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
           return;
         } catch {
           // fall through
