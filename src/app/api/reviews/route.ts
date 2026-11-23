@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const minRating = searchParams.get('minRating');
     const search = searchParams.get('search');
     const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1') || 1);
-    const limit = Math.min(100, Math.max(1, Number.parseInt(searchParams.get('limit') || '50') || 50));
+    const limit = Math.min(300, Math.max(1, Number.parseInt(searchParams.get('limit') || '50') || 50));
     const sortBy = ['createdAt', 'rating', 'updatedAt'].includes(searchParams.get('sortBy') || '') ? searchParams.get('sortBy')! : 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -97,17 +97,100 @@ export async function GET(request: NextRequest) {
     }
 
     // Stored replies use compact JSON with text (or the legacy replyText key).
-    // Google metadata alone is not a reply.
+    // A review needs a reply if:
+    // 1) It has no text reply at all, OR
+    // 2) It is a Google review whose reply has NOT been confirmed published to Google.
     if (searchParams.get('needsReply') === 'true') {
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : []),
-        {NOT:{responseJson:{contains:'"text":"'}}},
-        {NOT:{responseJson:{contains:'"replyText":"'}}},
+        {
+          OR: [
+            {
+              AND: [
+                { NOT: { responseJson: { contains: '"text":"' } } },
+                { NOT: { responseJson: { contains: '"replyText":"' } } },
+              ],
+            },
+            {
+              AND: [
+                { source: 'google' },
+                { NOT: { responseJson: { contains: '"publishedToGoogle":true' } } },
+              ],
+            },
+          ],
+        },
       ];
     }
     if (searchParams.get('countOnly') === 'true') {
-      return NextResponse.json({total:await db.review.count({where})});
+      return NextResponse.json({ total: await db.review.count({ where }) });
     }
+
+    // Compute rating breakdown across all reviews so mobile & web can show accurate counts
+    let counts: {
+      all: number;
+      fiveStars: number;
+      fourStars: number;
+      threeStars: number;
+      critical: number;
+      needsReply: number;
+    } | undefined;
+
+    try {
+      const baseWhere: Record<string, unknown> = user.role === 'customer'
+        ? { customerId: user.id }
+        : {
+            tenantId: user.tenantId,
+            ...(source ? { source: source === 'google' ? 'google' : source } : {}),
+          };
+
+      const [ratingGroups, needsReplyTotal] = await Promise.all([
+        db.review.groupBy({
+          by: ['rating'],
+          where: baseWhere,
+          _count: true,
+        }),
+        db.review.count({
+          where: {
+            ...baseWhere,
+            OR: [
+              {
+                AND: [
+                  { NOT: { responseJson: { contains: '"text":"' } } },
+                  { NOT: { responseJson: { contains: '"replyText":"' } } },
+                ],
+              },
+              {
+                AND: [
+                  { source: 'google' },
+                  { NOT: { responseJson: { contains: '"publishedToGoogle":true' } } },
+                ],
+              },
+            ],
+          },
+        }),
+      ]);
+
+      const rCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      let allTotal = 0;
+      for (const g of ratingGroups) {
+        const r = Math.round(Number(g.rating) || 5);
+        const c = typeof g._count === 'number' ? g._count : (g._count as any)?._all || 1;
+        rCounts[r] = (rCounts[r] || 0) + c;
+        allTotal += c;
+      }
+
+      counts = {
+        all: allTotal,
+        fiveStars: rCounts[5] || 0,
+        fourStars: rCounts[4] || 0,
+        threeStars: rCounts[3] || 0,
+        critical: (rCounts[1] || 0) + (rCounts[2] || 0),
+        needsReply: needsReplyTotal,
+      };
+    } catch (countErr) {
+      console.warn('[api/reviews] Error computing rating counts summary:', countErr);
+    }
+
     const [reviews, total] = await Promise.all([
       db.review.findMany({
         where,
@@ -155,7 +238,11 @@ export async function GET(request: NextRequest) {
                   ? JSON.parse(review.responseJson || '{}')
                   : review?.responseJson || {};
               const txt = parsed?.text || parsed?.replyText;
-              return !(typeof txt === 'string' && txt.trim().length > 0);
+              if (!txt || typeof txt !== 'string' || !txt.trim()) return true;
+              if (review?.source === 'google') {
+                return parsed?.publishedToGoogle !== true;
+              }
+              return false;
             } catch {
               return true;
             }
@@ -169,6 +256,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       reviews: finalReviews,
+      ...(counts ? { counts } : {}),
       pagination: {
         page,
         limit,

@@ -36,7 +36,18 @@ interface DiscoverResponse {
   activeProfile?: { id: string; name: string; shortId: string; initial: string };
 }
 
-type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
+type ReviewsResponse = {
+  reviews: Review[];
+  counts?: {
+    all: number;
+    fiveStars: number;
+    fourStars: number;
+    threeStars: number;
+    critical: number;
+    needsReply: number;
+  };
+  pagination?: { total: number; page?: number; limit?: number; totalPages?: number };
+};
 type ReviewFilter = 'needs_reply' | 'all' | '5star' | '4star' | '3star' | 'critical' | 'replied';
 
 interface KeywordUsage {
@@ -161,14 +172,14 @@ function GradientOutlineReplyButton({
 export default function ReviewRepliesScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<ReviewFilter>('needs_reply');
-  const [displayLimit, setDisplayLimit] = useState(15);
+  const [displayLimit, setDisplayLimit] = useState(25);
   const [settingsOpen,setSettingsOpen] = useState(false);
   const [tutorialVideoOpen, setTutorialVideoOpen] = useState(false);
   const [tutorialVideoId, setTutorialVideoId] = useState<TutorialVideoId>('reviews_trust');
   const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
   const [pendingPage,setPendingPage] = useState(1);
-  const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=50&page=${pendingPage}`,0,filter==='needs_reply');
-  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
+  const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=100&page=${pendingPage}`,0,filter==='needs_reply');
+  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=250');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const autoReplyConfig = useResource<{
@@ -261,31 +272,34 @@ export default function ReviewRepliesScreen() {
 
   const isLiveReplied = useCallback((r: Review) => {
     const rep = parseReply(r);
-    if (!rep) return false;
+    if (!rep || !rep.text?.trim()) return false;
     const isGoogle = Boolean(r.googleReviewId || r.source === 'google');
     return isGoogle ? rep.publishedToGoogle === true : true;
   }, []);
 
   const isSyncFailed = useCallback((r: Review) => {
     const rep = parseReply(r);
-    if (!rep) return false;
+    if (!rep || !rep.text?.trim()) return false;
     const isGoogle = Boolean(r.googleReviewId || r.source === 'google');
     return isGoogle && rep.publishedToGoogle !== true;
   }, []);
 
   const isPending = useCallback((r: Review) => {
-    return !parseReply(r);
+    const rep = parseReply(r);
+    if (!rep || !rep.text?.trim()) return true;
+    const isGoogle = Boolean(r.googleReviewId || r.source === 'google');
+    return isGoogle ? rep.publishedToGoogle !== true : false;
   }, []);
 
   const pending = useMemo(() => all.filter(isPending), [all, isPending]);
   const failed = useMemo(() => all.filter(isSyncFailed), [all, isSyncFailed]);
   const replied = useMemo(() => all.filter(isLiveReplied), [all, isLiveReplied]);
+  const counts = reviews.data?.counts;
   const totalRatings =
-    gbpPlace.data?.metrics?.totalReviews && gbpPlace.data.metrics.totalReviews > 0
+    counts?.all ??
+    (gbpPlace.data?.metrics?.totalReviews && gbpPlace.data.metrics.totalReviews > 0
       ? gbpPlace.data.metrics.totalReviews
-      : all.length > 0
-      ? reviews.data?.pagination?.total ?? all.length
-      : 0;
+      : reviews.data?.pagination?.total ?? all.length);
 
   // Dynamic Average Rating Calculation: Prioritize official Google place metrics, fallback to reviews
   const averageRating = useMemo(() => {
@@ -499,6 +513,7 @@ export default function ReviewRepliesScreen() {
     (connectionState === 'connected' ? 'connected-default' : '');
 
   const effectivePendingTotal =
+    counts?.needsReply ??
     pendingFeed.data?.pagination?.total ??
     pendingCount.data?.total ??
     (reviews.data ? pending.length : undefined);
@@ -962,7 +977,14 @@ export default function ReviewRepliesScreen() {
           </View>
         }
         onRefresh={async () => {
-          await Promise.all([reviews.refresh(), pendingFeed.refresh(),pendingCount.refresh(),gbpPlace.refresh(), discover.refresh()]).catch(() => {});
+          await Promise.all([
+            handleSyncGoogle({ silent: true }),
+            reviews.refresh(),
+            pendingFeed.refresh(),
+            pendingCount.refresh(),
+            gbpPlace.refresh(),
+            discover.refresh(),
+          ]).catch(() => {});
         }}
       >
         <ErrorNotice message={(filter==='needs_reply'?pendingFeed.error:reviews.error) || gbpPlace.error} retry={filter==='needs_reply'?pendingFeed.refresh:reviews.refresh} />
@@ -1000,7 +1022,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                All ({all.length})
+                All ({counts?.all ?? (reviews.data?.pagination?.total ?? all.length)})
               </Text>
             </Pressable>
 
@@ -1024,7 +1046,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                ⭐ 5 Stars ({fiveStars.length})
+                ⭐ 5 Stars ({counts?.fiveStars ?? fiveStars.length})
               </Text>
             </Pressable>
 
@@ -1048,7 +1070,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                ⭐ 4 Stars ({fourStars.length})
+                ⭐ 4 Stars ({counts?.fourStars ?? fourStars.length})
               </Text>
             </Pressable>
 
@@ -1072,12 +1094,12 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                ⭐ 3 Stars ({threeStars.length})
+                ⭐ 3 Stars ({counts?.threeStars ?? threeStars.length})
               </Text>
             </Pressable>
 
             {/* Critical 1-2 Stars */}
-            {critical.length > 0 && (
+            {(counts?.critical ?? critical.length) > 0 && (
               <Pressable
                 onPress={() => handleSelectFilter('critical')}
                 style={{
@@ -1099,7 +1121,7 @@ export default function ReviewRepliesScreen() {
                     fontSize: 12.5,
                   }}
                 >
-                  ⚠️ 1-2 Stars ({critical.length})
+                  ⚠️ 1-2 Stars ({counts?.critical ?? critical.length})
                 </Text>
               </Pressable>
             )}
@@ -2573,7 +2595,7 @@ export default function ReviewRepliesScreen() {
           <View style={{ alignItems: 'center', marginVertical: 12 }}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setDisplayLimit((prev) => prev + 15)}
+              onPress={() => setDisplayLimit((prev) => prev + 25)}
               style={({ pressed }) => ({
                 paddingHorizontal: 20,
                 paddingVertical: 10,
