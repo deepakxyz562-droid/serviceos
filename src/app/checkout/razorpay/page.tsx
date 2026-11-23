@@ -540,6 +540,13 @@ function RazorpayCheckoutContent() {
 export default function RazorpayCheckoutPage() {
   return (
     <>
+      <style>{`
+        [aria-label="Cookie consent banner"],
+        [aria-label*="Install"],
+        [role="dialog"][aria-label*="Install"] {
+          display: none !important;
+        }
+      `}</style>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
       <Suspense
         fallback={

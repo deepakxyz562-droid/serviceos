@@ -108,8 +108,22 @@ const subscribeConsent = (callback: () => void): (() => void) => {
 
 const getClientSnapshot = (): boolean => {
   if (typeof window === "undefined") return false;
+  const path = window.location.pathname.toLowerCase();
+  const search = window.location.search.toLowerCase();
+
   // Hide on the cookie policy page itself — the user is already reading it.
-  if (window.location.pathname === "/cookie-policy") return false;
+  if (path === "/cookie-policy") return false;
+
+  // Never show on checkout, payment, or mobile app checkout flows
+  if (
+    path.startsWith("/checkout") ||
+    path.startsWith("/b/") ||
+    search.includes("product=bgos") ||
+    search.includes("from=mobile")
+  ) {
+    return false;
+  }
+
   // Show the banner only when no valid consent decision exists yet AND the
   // user hasn't deferred it this session (scroll-to-dismiss sets the defer
   // flag so the banner doesn't keep overlapping content after the user

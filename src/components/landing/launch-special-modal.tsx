@@ -78,7 +78,11 @@ export function LaunchSpecialModal() {
     if (typeof window !== 'undefined') {
       const host = window.location.host.toLowerCase();
       const path = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
       if (
+        path.startsWith('/checkout') ||
+        search.includes('product=bgos') ||
+        search.includes('from=mobile') ||
         host === 'bgos.site' ||
         host === 'www.bgos.site' ||
         host.endsWith('.bgos.site') ||
