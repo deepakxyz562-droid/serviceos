@@ -55,6 +55,16 @@ interface ParsedReply {
   keywords?: KeywordUsage[];
 }
 
+interface BatchProgress {
+  type: 'auto_reply' | 'draft_all' | 'publish_all';
+  current: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  currentAuthor?: string;
+  rating?: number;
+}
+
 function parseReply(review: Review): ParsedReply | null {
   try {
     const parsed =
@@ -229,6 +239,7 @@ export default function ReviewRepliesScreen() {
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
   const [autoReplyBusy, setAutoReplyBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -361,7 +372,7 @@ export default function ReviewRepliesScreen() {
 
     Alert.alert(
       'Auto-Reply All to Google',
-      `AI will generate tailored responses and publish them directly to Google Maps for ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}. Continue?`,
+      `AI will generate tailored responses and publish them one-by-one to Google Maps for ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}.\n\nYou will see a live counter showing how many are sent and how many are left. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -369,6 +380,13 @@ export default function ReviewRepliesScreen() {
           onPress: async () => {
             setAutoReplyBusy(true);
             setLocalError(null);
+            setBatchProgress({
+              type: 'auto_reply',
+              current: 0,
+              total: unreplied.length,
+              succeeded: 0,
+              failed: 0,
+            });
             setNotice(`Auto-replying to ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}...`);
 
             let publishedCount = 0;
@@ -378,7 +396,18 @@ export default function ReviewRepliesScreen() {
             try {
               for (let i = 0; i < unreplied.length; i++) {
                 const rev = unreplied[i];
-                setNotice(`Auto-replying review ${i + 1} of ${unreplied.length} to Google Maps...`);
+                const author = rev.authorName || 'Valued Customer';
+                const leftCount = unreplied.length - i;
+                setBatchProgress({
+                  type: 'auto_reply',
+                  current: i + 1,
+                  total: unreplied.length,
+                  succeeded: publishedCount + localCount,
+                  failed: failureCount,
+                  currentAuthor: author,
+                  rating: rev.rating || 5,
+                });
+                setNotice(`Auto-replying ${i + 1} of ${unreplied.length} (${leftCount} left): "${author}"...`);
                 try {
                   const res = await apiRequest<{
                     success: boolean;
@@ -404,6 +433,16 @@ export default function ReviewRepliesScreen() {
                   console.warn(`Failed auto-reply for review ${rev.id}:`, itemErr);
                   failureCount++;
                 }
+
+                setBatchProgress({
+                  type: 'auto_reply',
+                  current: i + 1,
+                  total: unreplied.length,
+                  succeeded: publishedCount + localCount,
+                  failed: failureCount,
+                  currentAuthor: author,
+                  rating: rev.rating || 5,
+                });
               }
 
               const totalSuccess = publishedCount + localCount;
@@ -431,6 +470,7 @@ export default function ReviewRepliesScreen() {
               Alert.alert('Auto-Reply Error', errMsg);
             } finally {
               setAutoReplyBusy(false);
+              setBatchProgress(null);
             }
           },
         },
@@ -628,15 +668,42 @@ export default function ReviewRepliesScreen() {
 
     setDraftAllBusy(true);
     setLocalError(null);
+    setBatchProgress({
+      type: 'draft_all',
+      current: 0,
+      total: toDraft.length,
+      succeeded: 0,
+      failed: 0,
+    });
     setNotice(`Generating AI drafts for ${toDraft.length} review${toDraft.length === 1 ? '' : 's'}...`);
     let count = 0;
     try {
       for (let i = 0; i < toDraft.length; i++) {
         const rev = toDraft[i];
-        setNotice(`Generating AI draft ${i + 1} of ${toDraft.length}...`);
+        const author = rev.authorName || 'Valued Customer';
+        const leftCount = toDraft.length - i;
+        setBatchProgress({
+          type: 'draft_all',
+          current: i + 1,
+          total: toDraft.length,
+          succeeded: count,
+          failed: 0,
+          currentAuthor: author,
+          rating: rev.rating || 5,
+        });
+        setNotice(`Generating AI draft ${i + 1} of ${toDraft.length} (${leftCount} left): "${author}"...`);
         const draftData = await generateDraftText(rev);
         count++;
         setDrafts((prev) => ({ ...prev, [rev.id]: draftData }));
+        setBatchProgress({
+          type: 'draft_all',
+          current: i + 1,
+          total: toDraft.length,
+          succeeded: count,
+          failed: 0,
+          currentAuthor: author,
+          rating: rev.rating || 5,
+        });
       }
       const doneMsg = `Generated ${count} AI reply draft${count === 1 ? '' : 's'}. Review or publish below.`;
       setNotice(doneMsg);
@@ -645,6 +712,7 @@ export default function ReviewRepliesScreen() {
       Alert.alert('Drafting Notice', (err as Error).message || 'Some drafts could not be generated.');
     } finally {
       setDraftAllBusy(false);
+      setBatchProgress(null);
     }
   }
 
@@ -666,13 +734,36 @@ export default function ReviewRepliesScreen() {
           onPress: async () => {
             setPublishAllBusy(true);
             setLocalError(null);
+            setBatchProgress({
+              type: 'publish_all',
+              current: 0,
+              total: readyReviewIds.length,
+              succeeded: 0,
+              failed: 0,
+            });
             setNotice(`Publishing ${readyReviewIds.length} drafts to Google Maps...`);
             let publishedCount = 0;
+            let failureCount = 0;
             try {
-              for (const revId of readyReviewIds) {
+              for (let i = 0; i < readyReviewIds.length; i++) {
+                const revId = readyReviewIds[i];
                 const draftItem = drafts[revId];
                 if (!draftItem) continue;
                 const rev = all.find((r) => r.id === revId) || pendingFeed.data?.reviews?.find((r) => r.id === revId);
+                const author = rev?.authorName || 'Valued Customer';
+                const leftCount = readyReviewIds.length - i;
+
+                setBatchProgress({
+                  type: 'publish_all',
+                  current: i + 1,
+                  total: readyReviewIds.length,
+                  succeeded: publishedCount,
+                  failed: failureCount,
+                  currentAuthor: author,
+                  rating: rev?.rating || 5,
+                });
+                setNotice(`Publishing draft ${i + 1} of ${readyReviewIds.length} (${leftCount} left): "${author}"...`);
+
                 if (!rev) continue;
 
                 try {
@@ -695,7 +786,18 @@ export default function ReviewRepliesScreen() {
                   });
                 } catch (itemErr) {
                   console.warn(`Failed to publish draft for review ${revId}:`, itemErr);
+                  failureCount++;
                 }
+
+                setBatchProgress({
+                  type: 'publish_all',
+                  current: i + 1,
+                  total: readyReviewIds.length,
+                  succeeded: publishedCount,
+                  failed: failureCount,
+                  currentAuthor: author,
+                  rating: rev?.rating || 5,
+                });
               }
 
               const msg = `Published ${publishedCount} of ${readyReviewIds.length} reply drafts to Google Maps.`;
@@ -706,6 +808,7 @@ export default function ReviewRepliesScreen() {
               Alert.alert('Publish Error', (err as Error).message || 'Failed to publish all drafts.');
             } finally {
               setPublishAllBusy(false);
+              setBatchProgress(null);
             }
           },
         },
@@ -1125,6 +1228,122 @@ export default function ReviewRepliesScreen() {
                   </Pressable>
                 </View>
 
+                {/* Live Batch Progress Counter Card */}
+                {batchProgress && (
+                  <View
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1.5,
+                      borderColor:
+                        batchProgress.type === 'auto_reply'
+                          ? '#93C5FD'
+                          : batchProgress.type === 'draft_all'
+                          ? '#C4B5FD'
+                          : '#6EE7B7',
+                      borderRadius: 12,
+                      padding: 12,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <ActivityIndicator
+                          size="small"
+                          color={
+                            batchProgress.type === 'auto_reply'
+                              ? '#2563EB'
+                              : batchProgress.type === 'draft_all'
+                              ? '#7C3AED'
+                              : '#059669'
+                          }
+                        />
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                          {batchProgress.type === 'auto_reply'
+                            ? 'Sending to Google Maps...'
+                            : batchProgress.type === 'draft_all'
+                            ? 'Generating AI Drafts...'
+                            : 'Publishing Drafts...'}
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          backgroundColor:
+                            batchProgress.type === 'auto_reply'
+                              ? '#EFF6FF'
+                              : batchProgress.type === 'draft_all'
+                              ? '#F5F3FF'
+                              : '#ECFDF5',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: '800',
+                            color:
+                              batchProgress.type === 'auto_reply'
+                                ? '#1D4ED8'
+                                : batchProgress.type === 'draft_all'
+                                ? '#6D28D9'
+                                : '#047857',
+                          }}
+                        >
+                          {batchProgress.current} / {batchProgress.total}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Progress Bar Track */}
+                    <View
+                      style={{
+                        height: 6,
+                        backgroundColor: '#E2E8F0',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(
+                            100,
+                            Math.round(
+                              ((batchProgress.current) / Math.max(1, batchProgress.total)) * 100
+                            )
+                          )}%`,
+                          backgroundColor:
+                            batchProgress.type === 'auto_reply'
+                              ? '#2563EB'
+                              : batchProgress.type === 'draft_all'
+                              ? '#7C3AED'
+                              : '#059669',
+                          borderRadius: 3,
+                        }}
+                      />
+                    </View>
+
+                    {/* Sent & Left breakdown */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>
+                        {batchProgress.current} processed •{' '}
+                        <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                          {Math.max(0, batchProgress.total - batchProgress.current)} left
+                        </Text>
+                      </Text>
+                      {batchProgress.currentAuthor ? (
+                        <Text
+                          style={{ fontSize: 11, color: '#64748B', maxWidth: '50%' }}
+                          numberOfLines={1}
+                        >
+                          {batchProgress.currentAuthor}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                )}
+
                 {/* Main Action Buttons: [Draft All with AI] & [Auto-Reply All] */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Pressable
@@ -1141,12 +1360,22 @@ export default function ReviewRepliesScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 5,
-                      paddingHorizontal: 10,
+                      paddingHorizontal: 8,
                       opacity: draftAllBusy ? 0.7 : pressed ? 0.85 : 1,
                     })}
                   >
                     {draftAllBusy ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }} numberOfLines={1}>
+                          {batchProgress?.type === 'draft_all'
+                            ? `${batchProgress.current}/${batchProgress.total} (${Math.max(
+                                0,
+                                batchProgress.total - batchProgress.current
+                              )} left)`
+                            : 'Drafting...'}
+                        </Text>
+                      </>
                     ) : (
                       <>
                         <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
@@ -1171,12 +1400,22 @@ export default function ReviewRepliesScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 5,
-                      paddingHorizontal: 10,
+                      paddingHorizontal: 8,
                       opacity: autoReplyBusy ? 0.7 : pressed ? 0.85 : 1,
                     })}
                   >
                     {autoReplyBusy ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }} numberOfLines={1}>
+                          {batchProgress?.type === 'auto_reply'
+                            ? `${batchProgress.current}/${batchProgress.total} (${Math.max(
+                                0,
+                                batchProgress.total - batchProgress.current
+                              )} left)`
+                            : 'Replying...'}
+                        </Text>
+                      </>
                     ) : (
                       <>
                         <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
@@ -1228,7 +1467,17 @@ export default function ReviewRepliesScreen() {
                       })}
                     >
                       {publishAllBusy ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <>
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                            {batchProgress?.type === 'publish_all'
+                              ? `${batchProgress.current}/${batchProgress.total} (${Math.max(
+                                  0,
+                                  batchProgress.total - batchProgress.current
+                                )} left)`
+                              : 'Publishing...'}
+                          </Text>
+                        </>
                       ) : (
                         <>
                           <MaterialIcons name="publish" size={13} color="#FFFFFF" />
