@@ -224,6 +224,9 @@ export default function ReviewRepliesScreen() {
 
   const [drafts, setDrafts] = useState<Record<string, { text: string; keywords?: KeywordUsage[] }>>({});
   const [draftBusyId, setDraftBusyId] = useState<string | null>(null);
+  const [draftAllBusy, setDraftAllBusy] = useState(false);
+  const [publishAllBusy, setPublishAllBusy] = useState(false);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [replyBusyId, setReplyBusyId] = useState<string | null>(null);
   const [autoReplyBusy, setAutoReplyBusy] = useState(false);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
@@ -349,25 +352,43 @@ export default function ReviewRepliesScreen() {
 
   async function handleTriggerAutoReply() {
     if (autoReplyBusy) return;
-    setAutoReplyBusy(true);
-    setLocalError(null);
-    setNotice('');
-    try {
-      const res = await apiRequest<{ success: boolean; processedCount: number; message: string }>('/api/reviews/auto-reply', {
-        method: 'POST',
-        body: { minRating: 1 },
-      });
-      const msg = res.message || `Processed ${res.processedCount} auto-replies.`;
-      setNotice(msg);
-      Alert.alert('AI Auto-Reply', msg);
-      await Promise.all([reviews.refresh(),pendingFeed.refresh(),pendingCount.refresh()]);
-    } catch (err: unknown) {
-      const errMsg = (err as Error).message || 'AI Auto-reply failed.';
-      setLocalError(errMsg);
-      Alert.alert('Auto-Reply Error', errMsg);
-    } finally {
-      setAutoReplyBusy(false);
+    const unrepliedCount = (pendingFeed.data?.reviews || all).filter(isPending).length;
+    if (unrepliedCount === 0) {
+      Alert.alert('All Caught Up 🎉', 'All customer reviews already have replies on Google Maps.');
+      return;
     }
+
+    Alert.alert(
+      'Auto-Reply All to Google',
+      `AI will generate tailored responses and publish them directly to Google Maps for ${unrepliedCount} pending review${unrepliedCount === 1 ? '' : 's'}. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Reply to All (${unrepliedCount})`,
+          onPress: async () => {
+            setAutoReplyBusy(true);
+            setLocalError(null);
+            setNotice('Generating AI replies and publishing to Google Maps...');
+            try {
+              const res = await apiRequest<{ success: boolean; processedCount: number; message: string }>('/api/reviews/auto-reply', {
+                method: 'POST',
+                body: { minRating: 1 },
+              });
+              const msg = res.message || `Processed ${res.processedCount} auto-replies.`;
+              setNotice(msg);
+              Alert.alert('AI Auto-Reply Complete', msg);
+              await Promise.all([reviews.refresh(), pendingFeed.refresh(), pendingCount.refresh()]);
+            } catch (err: unknown) {
+              const errMsg = (err as Error).message || 'AI Auto-reply failed.';
+              setLocalError(errMsg);
+              Alert.alert('Auto-Reply Error', errMsg);
+            } finally {
+              setAutoReplyBusy(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   const [syncBusy, setSyncBusy] = useState(false);
@@ -480,68 +501,169 @@ export default function ReviewRepliesScreen() {
     }
   }
 
+  async function generateDraftText(review: Review): Promise<{ text: string; keywords?: KeywordUsage[] }> {
+    const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
+    const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
+    const author = review.authorName || 'valued customer';
+    const comment = review.comment ? `"${review.comment}"` : 'Rating only';
+    const phone = gbpPlace.data?.place?.phone || '';
+
+    let topic = '';
+    let tone = 'Friendly and professional';
+    let fallbackText = '';
+
+    if (rating <= 2) {
+      topic = `Write a sincere, professional apology reply to an unhappy customer ${author} who left a ${rating}★ review: ${comment}. Sincerely apologize on behalf of ${businessTitle}, acknowledge the issue without being defensive, and provide direct contact ${phone || 'our management team'} so management can resolve it privately. NEVER thank them for a great review and do not use cheerful emojis. 2-3 sentences.`;
+      tone = 'Empathetic, apologetic, and de-escalating';
+      fallbackText = `Dear ${author}, we sincerely apologize that your experience with ${businessTitle} did not meet expectations. We take your feedback seriously and want to make it right. Please reach out to us directly at ${phone || 'our office'} so we can address your concerns.`;
+    } else if (rating === 3) {
+      topic = `Write a polite, balanced Google review reply to customer ${author} who left a 3★ review: ${comment}. Thank them for honest feedback on behalf of ${businessTitle}, note dedication to improving, and invite them back to experience 5-star service. 2-3 sentences.`;
+      tone = 'Professional, constructive, and respectful';
+      fallbackText = `Thank you for sharing your feedback, ${author}. We appreciate your honest thoughts and are continuously working to refine our service at ${businessTitle}. We hope to welcome you back soon and deliver a true 5-star experience!`;
+    } else {
+      topic = `Write an enthusiastic, grateful Google review reply (2-3 sentences) to customer ${author} for their ${rating}★ review: ${comment}. Thank them warmly on behalf of ${businessTitle}, highlight their compliments, and invite them back.`;
+      tone = 'Warm, enthusiastic, and appreciative';
+      fallbackText = `Thank you so much for the wonderful ${rating}-star review, ${author}! The entire team at ${businessTitle} is thrilled to hear about your great experience. We look forward to welcoming you back soon!`;
+    }
+
+    let caption = '';
+    let keywords: KeywordUsage[] = [];
+    try {
+      const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
+        method: 'POST',
+        body: { topic, platforms: ['googlebusiness'], tone },
+      });
+      if (res.caption) {
+        caption = res.caption.trim();
+        if ((caption.startsWith('"') && caption.endsWith('"')) || (caption.startsWith("'") && caption.endsWith("'"))) {
+          caption = caption.slice(1, -1).trim();
+        }
+        if (res.keywords && res.keywords.length > 0) keywords = res.keywords;
+      }
+    } catch {
+      // Fallback gracefully on network/AI timeout
+    }
+
+    if (!caption) caption = fallbackText;
+    return { text: caption, keywords };
+  }
+
   async function generateDraft(review: Review) {
     if (draftBusyId) return;
     setDraftBusyId(review.id);
     setLocalError(null);
     setNotice('');
     try {
-      const rating = Math.max(1, Math.min(5, Math.round(review.rating || 0)));
-      const businessTitle = activeProfile?.name || gbpPlace.data?.place?.title || 'our business';
-      const author = review.authorName || 'valued customer';
-      const comment = review.comment ? `"${review.comment}"` : 'Rating only';
-      const phone = gbpPlace.data?.place?.phone || '';
-
-      let topic = '';
-      let tone = 'Friendly and professional';
-      let fallbackText = '';
-
-      if (rating <= 2) {
-        topic = `Write a sincere, professional apology reply to an unhappy customer ${author} who left a ${rating}★ review: ${comment}. Sincerely apologize on behalf of ${businessTitle}, acknowledge the issue without being defensive, and provide direct contact ${phone || 'our management team'} so management can resolve it privately. NEVER thank them for a great review and do not use cheerful emojis. 2-3 sentences.`;
-        tone = 'Empathetic, apologetic, and de-escalating';
-        fallbackText = `Dear ${author}, we sincerely apologize that your experience with ${businessTitle} did not meet expectations. We take your feedback seriously and want to make it right. Please reach out to us directly at ${phone || 'our office'} so we can address your concerns.`;
-      } else if (rating === 3) {
-        topic = `Write a polite, balanced Google review reply to customer ${author} who left a 3★ review: ${comment}. Thank them for honest feedback on behalf of ${businessTitle}, note dedication to improving, and invite them back to experience 5-star service. 2-3 sentences.`;
-        tone = 'Professional, constructive, and respectful';
-        fallbackText = `Thank you for sharing your feedback, ${author}. We appreciate your honest thoughts and are continuously working to refine our service at ${businessTitle}. We hope to welcome you back soon and deliver a true 5-star experience!`;
-      } else {
-        topic = `Write an enthusiastic, grateful Google review reply (2-3 sentences) to customer ${author} for their ${rating}★ review: ${comment}. Thank them warmly on behalf of ${businessTitle}, highlight their compliments, and invite them back.`;
-        tone = 'Warm, enthusiastic, and appreciative';
-        fallbackText = `Thank you so much for the wonderful ${rating}-star review, ${author}! The entire team at ${businessTitle} is thrilled to hear about your great experience. We look forward to welcoming you back soon!`;
-      }
-
-      let caption = '';
-      let keywords: KeywordUsage[] = [];
-      try {
-        const res = await apiRequest<{ caption: string; keywords?: KeywordUsage[] }>('/api/social/ai-caption', {
-          method: 'POST',
-          body: { topic, platforms: ['googlebusiness'], tone },
-        });
-        if (res.caption) {
-          caption = res.caption.trim();
-          if ((caption.startsWith('"') && caption.endsWith('"')) || (caption.startsWith("'") && caption.endsWith("'"))) {
-            caption = caption.slice(1, -1).trim();
-          }
-          if (res.keywords && res.keywords.length > 0) keywords = res.keywords;
-        }
-      } catch {
-        // Fallback gracefully on network/AI timeout
-      }
-
-      if (!caption) caption = fallbackText;
-
+      const draftData = await generateDraftText(review);
       setDrafts((prev) => ({
         ...prev,
-        [review.id]: {
-          text: caption,
-          keywords,
-        },
+        [review.id]: draftData,
       }));
     } catch (e) {
       setLocalError((e as Error).message || 'AI reply generation failed.');
     } finally {
       setDraftBusyId(null);
     }
+  }
+
+  async function handleDraftAllPending() {
+    if (draftAllBusy || autoReplyBusy) return;
+    const unreplied = (pendingFeed.data?.reviews || all).filter(isPending);
+    const toDraft = unreplied.filter((r) => !drafts[r.id]);
+    if (toDraft.length === 0) {
+      if (unreplied.length === 0) {
+        Alert.alert('All Caught Up 🎉', 'All customer reviews already have replies.');
+      } else {
+        Alert.alert('Drafts Ready', 'All pending reviews already have AI drafts ready to review below.');
+      }
+      return;
+    }
+
+    setDraftAllBusy(true);
+    setLocalError(null);
+    setNotice(`Generating AI drafts for ${toDraft.length} review${toDraft.length === 1 ? '' : 's'}...`);
+    let count = 0;
+    try {
+      for (let i = 0; i < toDraft.length; i++) {
+        const rev = toDraft[i];
+        setNotice(`Generating AI draft ${i + 1} of ${toDraft.length}...`);
+        const draftData = await generateDraftText(rev);
+        count++;
+        setDrafts((prev) => ({ ...prev, [rev.id]: draftData }));
+      }
+      const doneMsg = `Generated ${count} AI reply draft${count === 1 ? '' : 's'}. Review or publish below.`;
+      setNotice(doneMsg);
+      Alert.alert('AI Drafts Created', doneMsg);
+    } catch (err: unknown) {
+      Alert.alert('Drafting Notice', (err as Error).message || 'Some drafts could not be generated.');
+    } finally {
+      setDraftAllBusy(false);
+    }
+  }
+
+  async function handlePublishAllDrafts() {
+    if (publishAllBusy) return;
+    const readyReviewIds = Object.keys(drafts);
+    if (readyReviewIds.length === 0) {
+      Alert.alert('No Drafts Ready', 'Tap "Draft All with AI" to generate reply drafts first.');
+      return;
+    }
+
+    Alert.alert(
+      'Publish All Drafts',
+      `Publish ${readyReviewIds.length} generated AI reply draft${readyReviewIds.length === 1 ? '' : 's'} to Google Maps?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Publish All (${readyReviewIds.length})`,
+          onPress: async () => {
+            setPublishAllBusy(true);
+            setLocalError(null);
+            setNotice(`Publishing ${readyReviewIds.length} drafts to Google Maps...`);
+            let publishedCount = 0;
+            try {
+              for (const revId of readyReviewIds) {
+                const draftItem = drafts[revId];
+                if (!draftItem) continue;
+                const rev = all.find((r) => r.id === revId) || pendingFeed.data?.reviews?.find((r) => r.id === revId);
+                if (!rev) continue;
+
+                try {
+                  await apiRequest<{
+                    message?: string;
+                    moderationState?: string;
+                    publishedToGoogle?: boolean;
+                  }>(`/api/reviews/${rev.id}/reply`, {
+                    method: 'POST',
+                    body: {
+                      replyText: draftItem.text.trim(),
+                      keywords: draftItem.keywords || [],
+                    },
+                  });
+                  publishedCount++;
+                  setDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[revId];
+                    return next;
+                  });
+                } catch (itemErr) {
+                  console.warn(`Failed to publish draft for review ${revId}:`, itemErr);
+                }
+              }
+
+              const msg = `Published ${publishedCount} of ${readyReviewIds.length} reply drafts to Google Maps.`;
+              setNotice(msg);
+              Alert.alert('Batch Publish Complete', msg);
+              await Promise.all([reviews.refresh(), pendingFeed.refresh(), pendingCount.refresh()]);
+            } catch (err: unknown) {
+              Alert.alert('Publish Error', (err as Error).message || 'Failed to publish all drafts.');
+            } finally {
+              setPublishAllBusy(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function publishReply(review: Review, text: string, kw?: KeywordUsage[]) {
@@ -872,6 +994,254 @@ export default function ReviewRepliesScreen() {
             <MaterialIcons name="filter-list" size={18} color="#64748B" />
           </Pressable>
         </View>
+
+        {/* ── AI REVIEW REPLY STUDIO: BATCH AI DRAFTING & 1-TAP PUBLISH BAR ── */}
+        {(() => {
+          const currentPendingReviews = (pendingFeed.data?.reviews || all).filter(isPending);
+          const currentPendingCount = currentPendingReviews.length;
+          const draftsCount = Object.keys(drafts).length;
+
+          if (currentPendingCount > 0 || draftsCount > 0) {
+            return (
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1.5,
+                  borderColor: '#E2E8F0',
+                  padding: 14,
+                  marginVertical: 6,
+                  shadowColor: '#4F46E5',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 8,
+                  elevation: 2,
+                  gap: 12,
+                }}
+              >
+                {/* Header Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 10,
+                        backgroundColor: '#F5F3FF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <MaterialIcons name="auto-awesome" size={18} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                          AI Review Reply Studio
+                        </Text>
+                        <View
+                          style={{
+                            backgroundColor: '#FEF3C7',
+                            paddingHorizontal: 7,
+                            paddingVertical: 1.5,
+                            borderRadius: 10,
+                          }}
+                        >
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#B45309' }}>
+                            {currentPendingCount} Pending
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                        Draft AI replies for all reviews or auto-publish to Google in 1 tap
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="AI Auto-reply settings"
+                    onPress={() => setRulesModalOpen(true)}
+                    hitSlop={8}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <MaterialIcons name="tune" size={16} color="#475569" />
+                  </Pressable>
+                </View>
+
+                {/* Main Action Buttons: [Draft All with AI] & [Auto-Reply All] */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Draft all pending replies with AI"
+                    disabled={draftAllBusy || autoReplyBusy || publishAllBusy}
+                    onPress={() => void handleDraftAllPending()}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: 38,
+                      backgroundColor: '#7C3AED',
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      paddingHorizontal: 10,
+                      opacity: draftAllBusy ? 0.7 : pressed ? 0.85 : 1,
+                    })}
+                  >
+                    {draftAllBusy ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="auto-awesome" size={14} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+                          Draft All with AI
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Auto reply and publish all to Google"
+                    disabled={draftAllBusy || autoReplyBusy || publishAllBusy}
+                    onPress={() => void handleTriggerAutoReply()}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: 38,
+                      backgroundColor: '#2563EB',
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      paddingHorizontal: 10,
+                      opacity: autoReplyBusy ? 0.7 : pressed ? 0.85 : 1,
+                    })}
+                  >
+                    {autoReplyBusy ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="bolt" size={14} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+                          Auto-Reply All
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+
+                {/* Dynamic Row: Publish All Drafts when 1+ drafts ready */}
+                {draftsCount > 0 && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: '#ECFDF5',
+                      borderWidth: 1,
+                      borderColor: '#A7F3D0',
+                      borderRadius: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="check-circle" size={15} color="#059669" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#065F46' }}>
+                        {draftsCount} AI draft{draftsCount === 1 ? '' : 's'} ready to review
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Publish all drafts to Google"
+                      disabled={publishAllBusy}
+                      onPress={() => void handlePublishAllDrafts()}
+                      style={({ pressed }) => ({
+                        backgroundColor: '#059669',
+                        paddingHorizontal: 11,
+                        paddingVertical: 5,
+                        borderRadius: 7,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        opacity: publishAllBusy ? 0.7 : pressed ? 0.85 : 1,
+                      })}
+                    >
+                      {publishAllBusy ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="publish" size={13} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                            Publish All
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          }
+
+          if (all.length > 0) {
+            return (
+              <View
+                style={{
+                  backgroundColor: '#F0FDF4',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#BBF7D0',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  marginVertical: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <MaterialIcons name="verified" size={16} color="#16A34A" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>
+                    All reviews answered on Google Maps! 🎉
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setRulesModalOpen(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                    backgroundColor: '#DCFCE7',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                  }}
+                >
+                  <MaterialIcons name="tune" size={12} color="#15803D" />
+                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#15803D' }}>AI Rules</Text>
+                </Pressable>
+              </View>
+            );
+          }
+
+          return null;
+        })()}
 
         <Pressable accessibilityRole="button" accessibilityState={{expanded:settingsOpen}} onPress={()=>setSettingsOpen(!settingsOpen)} style={{paddingVertical:12}}><Text style={{color:'#007841',fontWeight:'700'}}>{settingsOpen?'Hide review tools':'Review insights & tools'}</Text></Pressable>
         {settingsOpen && <>
@@ -2007,6 +2377,183 @@ export default function ReviewRepliesScreen() {
           setReviewSheetOpen(true);
         }}
       />
+
+      {/* AI Auto-Reply Rules Modal */}
+      <Modal
+        visible={rulesModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setRulesModalOpen(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 20,
+              gap: 16,
+              maxHeight: '80%',
+            }}
+          >
+            {/* Modal Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    backgroundColor: '#F5F3FF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="auto-awesome" size={20} color="#7C3AED" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                    AI Auto-Reply Rules
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                    Configure automatic AI review responses
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setRulesModalOpen(false)}
+                hitSlop={8}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MaterialIcons name="close" size={18} color="#64748B" />
+              </Pressable>
+            </View>
+
+            {/* Rule 1: Enable Auto-Reply */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 14,
+                borderRadius: 14,
+                backgroundColor: effectiveAutoReply ? '#F0FDF4' : '#F8FAFC',
+                borderWidth: 1,
+                borderColor: effectiveAutoReply ? '#BBF7D0' : '#E2E8F0',
+              }}
+            >
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                  Enable AI Auto-Reply
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2, lineHeight: 15 }}>
+                  Automatically generate intelligent replies to customer reviews on Google
+                </Text>
+              </View>
+              <Switch
+                value={effectiveAutoReply}
+                onValueChange={(val) => void handleToggleAutoReply(val)}
+                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                thumbColor={effectiveAutoReply ? '#16A34A' : '#F1F5F9'}
+              />
+            </View>
+
+            {/* Rule 2: Auto-Publish to Google Maps */}
+            {effectiveAutoReply && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 14,
+                  borderRadius: 14,
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                    Publish Directly to Google
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2, lineHeight: 15 }}>
+                    {effectiveAutoPublish
+                      ? 'Responses publish live to Google Maps automatically'
+                      : 'Saves as drafts for your manual review before posting'}
+                  </Text>
+                </View>
+                <Switch
+                  value={effectiveAutoPublish}
+                  onValueChange={(val) => void handleToggleAutoPublish(val)}
+                  trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                  thumbColor={effectiveAutoPublish ? '#16A34A' : '#F1F5F9'}
+                />
+              </View>
+            )}
+
+            {/* Action Button: Auto-Reply to Pending Now */}
+            {pending.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                disabled={autoReplyBusy}
+                onPress={() => {
+                  setRulesModalOpen(false);
+                  void handleTriggerAutoReply();
+                }}
+                style={{
+                  minHeight: 46,
+                  borderRadius: 12,
+                  backgroundColor: '#2563EB',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                {autoReplyBusy ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="bolt" size={18} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800' }}>
+                      Auto-Reply to {pending.length} Pending Now
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setRulesModalOpen(false)}
+              style={{
+                minHeight: 44,
+                borderRadius: 12,
+                backgroundColor: '#F1F5F9',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
