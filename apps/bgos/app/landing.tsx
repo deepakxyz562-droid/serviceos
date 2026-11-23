@@ -11,21 +11,19 @@ import {
   Globe,
   QrCode,
   Star,
-  MessageCircle,
-  Calendar,
   ShieldCheck,
   TrendingUp,
   X,
   Plus,
-  Stethoscope,
-  Scissors,
-  Palmtree,
-  Wrench,
-  Utensils,
-  Dumbbell,
   CheckCircle2,
-  Clock,
-  ChevronRight,
+  Zap,
+  Palette,
+  Trophy,
+  Building2,
+  Phone,
+  Search,
+  Users,
+  Layers,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import s from './landing.module.css';
@@ -70,6 +68,78 @@ function Logo() {
     </div>
   );
 }
+
+const QUICK_PILLARS = [
+  {
+    icon: MapPin,
+    title: 'Google Business Profile AI',
+    desc: 'Optimize & grow',
+    pillar: 'gbp' as const,
+  },
+  {
+    icon: Star,
+    title: 'Review Management',
+    desc: 'Reply in 30 seconds',
+    pillar: 'gbp' as const,
+  },
+  {
+    icon: Bot,
+    title: 'AI Business Assistant',
+    desc: 'Answer & engage 24/7',
+    pillar: 'ai' as const,
+  },
+  {
+    icon: Palette,
+    title: 'AI Marketing Studio',
+    desc: 'Create stunning content',
+    pillar: 'studio' as const,
+  },
+  {
+    icon: Globe,
+    title: 'Website & Forms',
+    desc: 'Get more leads',
+    pillar: 'website' as const,
+  },
+];
+
+const INDUSTRIES = [
+  {
+    name: 'Clinics & Dentists',
+    image: '/images/bgos/templates/dental.webp',
+    badge: '+48% More Consultations',
+    desc: 'Auto-reply to patient reviews, confirm appointment slots, and answer pricing inquiries without front-desk bottlenecks.',
+  },
+  {
+    name: 'Salons & Spas',
+    image: '/images/bgos/templates/salon.webp',
+    badge: 'Zero Unanswered Inquiries',
+    desc: 'Send review requests after appointments, showcase styling photos, and auto-book appointments via WhatsApp chat.',
+  },
+  {
+    name: 'Farmhouses & Resorts',
+    image: '/images/bgos/templates/property.webp',
+    badge: '0% Commission Direct Bookings',
+    desc: 'Accept swimming pool access and stay reservations directly on bgos.site/your-resort without paying OTA commissions.',
+  },
+  {
+    name: 'Tradies & Home Services',
+    image: '/images/bgos/templates/plumbing.webp',
+    badge: 'Top 3 Google Maps Ranking',
+    desc: 'Boost local visibility for plumbers, electricians, painters, and HVAC technicians with automated job photo sync.',
+  },
+  {
+    name: 'Restaurants & Cafes',
+    image: '/images/bgos/templates/cafe.webp',
+    badge: '+3.4x Direction Inquiries',
+    desc: 'Post mouth-watering weekly food specials, manage 5-star Google ratings, and guide customers with counter QR standees.',
+  },
+  {
+    name: 'Gyms & Fitness',
+    image: '/images/bgos/templates/fitness.webp',
+    badge: 'Instant Trial Class Signups',
+    desc: 'Capture fitness leads on social media, follow up via automated WhatsApp templates, and boost membership renewals.',
+  },
+];
 
 export default function Landing() {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -131,10 +201,10 @@ export default function Landing() {
     }
   };
 
-  // ── 2. Interactive 4-Pillar Tabs State ──────────────────────────────────
-  const [activePillar, setActivePillar] = useState<'gbp' | 'ai' | 'website' | 'standee'>('gbp');
+  // ── 2. Interactive 5-Pillar Tabs State ──────────────────────────────────
+  const [activePillar, setActivePillar] = useState<'gbp' | 'ai' | 'website' | 'standee' | 'studio'>('gbp');
 
-  // ── 3. 15-Second Google Maps Growth Score Audit State (Dhanda / Grexa Top-of-Funnel) ──
+  // ── 3. 15-Second Google Maps Growth Score Audit State ───────────────────
   const [auditBusiness, setAuditBusiness] = useState('ShieldHire SOS App');
   const [auditCity, setAuditCity] = useState('Delhi');
   const [auditRunning, setAuditRunning] = useState(false);
@@ -155,7 +225,7 @@ export default function Landing() {
     }>;
   } | null>({
     score: 64,
-    benchmarkScore: 82,
+    benchmarkScore: 84,
     grade: 'Needs Optimization to Reach Top 3',
     business: 'ShieldHire SOS App',
     city: 'Delhi',
@@ -208,21 +278,21 @@ export default function Landing() {
       setTimeout(() => {
         setAuditStep(3);
         setTimeout(() => {
-          const seed = (cleanB.length * 7 + cleanC.length * 3) % 15;
-          const calculatedScore = 58 + seed;
+          const seed = (cleanB.length * 7 + cleanC.length * 3) % 20;
+          const calculatedScore = 62 + seed;
           setAuditResult({
             score: calculatedScore,
-            benchmarkScore: 84,
-            grade: calculatedScore >= 70 ? 'Good Potential • Close to Top 3' : 'Needs Optimization to Reach Top 3',
+            benchmarkScore: 86,
+            grade: calculatedScore >= 75 ? 'Good Potential • Close to Top 3' : 'Needs Optimization to Reach Top 3',
             business: cleanB,
             city: cleanC,
             checkpoints: [
               {
                 title: 'Google Maps 3-Pack SEO & Keywords',
                 score: calculatedScore - 6,
-                badge: 'Gap Found',
-                status: 'warning',
-                diagnostic: `Missing target neighborhood search keywords for ${cleanB} in ${cleanC}. Google 3-Pack visibility is limited to a 1.2km radius.`,
+                badge: calculatedScore >= 75 ? 'Optimized' : 'Gap Found',
+                status: calculatedScore >= 75 ? 'good' : 'warning',
+                diagnostic: `Missing neighborhood search keywords for ${cleanB} in ${cleanC}. Local 3-Pack visibility is limited to a 1.2km radius.`,
                 fix: 'Ranking Agent optimizes category taxonomy and local service tags to expand radius.',
               },
               {
@@ -266,9 +336,9 @@ export default function Landing() {
           <Logo />
         </a>
         <nav aria-label="Main Navigation">
-          <a href="#audit">Score Audit</a>
           <a href="#features">Features</a>
-          <a href="#solutions">Industries</a>
+          <a href="#audit">Google Growth</a>
+          <a href="#industries">Industries</a>
           <a href="#comparison">Why BGOS</a>
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
@@ -281,15 +351,15 @@ export default function Landing() {
             rel="noopener noreferrer"
           >
             <GooglePlayIcon size={16} />
-            <span>Install on Google Play</span>
+            <span>Get BGOS on Google Play</span>
           </a>
         </div>
         <details className={s.mobileMenu}>
-          <summary>Menu ☰</summary>
+          <summary aria-label="Open mobile navigation">☰</summary>
           <nav aria-label="Mobile Navigation">
-            <a href="#audit">Score Audit</a>
             <a href="#features">Features</a>
-            <a href="#solutions">Industries</a>
+            <a href="#audit">Google Growth</a>
+            <a href="#industries">Industries</a>
             <a href="#comparison">Why BGOS</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
@@ -322,10 +392,22 @@ export default function Landing() {
                   <Sparkles size={14} /> AUTONOMOUS AI MARKETING &amp; LOCAL GROWTH
                 </div>
                 <h1>
-                  Rank #1 on Google Maps.<br />
-                  Convert Inquiries 24/7.<br />
-                  <em>Autopilot Your Business.</em>
+                  Get Found. Win Customers.<br />
+                  <em>Grow Automatically.</em>
                 </h1>
+
+                <div className={s.heroValueProps}>
+                  <div className={s.heroValuePropItem}>
+                    <Check size={14} /> Rank #1 on Google Maps.
+                  </div>
+                  <div className={s.heroValuePropItem}>
+                    <Check size={14} /> Convert Inquiries 24/7.
+                  </div>
+                  <div className={s.heroValuePropItem}>
+                    <Check size={14} /> Autopilot Your Business.
+                  </div>
+                </div>
+
                 <p>
                   BGOS replies to Google reviews in 30 seconds, auto-posts daily photos &amp; updates to Google Maps,
                   and deploys a 24/7 AI Sales Receptionist on your instant hosted website at <b>bgos.site/your-business</b>.
@@ -345,35 +427,19 @@ export default function Landing() {
                     </div>
                   </a>
                   <a className={s.secondary} href="#features">
-                    Explore Features
+                    Explore Features →
                   </a>
-
-                  {qrDataUrl ? (
-                    <div className={s.desktopQrBadge}>
-                      <img
-                        src={qrDataUrl}
-                        alt="Scan QR to install BGOS"
-                        width={58}
-                        height={58}
-                        className={s.desktopQrImg}
-                      />
-                      <div className={s.desktopQrText}>
-                        <span className={s.desktopQrTitle}>Install on Phone</span>
-                        <span className={s.desktopQrSub}>Scan with phone camera to download</span>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
 
-                <div className={s.heroGuarantees}>
+                <div className={s.heroTrustBadges}>
                   <span>
-                    <Check size={14} /> 100% Free to Install
+                    <Check size={14} /> Free to download
                   </span>
                   <span>
-                    <Check size={14} /> Official Google API Partner
+                    <Check size={14} /> 7-day full trial
                   </span>
                   <span>
-                    <Check size={14} /> 7-Day Full Trial
+                    <Check size={14} /> No credit card required
                   </span>
                 </div>
 
@@ -392,6 +458,7 @@ export default function Landing() {
                       onChange={(e) => setHandleInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && checkSlugLive(handleInput)}
                       placeholder="your-business-name"
+                      aria-label="Enter desired business handle"
                     />
                     <button
                       type="button"
@@ -406,7 +473,7 @@ export default function Landing() {
                   {checkResult && (
                     <div className={s.checkerFeedback}>
                       {checkResult.available ? (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 6 }}>
                           <span className={s.availableText}>
                             ✓ <b>bgos.site/{checkResult.slug}</b> is available!
                           </span>
@@ -457,64 +524,89 @@ export default function Landing() {
                 </div>
               </div>
 
-              {/* Hero Visual Mockup */}
+              {/* Hero Dual-Device Visual Mockup */}
               <div className={s.heroVisual}>
-                <div className={s.liveMockCard}>
-                  <div className={s.mockTopBar}>
-                    <div className={s.mockTopDots}>
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                    <div className={s.mockUrlBadge}>
-                      <ShieldCheck size={13} color="#009f50" />
-                      https://bgos.site/kanvi
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#009f50' }}>LIVE</div>
+                <div className={s.dualDeviceContainer}>
+                  {/* Floating Upward Growth Accent */}
+                  <div className={s.upwardTrendArrow}>
+                    <TrendingUp size={15} />
+                    <span>#1 Local Growth Engine</span>
                   </div>
 
-                  <div className={s.mockContent}>
-                    {/* Google Maps Ranking Snippet */}
-                    <div className={s.googlePreviewBox}>
-                      <div className={s.gRankBadge}>
-                        #1 Rank
-                        <small style={{ display: 'block', fontSize: 9, fontWeight: 600 }}>Google Maps</small>
+                  {/* 1. Laptop Command Center Mockup (Background) */}
+                  <div className={s.laptopMock}>
+                    <div className={s.laptopTopDot} />
+                    <div className={s.laptopScreen}>
+                      <div className={s.laptopScreenHeader}>
+                        <div className={s.laptopBrandGroup}>
+                          <div style={{ width: 18, height: 18, borderRadius: 4, background: '#009f50', color: '#fff', fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>b</div>
+                          <span style={{ fontWeight: 800, color: '#0f172a' }}>Google Growth Overview</span>
+                        </div>
+                        <span className={s.laptopLiveBadge}>● Live Synced</span>
                       </div>
-                      <div className={s.gInfo}>
-                        <div className={s.gTitle}>Delhi Farm Kanvi &amp; Holiday Stays</div>
-                        <div className={s.gStars}>
+
+                      <div className={s.laptopScoreRow}>
+                        <div className={s.laptopDial}>
+                          <span className={s.laptopDialScore}>92</span>
+                          <span className={s.laptopDialSub}>/ 100</span>
+                        </div>
+                        <div className={s.laptopScoreText}>
+                          <div className={s.laptopScoreTitle}>Profile Health: Excellent</div>
+                          <div className={s.laptopScoreSub}>Top 3 Google Maps rank active in local search zone.</div>
+                        </div>
+                      </div>
+
+                      <div className={s.laptopStatGrid}>
+                        <div className={s.laptopStatBox}>
+                          <div className={s.laptopStatNum}>148</div>
+                          <div className={s.laptopStatLabel}>★ Reviews Replied</div>
+                        </div>
+                        <div className={s.laptopStatBox}>
+                          <div className={s.laptopStatNum}>2.4K</div>
+                          <div className={s.laptopStatLabel}>📞 Phone Calls</div>
+                        </div>
+                        <div className={s.laptopStatBox}>
+                          <div className={s.laptopStatNum}>1.8K</div>
+                          <div className={s.laptopStatLabel}>📍 Directions</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className={s.laptopBase}>
+                      <div className={s.laptopBaseNotch} />
+                    </div>
+                  </div>
+
+                  {/* 2. Smartphone Mockup (Foreground Overlapping) */}
+                  <div className={s.phoneMock}>
+                    <div className={s.phoneIsland} />
+                    <div className={s.phoneScreen}>
+                      <div className={s.phoneMapBox}>
+                        <div className={s.phoneRankPill}>
+                          <MapPin size={10} /> #1 Rank Google Maps
+                        </div>
+                        <div className={s.phoneMapTitle}>Delhi Farm Kanvi &amp; Holiday Stays</div>
+                        <div className={s.phoneStars}>
                           ★★★★★ <span>5.0 (148 Google Reviews)</span>
                         </div>
-                        <div className={s.gActionRow}>
-                          <span className={s.gBtn}>📞 Call</span>
-                          <span className={s.gBtn}>📍 Directions</span>
-                          <span className={s.gBtn} style={{ background: '#e6f7ee', color: '#008040' }}>
-                            ✓ 30s AI Auto-Reply Active
-                          </span>
+                        <div className={s.phoneActionRow}>
+                          <span className={s.phoneActionBtn}>📞 Call</span>
+                          <span className={s.phoneActionBtn}>📍 Directions</span>
+                        </div>
+                        <span className={s.phoneAutoReplyBadge}>
+                          ✓ 30s AI Auto-Reply Active
+                        </span>
+                      </div>
+
+                      {/* 3. Floating AI Chat Snippet */}
+                      <div className={s.floatingChatBubble}>
+                        <div className={s.chatUserRow}>
+                          <b>Customer:</b> Hi! What are the charges for booking full farmhouse stay this weekend?
+                        </div>
+                        <div className={s.chatAiRow}>
+                          <b>BGOS AI:</b> Namaste! Full farmhouse stay is ₹15,000/day with private swimming pool access. Would you like me to reserve Saturday for you?
                         </div>
                       </div>
                     </div>
-
-                    {/* AI Sales Chatbot Snippet */}
-                    <div className={s.aiChatSnippet}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#0f766e' }}>
-                        <Bot size={14} /> 24/7 AI Receptionist Assistant
-                      </div>
-                      <div className={s.chatUserBubble}>
-                        Hi! What are the charges for booking full farmhouse stay this weekend?
-                      </div>
-                      <div className={s.chatAiBubble}>
-                        Namaste! Full farmhouse stay is ₹15,000/day with private swimming pool access. Would you like me to reserve Saturday for you?
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={s.floatingTag}>
-                  <TrendingUp size={18} />
-                  <div>
-                    <span style={{ display: 'block', fontSize: 11, color: '#64748b' }}>Average Merchant Result</span>
-                    +42% More Calls &amp; Bookings
                   </div>
                 </div>
               </div>
@@ -522,31 +614,82 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── METRICS & TRUST BAR ────────────────────────────────────────── */}
+        {/* ── 5 QUICK-PILLAR ORIENTING BAR ──────────────────────────────── */}
+        <section className={s.quickPillarsStrip}>
+          <div className={s.container}>
+            <div className={s.quickPillarsGrid}>
+              {QUICK_PILLARS.map((p) => {
+                const IconComponent = p.icon;
+                return (
+                  <a
+                    key={p.title}
+                    href="#features"
+                    className={s.quickPillarCard}
+                    onClick={() => setActivePillar(p.pillar)}
+                  >
+                    <div className={s.quickPillarIcon}>
+                      <IconComponent size={20} />
+                    </div>
+                    <div className={s.quickPillarTitle}>{p.title}</div>
+                    <div className={s.quickPillarSub}>{p.desc}</div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ── SOCIAL PROOF & METRICS BAR ────────────────────────────────── */}
         <section className={s.metricsBar}>
           <div className={s.container}>
             <div className={s.metricsGrid}>
-              <div>
-                <div className={s.metricValue}>10,000+</div>
-                <div className={s.metricLabel}>Local Businesses Growing on BGOS</div>
+              <div className={s.metricCard}>
+                <div className={s.avatarStack}>
+                  <div className={s.avatarImg} style={{ background: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>AK</div>
+                  <div className={s.avatarImg} style={{ background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>RS</div>
+                  <div className={s.avatarImg} style={{ background: '#f59e0b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>PM</div>
+                  <div className={s.avatarImg} style={{ background: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>+</div>
+                </div>
+                <div>
+                  <div className={s.metricValue}>10,000+</div>
+                  <div className={s.metricLabel}>Local Businesses on BGOS</div>
+                </div>
               </div>
-              <div>
-                <div className={s.metricValue}>4.8 / 5.0 ★</div>
-                <div className={s.metricLabel}>Average Google Review Rating</div>
+
+              <div className={s.metricCard}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#fef3c7', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Star size={22} fill="#f59e0b" />
+                </div>
+                <div>
+                  <div className={s.metricValue}>4.8 / 5.0</div>
+                  <div className={s.metricLabel}>Average Google Review Rating</div>
+                </div>
               </div>
-              <div>
-                <div className={s.metricValue}>&lt; 30 sec</div>
-                <div className={s.metricLabel}>AI Response Time to Reviews &amp; Leads</div>
+
+              <div className={s.metricCard}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e6f7ee', color: '#009f50', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Zap size={22} />
+                </div>
+                <div>
+                  <div className={s.metricValue}>&lt; 30 sec</div>
+                  <div className={s.metricLabel}>AI Reply Time to Reviews &amp; Leads</div>
+                </div>
               </div>
-              <div>
-                <div className={s.metricValue}>3.4x</div>
-                <div className={s.metricLabel}>More Calls &amp; Direction Requests</div>
+
+              <div className={s.metricCard}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <TrendingUp size={22} />
+                </div>
+                <div>
+                  <div className={s.metricValue}>3.4x</div>
+                  <div className={s.metricLabel}>More Calls &amp; Direction Clicks</div>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ── 15-SECOND GOOGLE MAPS SCORE AUDIT (Dhanda / Grexa Top-of-Funnel Hook) ── */}
+        {/* ── 15-SECOND GOOGLE MAPS SCORE AUDIT ─────────────────────────── */}
         <section className={s.auditSection} id="audit">
           <div className={s.container}>
             <div className={s.auditHeader}>
@@ -588,7 +731,7 @@ export default function Landing() {
                   disabled={auditRunning}
                 >
                   <Sparkles size={16} />
-                  {auditRunning ? 'Analyzing...' : 'Run Audit'}
+                  {auditRunning ? 'Analyzing...' : 'Run Audit →'}
                 </button>
               </div>
 
@@ -636,7 +779,7 @@ export default function Landing() {
                     <div
                       className={s.scoreDial}
                       style={{
-                        borderColor: auditResult.score >= 70 ? '#10b981' : auditResult.score >= 50 ? '#f59e0b' : '#ef4444',
+                        borderColor: auditResult.score >= 75 ? '#10b981' : auditResult.score >= 55 ? '#f59e0b' : '#ef4444',
                       }}
                     >
                       <span className={s.scoreValue}>{auditResult.score}%</span>
@@ -651,7 +794,7 @@ export default function Landing() {
                         Current Google Growth Score is <b>{auditResult.score}%</b>. Local competitors dominating the Top 3 3-Pack in {auditResult.city} average <b>{auditResult.benchmarkScore}%</b>.
                       </div>
                       <div className={s.scoreHeroBenchmark}>
-                        <TrendingUp size={14} /> Reaching 78%+ score lifts organic phone calls & direction clicks by 3.4x
+                        <TrendingUp size={14} /> Reaching 78%+ score lifts organic phone calls &amp; direction clicks by 3.4x
                       </div>
                     </div>
                   </div>
@@ -686,7 +829,7 @@ export default function Landing() {
                     ))}
                   </div>
 
-                  {/* Five AI Agents Solution Callout & Google Play CTA */}
+                  {/* Solution Callout & Google Play CTA */}
                   <div className={s.auditSolutionBox}>
                     <div className={s.auditSolutionLeft}>
                       <div className={s.auditSolutionTitle}>
@@ -712,14 +855,14 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── 4 CORE PILLARS (Interactive Tabs) ─────────────────────────── */}
+        {/* ── FIVE AUTONOMOUS AI AGENTS ─────────────────────────────────── */}
         <section className={s.section} id="features">
           <div className={s.container}>
             <div className={s.sectionHeader}>
               <div className={s.badge}>FIVE AUTONOMOUS AI AGENTS</div>
               <h2>Five AI Marketing Agents. 24/7 Autopilot.</h2>
               <p>
-                Replace expensive marketing agencies, missed calls, and manual poster designing with Five Autonomous AI Agents trained on your business: Ranking &amp; SEO, Creative &amp; Poster Studio, Review &amp; Reputation, Media &amp; Storefront, and Viral Video &amp; Posts.
+                Replace expensive marketing agencies, missed calls, and manual poster designing with Five Autonomous AI Agents trained on your business.
               </p>
             </div>
 
@@ -753,6 +896,13 @@ export default function Landing() {
               >
                 <QrCode size={16} /> 4. Physical Review Standee
               </button>
+              <button
+                type="button"
+                className={`${s.pillarTabBtn} ${activePillar === 'studio' ? s.pillarTabActive : ''}`}
+                onClick={() => setActivePillar('studio')}
+              >
+                <Palette size={16} /> 5. Creative Posters &amp; CRM
+              </button>
             </div>
 
             {/* Pillar Content Showcase */}
@@ -772,7 +922,7 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>Photo Freshness Engine:</b> Regular photo publishing proven to increase direction requests by 42%.
                     </li>
                     <li>
-                      <CheckCircle2 size={16} /> <b>Local SEO Keyword Autopilot:</b> Automatically targets high-intent search terms (e.g. "near me", "best in city").
+                      <CheckCircle2 size={16} /> <b>Local SEO Keyword Autopilot:</b> Automatically targets high-intent search terms (e.g. &quot;near me&quot;, &quot;best in city&quot;).
                     </li>
                     <li>
                       <CheckCircle2 size={16} /> <b>Weekly Radar Scan:</b> Tracks rank movements on Google Search &amp; Maps every 7 days.
@@ -783,22 +933,22 @@ export default function Landing() {
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
-                  <div style={{ background: '#ffffff', borderRadius: 12, padding: 20, border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ background: '#ffffff', borderRadius: 14, padding: 22, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', width: '100%', maxWidth: 380 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Google Business Autopilot</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 10 }}>ACTIVE</span>
                     </div>
                     <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>Last 30 Days Performance:</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, textAlign: 'center' }}>
-                      <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
+                      <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#009f50' }}>148</div>
                         <div style={{ fontSize: 10, color: '#64748b' }}>Reviews Replied</div>
                       </div>
-                      <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
+                      <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#0284c7' }}>24</div>
                         <div style={{ fontSize: 10, color: '#64748b' }}>Posts Published</div>
                       </div>
-                      <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8 }}>
+                      <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                         <div style={{ fontSize: 18, fontWeight: 800, color: '#7c3aed' }}>#1</div>
                         <div style={{ fontSize: 10, color: '#64748b' }}>Local Map Rank</div>
                       </div>
@@ -824,7 +974,7 @@ export default function Landing() {
                       <CheckCircle2 size={16} /> <b>Direct Booking &amp; Lead Capture:</b> Captures customer name, phone number, and requested service right inside the chat.
                     </li>
                     <li>
-                      <CheckCircle2 size={16} /> <b>Instant WhatsApp &amp; Push Handoff:</b> Notifies you or your employees in real-time when human takeover is requested.
+                      <CheckCircle2 size={16} /> <b>Instant WhatsApp Handoff:</b> Notifies you or your employees in real-time when human takeover is requested.
                     </li>
                     <li>
                       <CheckCircle2 size={16} /> <b>Multilingual Fluency:</b> Communicates fluently in English, Hindi, Hinglish, and regional dialects.
@@ -835,21 +985,21 @@ export default function Landing() {
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
-                  <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, border: '1px solid #bbf7d0', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                  <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #bbf7d0', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', width: '100%', maxWidth: 380 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #f1f5f9', paddingBottom: 10, marginBottom: 12 }}>
                       <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#009f50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                         <Bot size={18} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>24/7 AI Business Assistant</div>
+                        <div style={{ fontSize: 13, fontWeight: 750 }}>24/7 AI Business Assistant</div>
                         <div style={{ fontSize: 10.5, color: '#15803d' }}>● Online &amp; Ready</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
-                      <div style={{ background: '#f1f5f9', padding: '8px 12px', borderRadius: '10px 10px 10px 2px', alignSelf: 'flex-start' }}>
+                      <div style={{ background: '#f1f5f9', padding: '9px 12px', borderRadius: '10px 10px 10px 2px', alignSelf: 'flex-start' }}>
                         Do you have availability for dental checkup tomorrow at 4 PM?
                       </div>
-                      <div style={{ background: '#009f50', color: '#fff', padding: '8px 12px', borderRadius: '10px 10px 2px 10px', alignSelf: 'flex-end', maxWidth: '85%' }}>
+                      <div style={{ background: '#009f50', color: '#fff', padding: '9px 12px', borderRadius: '10px 10px 2px 10px', alignSelf: 'flex-end', maxWidth: '85%' }}>
                         Yes! Dr. Sharma has a slot open at 4:15 PM. May I have your name and contact number to confirm your appointment?
                       </div>
                     </div>
@@ -885,7 +1035,7 @@ export default function Landing() {
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
-                  <div style={{ background: '#ffffff', borderRadius: 14, overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                  <div style={{ background: '#ffffff', borderRadius: 14, overflow: 'hidden', border: '1px solid #cbd5e1', width: '100%', maxWidth: 380, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                     <div style={{ height: 100, background: 'linear-gradient(135deg, #009f50, #0284c7)', display: 'flex', alignItems: 'flex-end', padding: 14 }}>
                       <span style={{ background: '#fff', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, color: '#009f50' }}>
                         bgos.site/kanvi
@@ -896,7 +1046,7 @@ export default function Landing() {
                       <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>Holiday Stays &amp; Swimming Pool</div>
                       <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
                         <div style={{ flex: 1, padding: 8, background: '#f8fafc', borderRadius: 6, textAlign: 'center', fontSize: 11, fontWeight: 600 }}>
-                          🏊 Swimming Pool
+                          🏊 Pool Access
                         </div>
                         <div style={{ flex: 1, padding: 8, background: '#f8fafc', borderRadius: 6, textAlign: 'center', fontSize: 11, fontWeight: 600 }}>
                           🏡 Farmhouse Stay
@@ -932,9 +1082,9 @@ export default function Landing() {
                   </a>
                 </div>
                 <div className={s.pillarCardMock}>
-                  <div style={{ background: '#ffffff', borderRadius: 16, padding: 24, textAlign: 'center', border: '2px solid #009f50', maxWidth: 280, margin: 'auto' }}>
+                  <div style={{ background: '#ffffff', borderRadius: 16, padding: 24, textAlign: 'center', border: '2px solid #009f50', maxWidth: 280, margin: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#009f50' }}>★ SCAN TO REVIEW ★</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 16px' }}>Delhi Farm Kanvi</div>
+                    <div style={{ fontSize: 14, fontWeight: 750, margin: '8px 0 16px' }}>Delhi Farm Kanvi</div>
                     <div style={{ width: 140, height: 140, background: '#f1f5f9', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: '1px dashed #94a3b8' }}>
                       <QrCode size={90} color="#0f172a" />
                     </div>
@@ -945,11 +1095,79 @@ export default function Landing() {
                 </div>
               </div>
             )}
+
+            {activePillar === 'studio' && (
+              <div className={s.pillarShowcase}>
+                <div className={s.pillarInfo}>
+                  <div className={s.badge}>CREATIVE &amp; POSTER STUDIO</div>
+                  <h3>Branded Festival &amp; Promotional Posters in Seconds</h3>
+                  <p>
+                    Never let your Google profile or Instagram feed go cold. AI generates stunning festive posters, discount announcements, and geo-tagged updates automatically.
+                  </p>
+                  <ul className={s.pillarBullets}>
+                    <li>
+                      <CheckCircle2 size={16} /> <b>Pre-loaded Regional Festival Templates:</b> Diwali, Eid, New Year, Independence Day ready with your logo.
+                    </li>
+                    <li>
+                      <CheckCircle2 size={16} /> <b>1-Tap Social Publishing:</b> Post instantly to Google Business Profile, Instagram, and WhatsApp status.
+                    </li>
+                    <li>
+                      <CheckCircle2 size={16} /> <b>Integrated Leads &amp; CRM:</b> Track every customer inquiry from flyer scans and social campaigns in one place.
+                    </li>
+                  </ul>
+                  <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+                    Explore Studio on App <ArrowRight size={15} />
+                  </a>
+                </div>
+                <div className={s.pillarCardMock}>
+                  <div style={{ background: '#ffffff', borderRadius: 16, padding: 20, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.06)', width: '100%', maxWidth: 360, textAlign: 'center' }}>
+                    <div style={{ width: '100%', height: 160, borderRadius: 10, background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', padding: 16 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>FESTIVE SPECIAL</span>
+                      <span style={{ fontSize: 20, fontWeight: 900, marginTop: 4 }}>FLAT 25% OFF</span>
+                      <span style={{ fontSize: 11, marginTop: 4, opacity: 0.9 }}>Valid this weekend only</span>
+                    </div>
+                    <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Auto-synced to Google Maps</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#008040', background: '#dcfce7', padding: '3px 8px', borderRadius: 10 }}>PUBLISHED</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
-        {/* ── BEFORE VS AFTER (Dhanda Style) ────────────────────────────── */}
-        <section className={`${s.section} ${s.sectionAlt}`} id="comparison">
+        {/* ── TAILORED FOR YOUR INDUSTRY (PHOTOGRAPHIC CARDS) ───────────── */}
+        <section className={`${s.section} ${s.sectionAlt}`} id="industries">
+          <div className={s.container}>
+            <div className={s.sectionHeader}>
+              <div className={s.badge}>TAILORED FOR YOUR INDUSTRY</div>
+              <h2>Built for Every Business</h2>
+              <p>Every industry has unique customer needs. BGOS adapts its AI brain to match your trade.</p>
+            </div>
+
+            <div className={s.industryGrid}>
+              {INDUSTRIES.map((ind) => (
+                <div key={ind.name} className={s.industryPhotoCard}>
+                  <img
+                    src={ind.image}
+                    alt={ind.name}
+                    className={s.industryPhotoImg}
+                    loading="lazy"
+                  />
+                  <div className={s.industryOverlay}>
+                    <span className={s.industryCardBadge}>{ind.badge}</span>
+                    <h3 className={s.industryCardTitle}>{ind.name}</h3>
+                    <p className={s.industryCardDesc}>{ind.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── BEFORE VS AFTER COMPARISON ─────────────────────────────────── */}
+        <section className={s.section} id="comparison">
           <div className={s.container}>
             <div className={s.sectionHeader}>
               <div className={s.badge}>THE BGOS ADVANTAGE</div>
@@ -958,10 +1176,13 @@ export default function Landing() {
             </div>
 
             <div className={s.compareGrid}>
+              <div className={s.compareVsBadge}>VS</div>
+
+              {/* Old Manual Way */}
               <div className={s.compareColOld}>
                 <div className={s.compareHeader}>
                   <X size={24} className={s.badIcon} />
-                  <h4>Without BGOS (Manual Friction)</h4>
+                  <h4 style={{ color: '#991b1b' }}>Without BGOS (Manual Friction)</h4>
                 </div>
                 <ul className={s.compareList}>
                   <li>
@@ -978,7 +1199,7 @@ export default function Landing() {
                   </li>
                   <li>
                     <X size={16} className={s.badIcon} />
-                    <span><b>Expensive Agencies:</b> Paying ₹15,000 to ₹30,000/mo for marketing agencies that don't deliver bookings.</span>
+                    <span><b>Expensive Agencies:</b> Paying ₹15,000 to ₹30,000/mo for marketing agencies that don&apos;t deliver bookings.</span>
                   </li>
                   <li>
                     <X size={16} className={s.badIcon} />
@@ -987,10 +1208,11 @@ export default function Landing() {
                 </ul>
               </div>
 
+              {/* New BGOS Way */}
               <div className={s.compareColNew}>
                 <div className={s.compareHeader}>
                   <CheckCircle2 size={24} className={s.goodIcon} />
-                  <h4>With BGOS (Autonomous Growth)</h4>
+                  <h4 style={{ color: '#065f46' }}>With BGOS (Autonomous Growth)</h4>
                 </div>
                 <ul className={s.compareList}>
                   <li>
@@ -1019,62 +1241,7 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── INDUSTRY VERTICALS (Grexa Style) ──────────────────────────── */}
-        <section className={s.section} id="solutions">
-          <div className={s.container}>
-            <div className={s.sectionHeader}>
-              <div className={s.badge}>TAILORED FOR YOUR INDUSTRY</div>
-              <h2>Built for Business Owners Like You</h2>
-              <p>Every industry has unique customer needs. BGOS adapts its AI brain to match your trade.</p>
-            </div>
-
-            <div className={s.industryGrid}>
-              <div className={s.industryCard}>
-                <Stethoscope size={28} />
-                <h4>Clinics &amp; Dentists</h4>
-                <span className={s.industryBenefit}>+48% More Consultations</span>
-                <p>Auto-reply to patient reviews, confirm appointment slots, and answer pricing inquiries without front-desk bottlenecks.</p>
-              </div>
-
-              <div className={s.industryCard}>
-                <Scissors size={28} />
-                <h4>Salons &amp; Spas</h4>
-                <span className={s.industryBenefit}>Zero Unanswered Inquiries</span>
-                <p>Send review requests after appointments, showcase styling photos, and auto-book appointments via WhatsApp chat.</p>
-              </div>
-
-              <div className={s.industryCard}>
-                <Palmtree size={28} />
-                <h4>Farmhouses &amp; Resorts</h4>
-                <span className={s.industryBenefit}>0% Commission Direct Bookings</span>
-                <p>Accept swimming pool access and stay reservations directly on <b>bgos.site/your-resort</b> without paying OTA commissions.</p>
-              </div>
-
-              <div className={s.industryCard}>
-                <Wrench size={28} />
-                <h4>Tradies &amp; Home Services</h4>
-                <span className={s.industryBenefit}>Top 3 Google Maps Ranking</span>
-                <p>Boost local visibility for plumbers, electricians, painters, and HVAC technicians with automated job photo sync.</p>
-              </div>
-
-              <div className={s.industryCard}>
-                <Utensils size={28} />
-                <h4>Cafes &amp; Restaurants</h4>
-                <span className={s.industryBenefit}>+3.4x Direction Inquiries</span>
-                <p>Post mouth-watering weekly food specials, manage 5-star Google ratings, and guide customers with counter QR standees.</p>
-              </div>
-
-              <div className={s.industryCard}>
-                <Dumbbell size={28} />
-                <h4>Gyms &amp; Fitness</h4>
-                <span className={s.industryBenefit}>Instant Trial Class Signups</span>
-                <p>Capture fitness leads on social media, follow up via automated WhatsApp templates, and boost membership renewals.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── TRANSPARENT PRICING ────────────────────────────────────────── */}
+        {/* ── TRANSPARENT PRICING GRID ───────────────────────────────────── */}
         <section className={`${s.section} ${s.sectionAlt}`} id="pricing">
           <div className={s.container}>
             <div className={s.sectionHeader}>
@@ -1093,20 +1260,17 @@ export default function Landing() {
                 <div className={s.planDesc}>Start your digital presence.</div>
                 <ul className={s.planFeatures}>
                   <li>
-                    <Check size={14} /> Instant Short URL (bgos.site/slug)
+                    <Check size={14} /> Short URL, QR Standee
                   </li>
                   <li>
-                    <Check size={14} /> Printable Counter QR Standee
+                    <Check size={14} /> One Form, 100 Contacts
                   </li>
                   <li>
-                    <Check size={14} /> One Hosted Intake Form
-                  </li>
-                  <li>
-                    <Check size={14} /> Up to 100 Customer Contacts
+                    <Check size={14} /> Basic Review Link
                   </li>
                 </ul>
                 <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-                  Get on Google Play
+                  Get Started Free
                 </a>
               </div>
 
@@ -1114,28 +1278,25 @@ export default function Landing() {
               <div className={s.planCard}>
                 <h4>Starter</h4>
                 <div className={s.planPrice}>
-                  ₹499 <span>/ month ($9)</span>
+                  ₹499 <span>/ month</span>
                 </div>
-                <div className={s.planDesc}>Ideal for solo trades and small shops.</div>
+                <div className={s.planDesc}>Perfect for small businesses.</div>
                 <ul className={s.planFeatures}>
                   <li>
                     <Check size={14} /> Everything in Free
                   </li>
                   <li>
-                    <Check size={14} /> 24/7 AI Sales Receptionist
+                    <Check size={14} /> AI Assistant, Forms
                   </li>
                   <li>
-                    <Check size={14} /> Unlimited Lead Forms &amp; Funnels
+                    <Check size={14} /> 1,000 Contacts
                   </li>
                   <li>
-                    <Check size={14} /> Appointment Booking Engine
-                  </li>
-                  <li>
-                    <Check size={14} /> 1,000 Customer Contacts
+                    <Check size={14} /> Appointment Booking
                   </li>
                 </ul>
                 <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-                  Download &amp; Start Trial
+                  Start 7-Day Trial
                 </a>
               </div>
 
@@ -1144,9 +1305,9 @@ export default function Landing() {
                 <div className={s.planBadge}>MOST POPULAR</div>
                 <h4>Growth</h4>
                 <div className={s.planPrice}>
-                  ₹1,499 <span>/ month ($29)</span>
+                  ₹1,499 <span>/ month</span>
                 </div>
-                <div className={s.planDesc}>For businesses ready to dominate local Google search.</div>
+                <div className={s.planDesc}>Grow your local presence.</div>
                 <ul className={s.planFeatures}>
                   <li>
                     <Check size={14} /> Everything in Starter
@@ -1158,17 +1319,14 @@ export default function Landing() {
                     <Check size={14} /> <b>30-Second AI Review Replies</b>
                   </li>
                   <li>
-                    <Check size={14} /> Weekly AI Social &amp; Video Posts
+                    <Check size={14} /> 10,000 Contacts
                   </li>
                   <li>
-                    <Check size={14} /> WhatsApp Outreach Campaigns
-                  </li>
-                  <li>
-                    <Check size={14} /> 10,000 Customer Contacts
+                    <Check size={14} /> Weekly AI Posters &amp; Updates
                   </li>
                 </ul>
                 <a className={s.primary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-                  Download &amp; Start 7-Day Trial
+                  Start 7-Day Trial
                 </a>
               </div>
 
@@ -1176,31 +1334,25 @@ export default function Landing() {
               <div className={s.planCard}>
                 <h4>Business</h4>
                 <div className={s.planPrice}>
-                  ₹3,999 <span>/ month ($79)</span>
+                  ₹3,999 <span>/ month</span>
                 </div>
-                <div className={s.planDesc}>For multi-location brands &amp; high volume teams.</div>
+                <div className={s.planDesc}>For growing teams &amp; chains.</div>
                 <ul className={s.planFeatures}>
                   <li>
                     <Check size={14} /> Everything in Growth
                   </li>
                   <li>
-                    <Check size={14} /> Multi-location Location Radar
-                  </li>
-                  <li>
-                    <Check size={14} /> 2,500 Monthly Lead Intelligence Credits
-                  </li>
-                  <li>
-                    <Check size={14} /> Team Roles &amp; Employee Routing
-                  </li>
-                  <li>
-                    <Check size={14} /> Priority WhatsApp Concierge Support
+                    <Check size={14} /> Multi-Location Radar
                   </li>
                   <li>
                     <Check size={14} /> 100,000 Contacts
                   </li>
+                  <li>
+                    <Check size={14} /> Priority Support &amp; Concierge
+                  </li>
                 </ul>
                 <a className={s.secondary} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
-                  Download on Google Play
+                  Get Started
                 </a>
               </div>
             </div>
@@ -1234,7 +1386,7 @@ export default function Landing() {
                   <Plus size={18} />
                 </summary>
                 <p>
-                  You don't need to purchase a domain or write code. BGOS instantly gives you a clean, lightning-fast business webpage at <b>https://bgos.site/your-business</b> featuring your services, catalog, photos, direct WhatsApp call button, and your 24/7 AI Receptionist.
+                  You don&apos;t need to purchase a domain or write code. BGOS instantly gives you a clean, lightning-fast business webpage at <b>https://bgos.site/your-business</b> featuring your services, catalog, photos, direct WhatsApp call button, and your 24/7 AI Receptionist.
                 </p>
               </details>
 
@@ -1244,7 +1396,7 @@ export default function Landing() {
                   <Plus size={18} />
                 </summary>
                 <p>
-                  Yes! BGOS has native mobile apps for iOS and Android for on-the-go management, daily push updates, and quick review checks, as well as a complete web studio for in-depth marketing campaigns.
+                  Yes! BGOS has native mobile apps for on-the-go management, daily push updates, and quick review checks, as well as a complete web studio for in-depth marketing campaigns.
                 </p>
               </details>
 
@@ -1254,7 +1406,7 @@ export default function Landing() {
                   <Plus size={18} />
                 </summary>
                 <p>
-                  Yes. BGOS connects via Google's official Business Profile APIs. You can set the AI to automatically publish replies instantly, or hold them for your 1-tap review and approval.
+                  Yes. BGOS connects via Google&apos;s official Business Profile APIs. You can set the AI to automatically publish replies instantly, or hold them for your 1-tap review and approval.
                 </p>
               </details>
 
@@ -1271,31 +1423,31 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── FINAL CTA BOX ─────────────────────────────────────────────── */}
+        {/* ── PRE-FOOTER GOLDEN TROPHY BANNER ───────────────────────────── */}
         <section className={s.container}>
-          <div className={s.ctaBox}>
-            <div>
-              <div className={s.badge} style={{ background: 'rgba(255,255,255,0.15)', color: '#a7f3d0', borderColor: 'rgba(255,255,255,0.2)' }}>
-                READY TO GROW?
+          <div className={s.trophyBanner}>
+            <div className={s.trophyBannerLeft}>
+              <div className={s.trophyIconWrap}>
+                <Trophy size={32} />
               </div>
-              <h2>Put BGOS to Work for Your Business Today.</h2>
-              <p>Join thousands of local businesses dominating Google Maps and converting customers 24/7.</p>
+              <div>
+                <div className={s.trophyTitle}>Your Business Deserves an AI Growth Partner.</div>
+                <div className={s.trophySub}>Join thousands of local businesses growing with BGOS.</div>
+              </div>
             </div>
-            <div className={s.ctaActions}>
+            <div className={s.trophyBannerRight}>
               <a
-                className={s.playStoreHeroBtn}
+                className={s.trophyPlayBtn}
                 href={PLAY_STORE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ padding: '14px 28px' }}
               >
-                <GooglePlayIcon size={24} />
-                <div style={{ textAlign: 'left', lineHeight: 1.15 }}>
-                  <span style={{ fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', opacity: 0.85, display: 'block' }}>GET IT ON</span>
-                  <span style={{ fontSize: 16, fontWeight: 800 }}>Google Play</span>
-                </div>
+                <GooglePlayIcon size={22} />
+                <span>Get BGOS on Google Play</span>
               </a>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>✓ Free download • 7-day full trial • 2 min setup</span>
+              <span className={s.trophyTrustNote}>
+                Free download • 7-day trial • No credit card required
+              </span>
             </div>
           </div>
         </section>
@@ -1323,20 +1475,20 @@ export default function Landing() {
 
             <div className={s.footerCol}>
               <h5>Industries</h5>
-              <a href="#solutions">Clinics &amp; Dentists</a>
-              <a href="#solutions">Salons &amp; Spas</a>
-              <a href="#solutions">Farmhouses &amp; Resorts</a>
-              <a href="#solutions">Tradies &amp; Home Services</a>
-              <a href="#solutions">Restaurants &amp; Cafes</a>
+              <a href="#industries">Clinics &amp; Dentists</a>
+              <a href="#industries">Salons &amp; Spas</a>
+              <a href="#industries">Farmhouses &amp; Resorts</a>
+              <a href="#industries">Tradies &amp; Home Services</a>
+              <a href="#industries">Restaurants &amp; Cafes</a>
             </div>
 
             <div className={s.footerCol}>
-              <h5>Download &amp; Support</h5>
+              <h5>Download &amp; Legal</h5>
               <a
                 href={PLAY_STORE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#009f50' }}
               >
                 <GooglePlayIcon size={14} /> Android App (Google Play)
               </a>
@@ -1348,9 +1500,9 @@ export default function Landing() {
 
           <div className={s.footerBottom}>
             <span>© {new Date().getFullYear()} BGOS (bgos.site) • A Fieseros Platform. All rights reserved.</span>
-            <div className={s.footerBottomLinks}>
-              <a href="https://fieseros.com/privacy-policy">Privacy</a>
-              <a href="https://fieseros.com/terms-of-service">Terms</a>
+            <div className={s.footerTagline}>
+              <TrendingUp size={15} />
+              <span>Grow Smarter. Grow Faster.</span>
             </div>
           </div>
         </div>
