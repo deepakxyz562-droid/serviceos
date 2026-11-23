@@ -6,6 +6,19 @@ export const metadata: Metadata = {
   title: 'BGOS — Autonomous Growth Engine for Local Businesses & Google Maps',
   description: 'Rank #1 on Google Maps, answer customer inquiries 24/7 with an AI sales receptionist, and launch an instant booking website at bgos.site/yourname.',
   alternates: { canonical: 'https://bgos.site/' },
+  icons: {
+    icon: [
+      { url: '/bgos/favicon.ico?v=20261123', sizes: 'any' },
+      { url: '/bgos/icon.svg?v=20261123', type: 'image/svg+xml' },
+      { url: '/bgos/icon-192.png?v=20261123', sizes: '192x192', type: 'image/png' },
+      { url: '/bgos/icon-512.png?v=20261123', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/bgos/apple-touch-icon.png?v=20261123', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/bgos/favicon.ico?v=20261123',
+  },
+  manifest: '/bgos/manifest.webmanifest',
   openGraph: {
     title: 'BGOS — Autonomous Growth Engine for Local Businesses',
     description: 'Autonomous Google Maps SEO, 24/7 AI Receptionist, QR Review Standees, and Instant Booking Website.',

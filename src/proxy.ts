@@ -4,7 +4,7 @@ import { generateRequestId } from '@/lib/logger';
 import { BRAND } from '@/lib/brand';
 import { productForHostname } from '../shared/product-context';
 import { marketplaceRedirect } from '../shared/products';
-import { bosIconRedirect } from '@/lib/bos-icons';
+import { bosIconRedirect, bgosIconRedirect } from '@/lib/bos-icons';
 
 /**
  * Trial-expiry paywall middleware (server-side layer) + global API rate limit
@@ -329,9 +329,9 @@ export async function proxy(request: NextRequest) {
     url.pathname = '/bos-home';
     return NextResponse.rewrite(url);
   }
-  const bosIcon = bosIconRedirect(appProduct, pathname);
-  if (bosIcon && ['GET', 'HEAD'].includes(request.method)) {
-    const response = NextResponse.redirect(new URL(bosIcon, request.url), 307);
+  const productIcon = bosIconRedirect(appProduct, pathname) || bgosIconRedirect(appProduct, pathname);
+  if (productIcon && ['GET', 'HEAD'].includes(request.method)) {
+    const response = NextResponse.redirect(new URL(productIcon, request.url), 307);
     response.headers.set('Cache-Control', 'no-store');
     return response;
   }
