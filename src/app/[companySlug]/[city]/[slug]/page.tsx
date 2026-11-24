@@ -46,6 +46,10 @@ import {
   resolveIndustryFromAnySlug,
 } from '@/lib/seo/plural-industry-slugs'
 import {
+  getBgosPublicBusinessProfile,
+  getBgosPublicCanonicalUrl,
+} from '@/lib/bgos-public-business'
+import {
   getPublicBusinessByUrl,
   getPublicServices,
   getMarketplaceCertifications,
@@ -133,6 +137,15 @@ export async function generateMetadata({
   const { business } = await getPublicBusinessByUrl(industry, city, slug)
 
   if (!business) {
+    // Check if this slug is actually a BGOS business profile:
+    const bgosProfile = await getBgosPublicBusinessProfile(slug);
+    if (bgosProfile) {
+      return {
+        robots: { index: false, follow: true },
+        alternates: { canonical: getBgosPublicCanonicalUrl(bgosProfile.slug) },
+      };
+    }
+
     // No business found — render a friendly in-page message instead of the
     // generic 404. Mark as noindex so Google doesn't index dead listings,
     // and give the page a useful title that reflects what the visitor was
@@ -255,6 +268,12 @@ export default async function PublicBusinessHubPage({
   }
 
   if (!business) {
+    // Check if this slug belongs to a BGOS business (e.g. visited via legacy or misrouted 3-segment URL):
+    const bgosProfile = await getBgosPublicBusinessProfile(slug);
+    if (bgosProfile) {
+      permanentRedirect(getBgosPublicCanonicalUrl(bgosProfile.slug));
+    }
+
     // HTTP 404 (not a soft 200/noindex) so Google de-indexes cleaned-out
     // listings quickly. The friendly "business not found" UI is rendered by
     // not-found.tsx, which preserves the marketplace shell (header / footer /

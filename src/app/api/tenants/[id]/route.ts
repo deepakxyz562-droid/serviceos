@@ -45,6 +45,7 @@ export async function GET(
             slug: true,
             industry: true,
             plan: true,
+            productType: true,
           },
         },
         _count: {
@@ -122,9 +123,21 @@ export async function GET(
         // and the BrandingSettings UI toggle. Shape: { hideFieserosBranding: boolean }
         whiteLabelJson: tenant.whiteLabelJson,
         // Computed canonical public URL (for the "Preview" button)
-        publicUrl: tenant.publicProfileEnabled
-          ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
-          : null,
+        publicUrl: (() => {
+          if (!tenant.publicProfileEnabled) return null;
+          const slug = tenant.publicSlug || tenant.slug;
+          if (!slug) return null;
+          const isBgos =
+            tenant.signupMode === 'bgos' ||
+            (Array.isArray(tenant.workspaces) && tenant.workspaces.some((w: any) => w.productType === 'bgos'));
+          if (isBgos) {
+            return `https://bgos.site/${slug}`;
+          }
+          if (tenant.industry && tenant.city) {
+            return `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${slug}`;
+          }
+          return `/marketplace/${slug}`;
+        })(),
       },
     });
   } catch (error) {
@@ -465,9 +478,24 @@ export async function PUT(
         seoTitle: finalTenant?.seoTitle ?? tenant.seoTitle,
         seoDescription: finalTenant?.seoDescription ?? tenant.seoDescription,
         serviceRadiusKm: finalTenant?.serviceRadiusKm ?? tenant.serviceRadiusKm,
-        publicUrl: (finalTenant?.publicProfileEnabled ?? tenant.publicProfileEnabled)
-          ? `/${mapIndustryToUrlSlug(finalTenant?.industry ?? tenant.industry)}/${slugifyCity(finalTenant?.city ?? tenant.city)}/${finalTenant?.publicSlug || tenant.publicSlug || tenant.slug}`
-          : null,
+        publicUrl: (() => {
+          const isEnabled = finalTenant?.publicProfileEnabled ?? tenant.publicProfileEnabled;
+          if (!isEnabled) return null;
+          const slug = finalTenant?.publicSlug || tenant.publicSlug || tenant.slug;
+          if (!slug) return null;
+          const isBgos =
+            (finalTenant?.signupMode ?? tenant.signupMode) === 'bgos' ||
+            (Array.isArray(tenant.workspaces) && tenant.workspaces.some((w: any) => w.productType === 'bgos'));
+          if (isBgos) {
+            return `https://bgos.site/${slug}`;
+          }
+          const ind = finalTenant?.industry ?? tenant.industry;
+          const ct = finalTenant?.city ?? tenant.city;
+          if (ind && ct) {
+            return `/${mapIndustryToUrlSlug(ind)}/${slugifyCity(ct)}/${slug}`;
+          }
+          return `/marketplace/${slug}`;
+        })(),
         updatedAt: finalTenant?.updatedAt ?? tenant.updatedAt,
       },
     });

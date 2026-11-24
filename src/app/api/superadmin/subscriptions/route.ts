@@ -103,11 +103,43 @@ export async function GET(request: NextRequest) {
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
     const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
 
+    // Batch query for BGOS workspaces to accurately detect BGOS tenants across all database drivers
+    const pageTenantIds = subscriptions
+      .map((s: Record<string, unknown>) => (s.tenantId as string) || (s.tenant as Record<string, any>)?.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    const bgosWorkspaces = pageTenantIds.length > 0
+      ? await db.workspace.findMany({
+          where: {
+            tenantId: { in: pageTenantIds },
+            productType: 'bgos',
+          },
+          select: { tenantId: true },
+        })
+      : [];
+    const bgosTenantIdSet = new Set(bgosWorkspaces.map((w: any) => w.tenantId));
+
     const formatted = subscriptions.map((s: Record<string, unknown>) => {
       const tenant = s.tenant as Record<string, any> | null;
       const owner = Array.isArray(tenant?.users) && tenant.users.length > 0 ? tenant.users[0] : null;
       const slug = tenant?.slug || '';
       const tenantId = (s.tenantId as string) || '';
+
+      const isBgos =
+        tenant?.signupMode === 'bgos' ||
+        (Boolean(tenantId) && bgosTenantIdSet.has(tenantId)) ||
+        (Array.isArray(tenant?.workspaces) && tenant.workspaces.some((w: any) => w.productType === 'bgos'));
+
+      let publicProfileUrl = '';
+      if (slug) {
+        if (isBgos) {
+          publicProfileUrl = `https://bgos.site/${slug}`;
+        } else if (tenant?.industry && tenant?.city) {
+          publicProfileUrl = `${origin}/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${slug}`;
+        } else {
+          publicProfileUrl = `${origin}/marketplace/${slug}`;
+        }
+      }
 
       return {
         id: s.id,
@@ -128,20 +160,10 @@ export async function GET(request: NextRequest) {
         ownerName: owner?.name || '',
         ownerEmail: owner?.email || '',
         ownerPhone: owner?.phone || '',
-        publicProfileUrl: (() => {
-          if (!slug) return '';
-          const isBgos =
-            tenant?.signupMode === 'bgos' ||
-            (Array.isArray(tenant?.workspaces) && tenant.workspaces.some((w: any) => w.productType === 'bgos'));
-          if (isBgos) {
-            return `https://bgos.site/${slug}`;
-          }
-          if (tenant?.industry && tenant?.city) {
-            return `${origin}/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${slug}`;
-          }
-          return `${origin}/marketplace/${slug}`;
-        })(),
-        marketplaceUrl: slug ? `${origin}/marketplace/${slug}` : '',
+        publicProfileUrl,
+        marketplaceUrl: isBgos
+          ? `https://bgos.site/${slug}`
+          : (slug ? `${origin}/marketplace/${slug}` : ''),
         adminDetailUrl: tenantId ? `${origin}/dashboard/superadmin/tenants/${tenantId}` : '',
         plan: s.plan,
         status: s.status,
