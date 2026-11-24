@@ -3038,14 +3038,20 @@ class SupabaseModel {
     by: string[],
     options: Record<string, unknown>,
   ): Record<string, unknown>[] {
-    const countObj = options._count as Record<string, unknown> | undefined;
-    const countKeys = countObj ? Object.keys(countObj) : ['id'];
+    const countObj = typeof options._count === 'object' && options._count !== null
+      ? (options._count as Record<string, unknown>)
+      : undefined;
+    const rawKeys = countObj ? Object.keys(countObj) : [];
+    const countKeys = rawKeys.length > 0 ? rawKeys : ['_all'];
 
     return rows.map((r) => {
       const count = Number(r.count) || 0;
       const _count: Record<string, number> = {};
       for (const k of countKeys) {
         _count[k] = count;
+      }
+      if (_count._all === undefined) {
+        _count._all = count;
       }
       const result: Record<string, unknown> = {};
       for (const c of by) {
@@ -3141,13 +3147,19 @@ class SupabaseModel {
     }
 
     // 4. Map to Prisma groupBy shape
-    const countObj = options._count as Record<string, unknown> | undefined;
-    const countKeys = countObj ? Object.keys(countObj) : ['id'];
+    const countObj = typeof options._count === 'object' && options._count !== null
+      ? (options._count as Record<string, unknown>)
+      : undefined;
+    const rawKeys = countObj ? Object.keys(countObj) : [];
+    const countKeys = rawKeys.length > 0 ? rawKeys : ['_all'];
 
     const results: Record<string, unknown>[] = counted.map(({ row, count }) => {
       const _count: Record<string, number> = {};
       for (const k of countKeys) {
         _count[k] = count;
+      }
+      if (_count._all === undefined) {
+        _count._all = count;
       }
       const result: Record<string, unknown> = {};
       for (const c of by) {

@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
       threeStars: number;
       critical: number;
       needsReply: number;
+      replied: number;
     } | undefined;
 
     try {
@@ -139,7 +140,7 @@ export async function GET(request: NextRequest) {
         db.review.groupBy({
           by: ['rating'],
           where: baseWhere,
-          _count: true,
+          _count: { _all: true },
         }),
         db.review.count({
           where: {
@@ -157,7 +158,14 @@ export async function GET(request: NextRequest) {
       let allTotal = 0;
       for (const g of ratingGroups) {
         const r = Math.round(Number(g.rating) || 5);
-        const c = typeof g._count === 'number' ? g._count : (g._count as any)?._all || 1;
+        const c =
+          typeof g._count === 'number'
+            ? g._count
+            : typeof (g._count as any)?._all === 'number'
+              ? (g._count as any)._all
+              : typeof (g._count as any)?.id === 'number'
+                ? (g._count as any).id
+                : (Object.values((g._count as any) || {})[0] as number) || 0;
         rCounts[r] = (rCounts[r] || 0) + c;
         allTotal += c;
       }
@@ -169,6 +177,7 @@ export async function GET(request: NextRequest) {
         threeStars: rCounts[3] || 0,
         critical: (rCounts[1] || 0) + (rCounts[2] || 0),
         needsReply: needsReplyTotal,
+        replied: Math.max(0, allTotal - needsReplyTotal),
       };
     } catch (countErr) {
       console.warn('[api/reviews] Error computing rating counts summary:', countErr);

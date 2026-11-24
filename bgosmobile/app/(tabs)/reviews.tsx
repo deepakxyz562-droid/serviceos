@@ -45,6 +45,7 @@ type ReviewsResponse = {
     threeStars: number;
     critical: number;
     needsReply: number;
+    replied?: number;
   };
   pagination?: { total: number; page?: number; limit?: number; totalPages?: number };
 };
@@ -1148,7 +1149,7 @@ export default function ReviewRepliesScreen() {
                   fontSize: 12.5,
                 }}
               >
-                ✓ Replied ({replied.length})
+                ✓ Replied ({counts?.replied ?? replied.length})
               </Text>
             </Pressable>
           </ScrollView>
@@ -2639,31 +2640,6 @@ export default function ReviewRepliesScreen() {
         </View>}
       </Screen>
 
-      {/* Floating Microphone Button (Screenshots 08.55.28 & 08.55.29) */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Voice assistant"
-        onPress={() => Alert.alert('BGOS AI Assistant', 'Listening... Ask me to draft a review reply or check your profile performance.')}
-        style={({ pressed }) => ({
-          position: 'absolute',
-          bottom: 24,
-          right: 20,
-          width: 54,
-          height: 54,
-          borderRadius: 27,
-          backgroundColor: '#0F172A',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: pressed ? 0.85 : 1,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 6,
-          elevation: 8,
-        })}
-      >
-        <MaterialIcons name="mic" size={24} color="#FFFFFF" />
-      </Pressable>
       {/* 1-Tap WhatsApp Google Review Request Sheet */}
       <ReviewRequestSheet
         visible={reviewSheetOpen}
