@@ -212,6 +212,9 @@ next-dev.pid
 # Local EAS signing credentials (never commit or upload in archives)
 bgosmobile/credentials.json
 bgosmobile/credentials/
+bosmobile/credentials.json
+bosmobile/credentials/
+*.aab
 *.jks
 *.keystore
 *.aab
