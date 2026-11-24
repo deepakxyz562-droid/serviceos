@@ -810,12 +810,6 @@ async function notifyScheduledPostCompleted(params: {
     const isPhotoMedia =
       params.gbpPostType === 'photo_media' ||
       Boolean(gbpTarget?.externalPostId && gbpTarget.externalPostId.includes('/media/'));
-    const isGbpReview = Boolean(
-      isPhotoMedia &&
-      gbpTarget?.status === 'published' &&
-      gbpTarget?.externalPostId &&
-      gbpTarget.externalPostId.includes('CIAB'),
-    );
 
     const cleanSnippet = (params.content || (params.isScheduled ? 'Scheduled post' : 'Post'))
       .replace(/\s+/g, ' ')
@@ -835,18 +829,10 @@ async function notifyScheduledPostCompleted(params: {
       actionUrl = `/app?product=bgos&view=socialMedia&socialTab=photos`;
 
       if (params.finalStatus === 'published') {
-        if (isGbpReview) {
-          title = 'Photo uploaded · In Google Review';
-          message =
-            'Your photo was uploaded to Google Business Profile and is currently in Google Review (12–48h) before appearing on Google Maps.';
-          actionLabel = 'View Photos Gallery';
-          notificationPill = 'uploaded';
-        } else {
-          title = 'Photo live on Google Maps';
-          message = 'Your photo is live on your Google Business Profile photo gallery.';
-          actionLabel = 'View Photos Gallery';
-          notificationPill = 'uploaded';
-        }
+        title = 'Photo live on Google Maps';
+        message = 'Your photo is live on your Google Business Profile photo gallery.';
+        actionLabel = 'View Photos Gallery';
+        notificationPill = 'uploaded';
       } else if (params.finalStatus === 'partial') {
         title = 'Photo partially published';
         message = 'Your photo was uploaded with errors on some channels.';

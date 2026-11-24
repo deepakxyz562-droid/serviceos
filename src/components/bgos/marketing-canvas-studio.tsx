@@ -1659,7 +1659,7 @@ export function MarketingCanvasStudio({
                 <label className="text-xs font-semibold text-foreground flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <ImageIcon className="size-3.5 text-[#009F50]" />
-                    Attach Post Photo (Optional)
+                    Attach Image (Optional)
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     Upload your real photo, or leave empty for AI generation

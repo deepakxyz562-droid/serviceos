@@ -395,7 +395,7 @@ export function ScheduledPhotosTimeline({
         >
           <MaterialIcons name="add-a-photo" size={17} color="#FFFFFF" />
           <Text style={styles.addPhotosButtonText} numberOfLines={1}>
-            {isUploading ? 'Picking…' : 'Add Media'}
+            {isUploading ? 'Picking…' : 'Add Photos'}
           </Text>
         </Pressable>
 

@@ -64,7 +64,7 @@ export function PostReviewEditModal({
   if (!post || !visible) return null;
 
   const handlePickPhoto = async () => {
-    Alert.alert('Change Post Photo', 'Update the image for this Google Business Profile post:', [
+    Alert.alert('Change Image', 'Select a new image for this Google Business Profile post:', [
       {
         text: 'Take Photo 📷',
         onPress: async () => {

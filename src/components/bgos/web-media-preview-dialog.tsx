@@ -112,12 +112,12 @@ export function WebMediaPreviewDialog({
   const queueId = item.postId || item.id;
   const isQueue = item.source === 'queue' && Boolean(queueId);
   const canEdit = isQueue && Boolean(onEdit);
-  const isPendingReview = item.reviewStatus === 'in_review' || (Boolean(item.id) && String(item.id).includes('CIAB'));
+  const isPendingReview = item.reviewStatus === 'in_review';
   const statusLabel =
     isPendingReview
-      ? 'In Google Review (12–48h)'
+      ? 'In Google Review'
       : item.source === 'google'
-        ? 'Published on Google'
+        ? 'Live on Google Maps'
         : item.status === 'failed'
           ? 'Failed'
           : item.status === 'scheduled' || item.status === 'publishing'

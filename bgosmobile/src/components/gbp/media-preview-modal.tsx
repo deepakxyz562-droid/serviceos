@@ -72,10 +72,10 @@ export function MediaPreviewModal({
   const canManageQueue = item.source === 'queue' && Boolean(item.postId || item.id);
   const canEdit = canManageQueue && Boolean(onEdit);
   const queueItemId = item.postId || item.id;
-  const isPendingReview = item.reviewStatus === 'in_review' || (Boolean(item.id) && String(item.id).includes('CIAB'));
+  const isPendingReview = item.reviewStatus === 'in_review';
   const statusLabel =
     isPendingReview
-      ? 'In Google Review (12–48h)'
+      ? 'In Google Review'
       : item.statusLabel
         ? item.statusLabel
         : item.source === 'google'

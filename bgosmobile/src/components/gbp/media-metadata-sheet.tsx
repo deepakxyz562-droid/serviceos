@@ -746,7 +746,7 @@ export function MediaMetadataSheet({
                     style={styles.uploadPhotoBtn}
                   >
                     <MaterialIcons name="file-upload" size={16} color="#009F50" />
-                    <Text style={styles.uploadPhotoBtnText}>Upload Photo</Text>
+                    <Text style={styles.uploadPhotoBtnText}>Choose Photo</Text>
                   </Pressable>
                 </View>
 
@@ -937,10 +937,10 @@ export function MediaMetadataSheet({
                           postDestination === 'photo_media' && styles.choiceOptionTitleSelected,
                         ]}
                       >
-                        Photos Gallery
+                        Google Photo Gallery
                       </Text>
                       <Text style={styles.choiceOptionDesc}>
-                        Google Maps Album · 12–48h safety review
+                        Permanent album on Google Maps Photos
                       </Text>
                     </View>
                   </Pressable>
@@ -964,10 +964,10 @@ export function MediaMetadataSheet({
                           postDestination === 'whats_new' && styles.choiceOptionTitleSelected,
                         ]}
                       >
-                        Update Post
+                        Google Update Post
                       </Text>
                       <Text style={styles.choiceOptionDesc}>
-                        Live in Updates tab with Call button
+                        Announcement post with caption & Call button
                       </Text>
                     </View>
                   </Pressable>
@@ -1033,48 +1033,64 @@ export function MediaMetadataSheet({
               </View>
             </ScrollView>
 
-            {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST TO GOOGLE) ── */}
+            {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST PHOTO) ── */}
             <View style={[styles.bottomActionBar, { height: 72 + insets.bottom, paddingBottom: insets.bottom }]}>
               <Pressable
                 onPress={handleWhatsAppShare}
-                style={styles.actionOutlineBtn}
+                style={({ pressed }) => [styles.actionUtilityBtn, pressed && styles.actionUtilityBtnPressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Share post"
               >
-                <MaterialIcons name="share" size={18} color="#009F50" />
-                <Text style={[styles.actionOutlineBtnText, { color: '#009F50' }]}>Share</Text>
+                <MaterialIcons name="share" size={20} color="#009F50" />
               </Pressable>
 
               <Pressable
                 onPress={handleDownload}
-                style={styles.actionOutlineBtn}
+                style={({ pressed }) => [styles.actionUtilityBtn, pressed && styles.actionUtilityBtnPressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Download image"
               >
-                <MaterialIcons name="file-download" size={18} color="#0F172A" />
-                <Text style={styles.actionOutlineBtnText}>Download</Text>
+                <MaterialIcons name="file-download" size={20} color="#0F172A" />
               </Pressable>
 
               <Pressable
                 onPress={handlePublishOrSchedule}
                 disabled={submitting || uploadingMedia}
-                style={[styles.actionPrimaryBtn, (submitting || uploadingMedia) && { opacity: 0.7 }]}
+                style={({ pressed }) => [
+                  styles.actionPrimaryBtn,
+                  (submitting || uploadingMedia) && { opacity: 0.7 },
+                  pressed && { opacity: 0.85 },
+                ]}
                 accessibilityRole="button"
-                accessibilityLabel="Post to Google"
+                accessibilityLabel={
+                  postDestination === 'whats_new' ? 'Post Google Update' : 'Post Photo'
+                }
               >
                 {submitting || uploadingMedia ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <MaterialIcons name="publish" size={18} color="#FFFFFF" />
+                    <MaterialIcons
+                      name={
+                        isEditMode
+                          ? 'check'
+                          : scheduleMode === 'daily' || scheduleMode === 'weekly'
+                            ? 'schedule'
+                            : 'send'
+                      }
+                      size={18}
+                      color="#FFFFFF"
+                    />
                     <Text style={styles.actionPrimaryBtnText}>
                       {isEditMode
-                        ? 'Update'
+                        ? 'Save Changes'
                         : scheduleMode === 'daily' || scheduleMode === 'weekly'
-                          ? 'Schedule Post'
+                          ? postDestination === 'whats_new'
+                            ? 'Schedule Update'
+                            : 'Schedule Post'
                           : postDestination === 'whats_new'
-                            ? 'Post Update Live'
-                            : 'Upload Photo'}
+                            ? 'Post Update'
+                            : 'Post Photo'}
                     </Text>
                   </>
                 )}
@@ -1603,44 +1619,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 4,
   },
-  actionOutlineBtn: {
-    flex: 1,
-    height: 46,
+  actionUtilityBtn: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
   },
-  actionOutlineBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
+  actionUtilityBtnPressed: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#94A3B8',
   },
   actionPrimaryBtn: {
-    flex: 1.6,
-    height: 46,
+    flex: 1,
+    height: 48,
     borderRadius: 12,
     backgroundColor: '#009F50',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    shadowColor: '#009F50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   actionPrimaryBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   celebrationWrapper: {
     flex: 1,

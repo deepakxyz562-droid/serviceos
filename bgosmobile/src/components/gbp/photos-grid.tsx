@@ -175,7 +175,7 @@ function PhotoCell({
         ) : null}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-          {photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB')) ? (
+          {photo.reviewStatus === 'in_review' ? (
             <View
               style={{
                 backgroundColor: '#D97706',
@@ -188,7 +188,7 @@ function PhotoCell({
               }}
             >
               <MaterialIcons name="schedule" size={10} color="#FFFFFF" />
-              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>In Review (12–48h)</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' }}>In Review</Text>
             </View>
           ) : unposted ? (
             <View

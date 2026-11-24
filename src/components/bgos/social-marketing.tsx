@@ -6265,7 +6265,7 @@ export function SocialMediaView({
                         )}
                         <span
                           className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB'))
+                            photo.reviewStatus === 'in_review'
                               ? 'bg-amber-600/95 text-white'
                               : photo.source === 'google'
                                 ? 'bg-emerald-600/90 text-white'
@@ -6276,8 +6276,8 @@ export function SocialMediaView({
                                     : 'bg-slate-800/85 text-white'
                           }`}
                         >
-                          {photo.reviewStatus === 'in_review' || (photo.id && String(photo.id).includes('CIAB'))
-                            ? 'In Review (12–48h)'
+                          {photo.reviewStatus === 'in_review'
+                            ? 'In Review'
                             : photo.source === 'google'
                               ? 'Live'
                               : photo.status === 'failed'

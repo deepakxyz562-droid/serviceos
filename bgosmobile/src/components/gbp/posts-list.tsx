@@ -1081,7 +1081,7 @@ export function PostDetailModal({
                   onPress={openPhotoSwitcher}
                 >
                   <MaterialIcons name="photo-camera" size={17} color="#009F50" />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534' }}>Change Post Photo</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#166534' }}>Change Image</Text>
                 </Pressable>
               </View>
 
@@ -1180,7 +1180,7 @@ export function PostDetailModal({
                   <Pressable
                     style={styles.changePhotoFloatingBtn}
                     onPress={openPhotoSwitcher}
-                    accessibilityLabel="Change post photo"
+                    accessibilityLabel="Change post image"
                   >
                     <MaterialIcons name="photo-camera" size={14} color="#FFFFFF" />
                     <Text style={styles.changePhotoFloatingText}>Change Photo</Text>
@@ -1473,7 +1473,7 @@ export function PostDetailModal({
               <View style={styles.photoModalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <MaterialIcons name="photo-camera" size={20} color="#009F50" />
-                  <Text style={styles.photoModalTitle}>Change Post Photo</Text>
+                  <Text style={styles.photoModalTitle}>Change Image</Text>
                 </View>
                 <Pressable onPress={() => setPhotoSwitcherVisible(false)} style={styles.photoModalCloseBtn}>
                   <MaterialIcons name="close" size={22} color="#475569" />
@@ -1533,7 +1533,7 @@ export function PostDetailModal({
                 <View style={{ padding: 40, alignItems: 'center' }}>
                   <ActivityIndicator color="#009F50" size="large" />
                   <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '600' }}>
-                    {isUpdatingPhoto ? 'Updating post photo...' : 'Loading media library...'}
+                    {isUpdatingPhoto ? 'Updating image...' : 'Loading media library...'}
                   </Text>
                 </View>
               ) : mediaTab === 'ai' ? (

@@ -126,8 +126,8 @@ export function CreateGbpPostModal({
 
   const handlePickAttachedPhoto = async () => {
     Alert.alert(
-      'Attach Post Photo',
-      'Select an authentic photo for your Google Business Profile post:',
+      'Attach Image',
+      'Select an image to attach to this Google Business Profile update:',
       [
         {
           text: 'Take Photo 📷',

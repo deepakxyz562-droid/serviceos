@@ -331,8 +331,6 @@ export async function GET(request: NextRequest) {
             (mediaFormat !== 'VIDEO' || m.thumbnailUrl !== m.googleUrl)
               ? m.thumbnailUrl
               : undefined;
-          const shortId = m.name ? m.name.split('/').pop() || '' : '';
-          const isPendingReview = shortId.startsWith('CIAB');
           return {
             id: m.name || `gmedia-${idx}`,
             url: m.googleUrl,
@@ -342,9 +340,9 @@ export async function GET(request: NextRequest) {
             source: 'google' as const,
             mediaFormat,
             caption: m.category ? `Google Business Profile · ${m.category}` : undefined,
-            reviewStatus: isPendingReview ? ('in_review' as const) : ('approved' as const),
-            status: isPendingReview ? 'in_review' : 'published',
-            statusLabel: isPendingReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
+            reviewStatus: 'approved' as const,
+            status: 'published',
+            statusLabel: 'Live on Google Maps',
           };
         });
       } catch (err: unknown) {
@@ -704,22 +702,16 @@ export async function POST(request: NextRequest) {
           });
           const finishedTargets = parsePublishTargetsRaw(finished?.publishTargets);
           const gbpRes = finishedTargets.find((t) => t.platform === 'googlebusiness');
-          const isReview = Boolean(
-            gbpRes?.externalPostId && gbpRes.externalPostId.includes('CIAB'),
-          );
-
           uploadedPhotos.push({
             id: postRecord.id,
             url: gbpRes?.permalink || publicItemUrl,
             thumbnailUrl: firstItem.thumbnailUrl,
             status:
               finished?.status === 'published'
-                ? isReview
-                  ? 'in_review'
-                  : 'published'
+                ? 'published'
                 : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
-            reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
-            statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
+            reviewStatus: 'approved' as const,
+            statusLabel: 'Live on Google Maps',
             title: firstItem.title,
             tags: firstItem.tags,
             ...seoFields,
@@ -1033,13 +1025,9 @@ export async function POST(request: NextRequest) {
                 ? items.length > 1
                   ? `Published update post live. Scheduled remaining ${items.length - 1} item(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
                   : `Update post published live to Google Business Profile (Visible in Updates tab).`
-                : uploadedPhotos.some((p: any) => p.reviewStatus === 'in_review')
-                  ? items.length > 1
-                    ? `Uploaded photo to Google Photos gallery (in review: 12–48h). Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                    : `Photo uploaded to Google Photos gallery and is currently in Google Review (12–48h).`
-                  : items.length > 1
-                    ? `Published 1 photo to gallery. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                    : `Published photo to Google Maps Photos gallery.`
+                : items.length > 1
+                  ? `Uploaded 1 photo to Google Photos gallery. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                  : `Photo uploaded successfully to Google Photos gallery.`
             : `Scheduled ${uploadedPhotos.length} ${requestedPostType === 'whats_new' ? 'update post(s)' : 'photo(s)'} (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
     });
   } catch (error: unknown) {
@@ -1196,28 +1184,22 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: errMsg }, { status: 502 });
       }
 
-      const isReview = Boolean(
-        gbpTarget?.externalPostId && gbpTarget.externalPostId.includes('CIAB'),
-      );
-
       return NextResponse.json({
         success: true,
         published: true,
         googleUrl: gbpTarget?.permalink || sourceUrl,
-        reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
-        statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
-        message: isReview
-          ? 'Photo uploaded to Google Business Profile and is now in Google Review (takes 12–48h).'
-          : 'Photo published live to Google Business Profile.',
+        reviewStatus: 'approved' as const,
+        statusLabel: 'Live on Google Maps',
+        message: 'Photo published live to Google Business Profile gallery.',
         item: {
           id: existing.id,
           title: baseMeta.title,
           description: publishedPost?.content || effectiveDescription,
           tags: baseMeta.tags || [],
           category: baseMeta.category || 'ADDITIONAL',
-          status: isReview ? 'in_review' : publishedPost?.status || 'published',
-          reviewStatus: isReview ? ('in_review' as const) : ('approved' as const),
-          statusLabel: isReview ? 'In Google Review (12–48h)' : 'Live on Google Maps',
+          status: publishedPost?.status || 'published',
+          reviewStatus: 'approved' as const,
+          statusLabel: 'Live on Google Maps',
           url: gbpTarget?.permalink || sourceUrl,
           scheduledFor: null,
         },

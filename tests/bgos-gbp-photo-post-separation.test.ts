@@ -87,7 +87,7 @@ beforeEach(() => {
 });
 
 describe('GBP Photos & Posts Separation, Concurrency & Review Status', () => {
-  it('GET /api/social/photos correctly identifies temporary CIAB photos as in_review', async () => {
+  it('GET /api/social/photos correctly identifies Google photos as Live on Google Maps', async () => {
     mocks.listGoogleBusinessMedia.mockResolvedValue({
       mediaItems: [
         {
@@ -111,11 +111,10 @@ describe('GBP Photos & Posts Separation, Concurrency & Review Status', () => {
     const body = await res.json();
 
     expect(body.photos).toHaveLength(2);
-    expect(body.photos[0].reviewStatus).toBe('in_review');
-    expect(body.photos[0].statusLabel).toBe('In Google Review (12–48h)');
+    expect(body.photos[0].reviewStatus).toBe('approved');
+    expect(body.photos[0].statusLabel).toBe('Live on Google Maps');
     expect(body.photos[1].reviewStatus).toBe('approved');
     expect(body.photos[1].statusLabel).toBe('Live on Google Maps');
-    expect(body.hasInReviewPhoto).toBe(true);
   });
 
   it('POST /api/social/photos sets gbpPostType: photo_media by default and enforces in-flight lock', async () => {
@@ -168,8 +167,8 @@ describe('GBP Photos & Posts Separation, Concurrency & Review Status', () => {
     expect(mocks.postCreate).toHaveBeenCalled();
     const createdData = mocks.postCreate.mock.calls[0][0].data;
     expect(createdData.gbpPostType).toBe('photo_media');
-    expect(uploadBody.results[0].reviewStatus).toBe('in_review');
-    expect(uploadBody.results[0].statusLabel).toBe('In Google Review (12–48h)');
+    expect(uploadBody.results[0].reviewStatus).toBe('approved');
+    expect(uploadBody.results[0].statusLabel).toBe('Live on Google Maps');
   });
 
   it('POST /api/social/photos honors postType: whats_new when user chooses Update Post destination', async () => {

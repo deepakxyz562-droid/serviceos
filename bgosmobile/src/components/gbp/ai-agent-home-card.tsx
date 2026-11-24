@@ -71,7 +71,7 @@ export function HomeStoryBubblesStrip({
     },
     {
       id: 's_media',
-      title: 'Post Photos',
+      title: 'Add Photos',
       icon: 'photo-camera' as const,
       color: '#059669',
       ringColor: '#A7F3D0',
