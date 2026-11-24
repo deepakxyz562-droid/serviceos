@@ -30,7 +30,6 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [devOtpNotice, setDevOtpNotice] = useState<string | null>(null);
 
   // Email Sign In State
   const [email, setEmail] = useState('');
@@ -81,9 +80,6 @@ export default function LoginScreen() {
     if (result.success) {
       setPhoneStep('otp');
       setResendCountdown(30);
-      if (result.devOtp) {
-        setDevOtpNotice(result.devOtp);
-      }
     }
   };
 
@@ -103,18 +99,8 @@ export default function LoginScreen() {
     const result = await sendPhoneOtp(phoneNumber.trim());
     if (result.success) {
       setResendCountdown(30);
-      if (result.devOtp) {
-        setDevOtpNotice(result.devOtp);
-      }
       Alert.alert('Code Sent', 'A fresh verification code has been dispatched.');
     }
-  };
-
-  const handleUseTestAccount = () => {
-    setPhoneNumber('+91 99999 99999');
-    setOtpCode('123456');
-    setDevOtpNotice('123456');
-    hapticFeedback.light();
   };
 
   const handleSignIn = async () => {
@@ -357,20 +343,6 @@ export default function LoginScreen() {
                       </View>
                     </View>
 
-                    {/* Quick Test Account Fill (Dev Only) */}
-                    {__DEV__ && (
-                      <TouchableOpacity
-                        style={styles.testAccountPill}
-                        onPress={handleUseTestAccount}
-                        activeOpacity={0.7}
-                      >
-                        <MaterialCommunityIcons name="lightning-bolt" size={14} color="#10B981" />
-                        <Text style={styles.testAccountPillText}>
-                          Test Account: +91 99999 99999 (Code: 123456)
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
                     {/* Send Code Button */}
                     <TouchableOpacity
                       onPress={handleSendPhoneOtp}
@@ -414,16 +386,6 @@ export default function LoginScreen() {
                         <Text style={styles.editPhoneBtnText}>Change</Text>
                       </TouchableOpacity>
                     </View>
-
-                    {/* Dev OTP Helper Pill (Dev Only) */}
-                    {__DEV__ && devOtpNotice ? (
-                      <View style={styles.devOtpBox}>
-                        <Feather name="key" size={14} color="#10B981" style={{ marginRight: 6 }} />
-                        <Text style={styles.devOtpText}>
-                          Active Verification Code: <Text style={{ fontWeight: '800' }}>{devOtpNotice}</Text>
-                        </Text>
-                      </View>
-                    ) : null}
 
                     {/* 6-digit OTP code */}
                     <View style={styles.inputGroup}>
@@ -1036,23 +998,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#E2E8F0',
   },
-  testAccountPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-    gap: 6,
-  },
-  testAccountPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10B981',
-  },
   submitBtnEmerald: {
     backgroundColor: '#059669',
   },
@@ -1094,21 +1039,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#10B981',
-  },
-  devOtpBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 14,
-  },
-  devOtpText: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '600',
   },
   otpTextInput: {
     fontSize: 18,
