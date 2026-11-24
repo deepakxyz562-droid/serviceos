@@ -40,6 +40,7 @@ function buildPresetS3Urls(slug: string): string[] {
 }
 
 const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
+  film_studio: buildPresetS3Urls('film_production_studio'),
   market: buildPresetS3Urls('grocery_supermarket'),
   pool: buildPresetS3Urls('farmhouse_resort'),
   cake: buildPresetS3Urls('bakery_cafe'),
@@ -49,13 +50,17 @@ const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
   fashion: buildPresetS3Urls('fashion_boutique'),
   salon: buildPresetS3Urls('salon_spa'),
   restaurant: buildPresetS3Urls('restaurant_dining'),
-  generic: buildPresetS3Urls('it_software'),
+  generic: buildPresetS3Urls('general_business'),
 };
 
-function resolveCategoryKey(blob: string): 'market' | 'pool' | 'cake' | 'hardware' | 'paint' | 'software' | 'fashion' | 'salon' | 'restaurant' | 'generic' {
+function resolveCategoryKey(blob: string): string {
   const lower = blob.toLowerCase();
-  // Software & Tech MUST be evaluated first so SaaS / tech businesses are never misclassified as retail markets
-  if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|fieseros|serviceos|bgos|bos|crm|platform|digital marketing)/.test(lower)) {
+  // Film, Media & Creative Studios must NOT be classified as software/IT
+  if (/(film|cinema|movie|studio|video production|production house|cinematography|audiovisual)/.test(lower)) {
+    return 'film_studio';
+  }
+  // Software & Tech
+  if (/(software|it company|developer|code|web development|app development|cloud|saas|crm|platform|digital marketing)/.test(lower) && !/(film|cinema|studio|parlour|salon|hotel)/.test(lower)) {
     return 'software';
   }
   if (/(market|grocery|supermarket|kirana|general store|provision|mart|vegetable|fruit|bazaar|mandi|departmental)/.test(lower)) {
@@ -73,17 +78,14 @@ function resolveCategoryKey(blob: string): 'market' | 'pool' | 'cake' | 'hardwar
   if (/(cake|bakery|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/.test(lower)) {
     return 'cake';
   }
-  if (/(restaurant|dining|cafe|bistro|diner|food|fast food|dhaba)/.test(lower)) {
-    return 'restaurant';
-  }
-  if (/(hardware|tool|fastener|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/.test(lower)) {
+  if (/(paint|hardware|tool|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/.test(lower)) {
     return 'hardware';
   }
   if (/(paint|color|wall finish|coating|texture|primer|asian paints|berger|nerolac|decor)/.test(lower)) {
     return 'paint';
   }
-  if (/(software|it company|tech|developer|code|web development|app development|cloud|saas|digital marketing)/.test(lower)) {
-    return 'software';
+  if (/(restaurant|dining|cafe|bistro|diner|food|fast food|dhaba|kitchen)/.test(lower)) {
+    return 'restaurant';
   }
   return 'generic';
 }

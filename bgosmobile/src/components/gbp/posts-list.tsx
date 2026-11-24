@@ -477,64 +477,9 @@ export function parsePostStructure(content: string, fallbackTitle?: string): Par
 
   if (!title) title = fallbackTitle || 'Local Business Update';
 
-  // If content was legacy 1-line format with no bullet points, auto-enrich with 5-bullet local SEO structure
-  if (bullets.length === 0) {
-    const isTech = /software|it|tech|consult|developer|cloud|cyber|system/i.test(`${title} ${content}`);
-    const isPoolOrFarm = /pool|farm|resort|hotel|stay|villa|swim/i.test(`${title} ${content}`);
-    const detectedCity = /patna/i.test(`${title} ${content}`) ? 'Patna' : 'your area';
-
-    if (isTech) {
-      if (title.length > 70 || /provides verified/i.test(title)) {
-        title = `How Professional IT Strategy & Consulting Elevates Enterprise Performance in ${detectedCity}`;
-      }
-      if (!intro) {
-        intro = `Reliable technology infrastructure and forward-thinking digital solutions are critical for modern business growth. For organizations seeking expert IT Strategy & Consulting in ${detectedCity}, we deliver specialized solutions engineered to optimize operations, improve cybersecurity, and maximize technological ROI.`;
-      }
-      bullets.push(
-        'Strategic alignment & roadmap: Align enterprise technology directly with business goals and operational milestones.',
-        'Scalable digital architecture: Future-proof your core software, data pipelines, and cloud workflows.',
-        'Enhanced enterprise security: Proactive risk management, compliance auditing, and threat protection.',
-        'Measurable workflow efficiency: Modernize legacy processes and eliminate operational bottlenecks.',
-        `Dedicated local consulting: Direct access to experienced technology specialists in ${detectedCity}.`,
-      );
-      if (!conclusion) {
-        conclusion = `Choosing the right technology partner is essential for sustainable competitive advantage. We ensure your digital infrastructure supports your organization every step of the way.`;
-      }
-    } else if (isPoolOrFarm) {
-      if (title.length > 70 || /provides verified/i.test(title)) {
-        title = `How Clean Pool Facilities Enhance Guest Comfort and Trust in ${detectedCity}`;
-      }
-      if (!intro) {
-        intro = `A refreshing swim feels better when the surroundings are clean, comfortable, and welcoming. For families looking for a relaxing escape in ${detectedCity}, we put the focus on what matters: a serene setting where guest comfort comes first.`;
-      }
-      bullets.push(
-        'A welcoming first impression: Clean pool surroundings help guests feel more at ease from the moment they arrive.',
-        'Comfort beyond the water: Tidy spaces around the pool make time spent relaxing with family feel more enjoyable.',
-        'Confidence through care: Attention to facilities shows guests that their experience matters, helping build trust.',
-        'A better family outing: Well-kept surroundings let everyone enjoy the atmosphere without unnecessary distractions.',
-        'More memorable downtime: A cared-for setting adds to the pleasure of a visit, whether you come to swim or unwind.',
-      );
-      if (!conclusion) {
-        conclusion = `Choosing a nearby destination is about more than distance. The condition of the facilities and the care given to shared spaces make a meaningful difference to your visit.`;
-      }
-    } else {
-      if (title.length > 70 || /provides verified/i.test(title)) {
-        title = `How Verified Professional Services Deliver Quality and Trust in ${detectedCity}`;
-      }
-      if (!intro) {
-        intro = `Exceptional service begins with consistency, transparent communication, and dedication to customer satisfaction. For clients seeking verified local services in ${detectedCity}, we set the benchmark for dependable standards and prompt support.`;
-      }
-      bullets.push(
-        `Verified local expertise: Experienced specialists committed to high-standard execution in ${detectedCity}.`,
-        'Quality & reliability: Certified processes ensuring lasting value and dependable performance.',
-        'Transparent upfront pricing: Clear estimates with zero hidden charges so you can plan with confidence.',
-        'Dedicated customer support: Responsive communication from initial inquiry through project completion.',
-        '100% satisfaction assurance: Trusted by local clients for punctual, professional service.',
-      );
-      if (!conclusion) {
-        conclusion = `Choosing the right local partner makes all the difference. Contact our team today for dependable service.`;
-      }
-    }
+  // If content has no separate intro/conclusion, use content directly
+  if (!intro && content) {
+    intro = content;
   }
 
   return {

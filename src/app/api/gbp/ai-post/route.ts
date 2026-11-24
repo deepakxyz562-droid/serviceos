@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { callAI } from '@/lib/ai-client';
-import { getBrandContext } from '@/lib/brand-context';
+import { generateIndustryAwarePost } from '@/lib/business-intelligence/post-generator';
+import { getBusinessIntelligence } from '@/lib/business-intelligence/service';
 import { validateBrandSafety } from '@/lib/brand-safety-gate';
 import { resolveBusinessPostVisual } from '@/lib/designs/dynamic-visual-resolver';
 
@@ -30,99 +30,37 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as AiPostRequest;
     const targetKeyword = body.targetKeyword?.trim();
-    const topic = body.topic?.trim() || (targetKeyword ? `${targetKeyword} Update` : 'Exciting local service update');
+    const topic = body.topic?.trim() || (targetKeyword ? `${targetKeyword} Update` : undefined);
     const postType = body.postType || 'whats_new';
-    const tone = body.tone || 'engaging, professional, local-friendly';
 
+    // 1. Generate post using the shared Business Intelligence Engine with relevance validation
+    const intelligence = await getBusinessIntelligence(user.tenantId);
+    const generated = await generateIndustryAwarePost({
+      tenantId: user.tenantId,
+      topic,
+      occasion: body.offerDetails?.title,
+      postType,
+    });
+
+    const businessName = intelligence.businessName.value;
+    const industry = intelligence.businessCategory.value;
+    const location = intelligence.location.value?.formattedAddress || intelligence.location.value?.city || 'Local Area';
+
+    // Layer 1: Resolve high-quality matched visual photo
+    const visualImageUrl = await resolveBusinessPostVisual({
+      tenantId: user.tenantId,
+      industry,
+      topic: topic || generated.contentPillar,
+      imageKeyword: generated.contentPillar,
+      imagePrompt: generated.visualScenePrompt,
+    });
+
+    // Layer 2: Deterministic Brand Safety Gate validation
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
       include: { brandProfile: true },
     });
 
-    const businessName =
-      tenant?.brandProfile?.businessName || tenant?.name || 'Local Business';
-    const industry =
-      tenant?.brandProfile?.industry || (tenant as any)?.industry || 'Professional Services';
-    const location =
-      tenant?.brandProfile?.location || tenant?.city || 'Local Area';
-    const brandContext = await getBrandContext(user.tenantId);
-
-    const systemPrompt = `You are a world-class Google Business Profile (GBP) Local SEO and Viral Poster expert for ${businessName}.
-Your job is to generate a high-converting Google Business Profile post that drives local Google Maps rankings, calls, direction requests, and clicks.
-
-Strict Guidelines:
-1. Business: "${businessName}"
-2. Industry: "${industry}"
-3. Service Location / City: "${location}"
-4. Brand Context: ${brandContext}
-5. Post Type: ${postType.toUpperCase()}
-6. Desired Tone: ${tone}
-7. Topic / Angle: "${topic}"${targetKeyword ? `\n8. Priority Search Term to target naturally: "${targetKeyword}"` : ''}
-
-Respond ONLY with a valid JSON object with the following schema:
-{
-  "headline": "A punchy, attention-grabbing headline (under 70 chars)",
-  "content": "A high-converting local GBP post strictly formatted as:\\n\\n[Intro paragraph introducing the experience, location, and guest/customer comfort]\\n\\n✓ [Benefit 1]: [Details]\\n✓ [Benefit 2]: [Details]\\n✓ [Benefit 3]: [Details]\\n✓ [Benefit 4]: [Details]\\n✓ [Benefit 5]: [Details]\\n\\n[Concluding paragraph on quality, facilities, and local peace of mind]\\n\\nCall ${businessName} in ${location} to ask about services and plan your visit.\\n\\nCTA: CALL\\n\\n#[Hashtags]",
-  "ctaType": "CALL" | "BOOK" | "LEARN_MORE" | "ORDER",
-  "ctaLabel": "e.g. Call Now, Book Appointment, Get Quote",
-  "suggestedOffer": {
-    "title": "Title for offer (if postType is offer)",
-    "couponCode": "e.g. SAVE20",
-    "discount": "e.g. 15% OFF"
-  },
-  "imageKeyword": "1-3 descriptive search words for finding or generating the best matching visual photo (e.g. 'welding workshop', 'solar installation')",
-  "imagePrompt": "Detailed generative AI prompt describing an ultra-realistic, professional, high-resolution photo showcasing this service"
-}`;
-
-    let parsedResult: any = null;
-
-    try {
-      const aiResponse = await callAI({
-        messages: [
-          { role: 'system', content: 'You are an expert Google Local SEO AI assistant. Respond only with JSON.' },
-          { role: 'user', content: systemPrompt },
-        ],
-        temperature: 0.7,
-      });
-
-      const rawText = aiResponse.content || '';
-      const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      parsedResult = JSON.parse(cleaned);
-    } catch (aiErr) {
-      console.warn('[api/gbp/ai-post] AI generation error, using smart fallback:', aiErr);
-    }
-
-    if (!parsedResult || !parsedResult.content) {
-      const isOffer = postType === 'offer';
-      parsedResult = {
-        headline: isOffer
-          ? `🔥 Special Limited-Time Offer from ${businessName}!`
-          : `✨ ${topic} — Trusted ${industry} in ${location}`,
-        content: `Looking for top-rated ${industry.toLowerCase()} in ${location}? ${businessName} delivers precision workmanship, fast turnarounds, and exceptional customer service on every project.\n\nWhether you need custom solutions, reliable maintenance, or urgent assistance, our experienced team is here to help.\n\n📞 Contact us today for a free consultation and prompt service!\n\n#${location.replace(/[^a-zA-Z0-9]/g, '')}${industry.replace(/[^a-zA-Z0-9]/g, '')} #${businessName.replace(/[^a-zA-Z0-9]/g, '')} #Local${industry.replace(/[^a-zA-Z0-9]/g, '')}`,
-        ctaType: 'CALL',
-        ctaLabel: 'Call Now',
-        suggestedOffer: isOffer
-          ? {
-              title: body.offerDetails?.title || `Exclusive ${industry} Discount`,
-              couponCode: body.offerDetails?.couponCode || 'GOOGLE10',
-              discount: body.offerDetails?.discount || '10% OFF',
-            }
-          : undefined,
-        imageKeyword: `${industry} professional`,
-        imagePrompt: `Professional high-quality commercial photo of ${industry.toLowerCase()} service by ${businessName} in ${location}, modern equipment, clean lighting.`,
-      };
-    }
-
-    // Dynamic 4-Tier Visual Resolver: Real Business Photos -> Live Unsplash API -> 35+ SMB Taxonomy
-    const visualImageUrl = await resolveBusinessPostVisual({
-      tenantId: user.tenantId,
-      industry,
-      topic,
-      imageKeyword: parsedResult.imageKeyword,
-      imagePrompt: parsedResult.imagePrompt,
-    });
-
-    // Layer 2: Deterministic Brand Safety Gate validation
     const forbiddenPhrases = (() => {
       try {
         const fp = tenant?.brandProfile?.forbiddenPhrases;
@@ -140,7 +78,7 @@ Respond ONLY with a valid JSON object with the following schema:
       }
     })();
 
-    const safetyCheck = validateBrandSafety(`${parsedResult.headline}\n${parsedResult.content}`, {
+    const safetyCheck = validateBrandSafety(`${generated.title}\n${generated.fullCaption}`, {
       tenantId: user.tenantId,
       activeBusinessName: businessName,
       forbiddenPhrases,
@@ -148,8 +86,8 @@ Respond ONLY with a valid JSON object with the following schema:
     });
 
     // If cross-tenant contamination or severe violations found, sanitize content to active business
-    let finalHeadline = parsedResult.headline;
-    let finalContent = parsedResult.content;
+    let finalHeadline = generated.title;
+    let finalContent = generated.fullCaption;
     if (!safetyCheck.passed) {
       for (const v of safetyCheck.violations) {
         if (v.type === 'cross_tenant_contamination' && v.matchedText) {
@@ -166,13 +104,15 @@ Respond ONLY with a valid JSON object with the following schema:
       post: {
         headline: finalHeadline,
         content: finalContent,
-        ctaType: parsedResult.ctaType || 'CALL',
-        ctaLabel: parsedResult.ctaLabel || 'Call Now',
+        ctaType: 'CALL',
+        ctaLabel: generated.callToAction || 'Call Now',
         postType,
-        topic,
-        suggestedOffer: parsedResult.suggestedOffer,
-        imagePrompt: parsedResult.imagePrompt,
+        topic: generated.contentPillar,
+        suggestedOffer: body.offerDetails,
+        imagePrompt: generated.visualScenePrompt,
         visualImageUrl,
+        relevanceScore: generated.relevanceScore,
+        validationReason: generated.validationReason,
         safety: {
           passed: safetyCheck.passed,
           warnings: safetyCheck.warnings.map((w) => w.message),

@@ -488,12 +488,20 @@ export function MarketingCanvasStudio({
 
   const dynamicInspirationIdeas = useMemo(() => {
     const cat = ((category || '') + ' ' + (businessName || '')).toLowerCase();
-    if (cat.includes('it') || cat.includes('tech') || cat.includes('software') || cat.includes('consult')) {
+    if (/(film|cinema|movie|video|studio|production|filmmaking)/i.test(cat)) {
       return [
-        `Discover verified IT Strategy & Consulting services at ${businessName}`,
-        'Strategic IT roadmaps to scale your enterprise and reduce operational risk',
-        'Book an IT architecture and infrastructure audit with our senior consultants',
-        'High-impact digital transformation and technology governance for modern business',
+        `Behind the scenes of cinematic storytelling at ${businessName}`,
+        'From script to screen: Creative film and video production excellence',
+        'Professional on-set direction, cinematography, and post-production',
+        'Showcasing compelling visuals and branded commercial storytelling',
+      ];
+    }
+    if (/(software company|software development|saas platform|it consulting firm|cloud consulting)/i.test(cat)) {
+      return [
+        `Discover verified technology solutions at ${businessName}`,
+        'Strategic roadmaps to scale your systems and reduce operational risk',
+        'Modern software architecture and workflow optimization',
+        'High-impact digital solutions built for modern business performance',
       ];
     }
     if (cat.includes('farm') || cat.includes('pool') || cat.includes('resort') || cat.includes('stay') || cat.includes('villa')) {

@@ -64,11 +64,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const { getBusinessIntelligence } = await import('@/lib/business-intelligence/service');
+    const intelligence = await getBusinessIntelligence(tenantId);
     const brandContext = await getBrandContext(tenantId);
-    const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'Our Business';
-    const industry = tenant?.brandProfile?.industry || tenant?.industry || 'Services';
+    const businessName = intelligence.businessName.value;
+    const industry = intelligence.businessCategory.value;
     const phone = tenant?.phone || '+91 61279 67087';
-    const location = tenant?.brandProfile?.location || (tenant?.city ? `${tenant.city}, India` : 'Local Store & Online');
+    const location =
+      intelligence.location.value?.formattedAddress ||
+      intelligence.location.value?.city ||
+      (tenant?.city ? `${tenant.city}, India` : 'Local Area');
 
     // 2. Generate SEO-Friendly Copy with AI (Google Business Profile & Local Search Focused)
     const prompt = `

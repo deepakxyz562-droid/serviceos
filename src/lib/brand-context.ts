@@ -104,9 +104,20 @@ export async function getBrandContextRaw(
  * on-brand-ish than to throw a 500.
  */
 export async function getBrandContext(tenantId: string | null | undefined): Promise<string> {
+  // Attempt to load authoritative Business Intelligence profile (single source of truth)
+  let intelligence: any = null;
+  if (tenantId) {
+    try {
+      const { getBusinessIntelligence } = await import('@/lib/business-intelligence/service');
+      intelligence = await getBusinessIntelligence(tenantId);
+    } catch (err) {
+      console.warn('[brand-context] Failed to load business intelligence:', err);
+    }
+  }
+
   const profile = await getBrandContextRaw(tenantId);
 
-  if (!profile) {
+  if (!profile && !intelligence) {
     const seoCtx = await getTenantSeoContext(tenantId);
     const seoSection = formatSeoKeywordsPromptSection(seoCtx);
     const base =
@@ -117,25 +128,41 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
     return seoSection ? `${base}\n${seoSection}` : base;
   }
 
-  const services = parseJsonArray(profile.services);
-  const products = parseJsonArray(profile.products);
-  const forbidden = parseJsonArray(profile.forbiddenPhrases);
-  const competitors = parseJsonArray(profile.competitors);
+  const rawServices = parseJsonArray(profile?.services);
+  const products = parseJsonArray(profile?.products);
+  const forbidden = parseJsonArray(profile?.forbiddenPhrases);
+  const competitors = parseJsonArray(profile?.competitors);
+
+  // Use intelligence values when profile has placeholder defaults
+  const rawBizName = profile?.businessName || '';
+  const isPlaceholderName = !rawBizName || /^(owner\s+\d+|my business|test business|default business)$/i.test(rawBizName.trim());
+  const businessName = isPlaceholderName && intelligence?.businessName?.value ? intelligence.businessName.value : rawBizName || 'Our Business';
+
+  const rawIndustry = profile?.industry?.trim() || '';
+  const isPlaceholderIndustry = !rawIndustry || /^(services|service|other|general)$/i.test(rawIndustry);
+  const industry = isPlaceholderIndustry && intelligence?.businessCategory?.value ? intelligence.businessCategory.value : rawIndustry || 'Local Service';
+
+  const location =
+    intelligence?.location?.value?.formattedAddress ||
+    intelligence?.location?.value?.city ||
+    profile?.location?.trim();
 
   const lines: string[] = [];
 
-  // Identity (opener — always included if businessName is set)
-  const industry = profile.industry?.trim() || 'service';
-  const location = profile.location?.trim();
+  // Identity opener
   const opener = location
-    ? `You are writing content for ${profile.businessName}, a ${industry} business in ${location}.`
-    : `You are writing content for ${profile.businessName}, a ${industry} business.`;
+    ? `You are writing content for ${businessName}, a ${industry} business in ${location}.`
+    : `You are writing content for ${businessName}, a ${industry} business.`;
   lines.push(opener);
 
-  if (profile.serviceArea?.trim()) {
+  if (intelligence?.description?.value) {
+    lines.push(`Business Description: ${intelligence.description.value}`);
+  }
+
+  if (profile?.serviceArea?.trim()) {
     lines.push(`Service area: ${profile.serviceArea.trim()}`);
   }
-  if (profile.website?.trim()) {
+  if (profile?.website?.trim()) {
     const rawSite = profile.website.trim();
     if (
       !rawSite.includes('fieseros.com') &&
@@ -147,30 +174,48 @@ export async function getBrandContext(tenantId: string | null | undefined): Prom
   }
 
   // Target audience
-  pushLine(lines, 'Target audience', profile.targetCustomer);
-  pushLine(lines, 'Customer pain points', profile.customerPainPoints);
+  const audience = profile?.targetCustomer || (intelligence?.targetAudience?.value ? intelligence.targetAudience.value.join(', ') : null);
+  pushLine(lines, 'Target audience', audience);
+  pushLine(lines, 'Customer pain points', profile?.customerPainPoints);
 
   // Brand voice
-  if (profile.tone?.trim() || profile.voiceDescription?.trim()) {
+  const tone = profile?.tone?.trim() || intelligence?.brandTone?.value;
+  if (tone || profile?.voiceDescription?.trim()) {
     const voiceParts: string[] = [];
-    if (profile.tone?.trim()) voiceParts.push(profile.tone.trim());
-    if (profile.voiceDescription?.trim()) voiceParts.push(profile.voiceDescription.trim());
+    if (tone) voiceParts.push(tone);
+    if (profile?.voiceDescription?.trim()) voiceParts.push(profile.voiceDescription.trim());
     lines.push(`Brand voice: ${voiceParts.join(' — ')}`);
   }
-  if (forbidden.length > 0) {
-    lines.push(`Avoid these phrases: ${forbidden.join(', ')}`);
-  }
-  pushLine(lines, 'Call to action', profile.defaultCta);
 
-  // Offering
-  if (services.length > 0) {
-    lines.push(`Key services: ${services.join(', ')}`);
+  // Key services: combine profile services and intelligence verified services
+  const verifiedServices = Array.isArray(intelligence?.verifiedServices)
+    ? intelligence.verifiedServices.map((s: any) => s.name)
+    : [];
+  const combinedServices = Array.from(new Set([...rawServices, ...verifiedServices])).filter(Boolean);
+  if (combinedServices.length > 0) {
+    lines.push(`Key services: ${combinedServices.join(', ')}`);
   }
+
   if (products.length > 0) {
     lines.push(`Products: ${products.join(', ')}`);
   }
-  pushLine(lines, 'USPs (unique selling points)', profile.usps);
-  pushLine(lines, 'Current offers', profile.currentOffers);
+  pushLine(lines, 'USPs (unique selling points)', profile?.usps || (intelligence?.usps?.length ? intelligence.usps.join(', ') : null));
+  pushLine(lines, 'Current offers', profile?.currentOffers);
+
+  // Marketing content pillars from intelligence
+  if (intelligence?.marketingContentPillars?.length) {
+    lines.push(`Core Marketing Themes: ${intelligence.marketingContentPillars.join(', ')}`);
+  }
+
+  // Strict negative boundaries
+  if (intelligence?.negativeBoundaries?.length) {
+    lines.push(`Strictly avoid these unrelated industries and topics: ${intelligence.negativeBoundaries.join(', ')}`);
+  }
+
+  if (forbidden.length > 0) {
+    lines.push(`Avoid these phrases: ${forbidden.join(', ')}`);
+  }
+  pushLine(lines, 'Call to action', profile?.defaultCta);
 
   // Ingest expanded Brand Brain from tenant settingsJson (sellingItems, founder, story, hashtags)
   try {

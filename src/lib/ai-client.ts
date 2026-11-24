@@ -72,6 +72,7 @@ const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const GEMINI_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta/models'
+const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
 
 /**
  * Free-tier OpenRouter models to try in order. Verified live against
@@ -95,34 +96,47 @@ const OPENROUTER_MODELS = [
   'dots-studio/dots-3-note-preview:free',
 ]
 
-/** Per-attempt timeout (10s). Fast failure allows rapid fallback to next model or Gemini within proxy limits. */
-const REQUEST_TIMEOUT_MS = 10_000
+/** Per-attempt timeout (60s) for rich structured intelligence responses. */
+const REQUEST_TIMEOUT_MS = 60_000
 
-/** Total end-to-end callAI waterfall budget (28s) so synchronous routes never exceed 60s reverse-proxy timeouts. */
-const DEFAULT_CALL_AI_BUDGET_MS = 28_000
+/** Total end-to-end callAI waterfall budget (120s). */
+const DEFAULT_CALL_AI_BUDGET_MS = 120_000
 
-/** Provider order — Google Gemini is tried first as requested for maximum quality,
- *  followed by OpenRouter, then OpenAI and Anthropic. */
-const PROVIDER_ORDER = ['gemini', 'openrouter', 'openai', 'anthropic'] as const
+/** Provider order — NVIDIA is tried first when configured, followed by Gemini,
+ *  OpenRouter, OpenAI and Anthropic. */
+const PROVIDER_ORDER = ['nvidia', 'gemini', 'openrouter', 'openai', 'anthropic'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
-  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini'
+  return (
+    s === 'nvidia' ||
+    s === 'openrouter' ||
+    s === 'openai' ||
+    s === 'anthropic' ||
+    s === 'gemini'
+  )
 }
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
+  nvidia: [
+    'nvidia/nemotron-3-ultra-550b-a55b',
+    'minimaxai/minimax-m3.1-flash',
+    'mistralai/mistral-large-4-1t-a52b',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  ],
   openrouter: OPENROUTER_MODELS,
   openai: ['gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
     'gemini-3.1-flash-lite',
-    'gemini-3.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-flash-latest',
   ],
 }
 
 const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
+  nvidia: 'NVIDIA_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
@@ -161,6 +175,7 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
   }
 
   const chain: KeyChain = {
+    nvidia: [],
     openrouter: [],
     openai: [],
     anthropic: [],
@@ -301,10 +316,11 @@ function classifyHttpError(
     }
   }
   if (status === 429) {
-    // Model-specific upstream rate limits (very common on OpenRouter free pool)
+    // Model-specific upstream rate limits (common on free/preview pools)
     // should try the next model with the same key before rotating keys.
     const isModelSpecific =
       provider === 'openrouter' ||
+      provider === 'nvidia' ||
       body.toLowerCase().includes('model') ||
       body.toLowerCase().includes('upstream') ||
       body.toLowerCase().includes('provider returned error');
@@ -398,7 +414,8 @@ const openRouterAdapter: AiProviderAdapter = {
         }
       }
 
-      const content = data.choices?.[0]?.message?.content || ''
+      const msg = data.choices?.[0]?.message
+      const content = msg?.content || msg?.reasoning_content || ''
       if (!content || content.trim().length < 1) {
         const fr = data.choices?.[0]?.finish_reason
         return {
@@ -472,7 +489,8 @@ const openAiAdapter: AiProviderAdapter = {
         }
       }
 
-      const content = data.choices?.[0]?.message?.content || ''
+      const msg = data.choices?.[0]?.message
+      const content = msg?.content || msg?.reasoning_content || ''
       if (!content || content.trim().length < 1) {
         const fr = data.choices?.[0]?.finish_reason
         return {
@@ -491,7 +509,7 @@ const openAiAdapter: AiProviderAdapter = {
         status: 0,
         error: msg,
         shouldRotateKey: false,
-        shouldSwitchProvider: true,
+        shouldSwitchProvider: false,
       }
     }
   },
@@ -576,7 +594,7 @@ const anthropicAdapter: AiProviderAdapter = {
         status: 0,
         error: msg,
         shouldRotateKey: false,
-        shouldSwitchProvider: true,
+        shouldSwitchProvider: false,
       }
     }
   },
@@ -674,13 +692,88 @@ const geminiAdapter: AiProviderAdapter = {
         status: 0,
         error: msg,
         shouldRotateKey: false,
-        shouldSwitchProvider: true,
+        shouldSwitchProvider: false,
+      }
+    }
+  },
+}
+
+// ── NVIDIA adapter ──────────────────────────────────────────────────────────
+
+const nvidiaAdapter: AiProviderAdapter = {
+  name: 'nvidia',
+  async request({
+    apiKey,
+    model,
+    messages,
+    temperature,
+    maxTokens,
+    json,
+    signal,
+  }): Promise<ProviderResult> {
+    try {
+      const res = await fetch(NVIDIA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: temperature ?? 0.7,
+          ...(maxTokens ? { max_tokens: maxTokens } : {}),
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        signal,
+      })
+
+      const text = await res.text().catch(() => '')
+      if (!res.ok) return classifyHttpError('nvidia', res.status, text)
+
+      const data = JSON.parse(text) as {
+        choices?: { message?: { content?: string }; finish_reason?: string }[]
+        error?: { message?: string }
+      }
+
+      if (data.error?.message) {
+        return {
+          ok: false,
+          status: res.status,
+          error: `NVIDIA: ${data.error.message}`,
+          shouldRotateKey: false,
+          shouldSwitchProvider: true,
+        }
+      }
+
+      const msg = data.choices?.[0]?.message
+      const content = msg?.content || msg?.reasoning_content || ''
+      if (!content || content.trim().length < 1) {
+        const fr = data.choices?.[0]?.finish_reason
+        return {
+          ok: false,
+          status: res.status,
+          error: `Empty content (finish_reason=${fr || 'unknown'})`,
+          shouldRotateKey: false,
+          shouldSwitchProvider: true,
+        }
+      }
+      return { ok: true, content }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return {
+        ok: false,
+        status: 0,
+        error: msg,
+        shouldRotateKey: false,
+        shouldSwitchProvider: false,
       }
     }
   },
 }
 
 const ADAPTERS: Record<ProviderName, AiProviderAdapter> = {
+  nvidia: nvidiaAdapter,
   openrouter: openRouterAdapter,
   openai: openAiAdapter,
   anthropic: anthropicAdapter,
@@ -788,7 +881,7 @@ export async function callAI(
 
   const chain = await loadAiKeyChain()
   let lastErrorMsg = ''
-  const totalBudgetMs = Math.max(3_000, Math.min(timeoutMs ?? DEFAULT_CALL_AI_BUDGET_MS, 55_000))
+  const totalBudgetMs = Math.max(3_000, Math.min(timeoutMs ?? DEFAULT_CALL_AI_BUDGET_MS, 120_000))
   const deadline = Date.now() + totalBudgetMs
 
   // Dynamically order providers by their highest-priority (lowest priority number) active key,
@@ -840,15 +933,13 @@ export async function callAI(
             signal: controller.signal,
           })
           .catch((err: unknown): ProviderResult => {
-            // Defensive: adapters should never throw, but if one does, treat
-            // it as a switch-provider error (adapter in unknown state).
             const msg = err instanceof Error ? err.message : String(err)
             return {
               ok: false,
               status: 0,
               error: msg,
               shouldRotateKey: false,
-              shouldSwitchProvider: true,
+              shouldSwitchProvider: false,
             }
           })
           .finally(() => {
@@ -903,6 +994,9 @@ export async function callAI(
           `[ai-client] ${provider}/${model} (key ${key.id}): ` +
             `"${result.error.slice(0, 120)}" → ${modelFailuresForKey >= 3 ? 'moving to next key/provider' : 'trying next model'}`,
         )
+        if (result.status === 429) {
+          await new Promise((r) => setTimeout(r, 2000))
+        }
         if (modelFailuresForKey >= 3) break
       }
     }
@@ -1177,7 +1271,36 @@ export function extractJson<T = Record<string, unknown>>(raw: string): T {
   // Naive trailing-comma cleanup (LLMs sometimes add them).
   jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1')
 
-  return JSON.parse(jsonStr) as T
+  try {
+    return JSON.parse(jsonStr) as T
+  } catch (err) {
+    // Attempt best-effort recovery for truncated JSON (e.g. unclosed string or unclosed braces)
+    try {
+      let repaired = jsonStr.trim();
+      const quotes = (repaired.match(/"/g) || []).length;
+      if (quotes % 2 !== 0) {
+        repaired += '"';
+      }
+      let openBraces = 0;
+      let openBrackets = 0;
+      for (const char of repaired) {
+        if (char === '{') openBraces++;
+        if (char === '}') openBraces--;
+        if (char === '[') openBrackets++;
+        if (char === ']') openBrackets--;
+      }
+      while (openBrackets > 0) {
+        repaired += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        repaired += '}';
+        openBraces--;
+      }
+      return JSON.parse(repaired) as T;
+    } catch {}
+    throw err;
+  }
 }
 
 // ─── Hub content validation ─────────────────────────────────────────────────
