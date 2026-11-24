@@ -429,7 +429,7 @@ export interface ProviderFilterOptions {
   radiusKm?: number | null;
 }
 
-export function buildProviderWhereClause(opts: ProviderFilterOptions): Record<string, unknown> {
+export function buildProviderWhereClause(opts: ProviderFilterOptions = {}): Record<string, unknown> {
   const where: Record<string, unknown> = {
     publicProfileEnabled: true,
     marketplaceOptIn: true,
@@ -724,7 +724,8 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   const sort: MarketplaceSort = opts.sort ?? 'rating';
   const sortOrderBy = getSortOrderBy(sort);
   const where = buildProviderWhereClause(opts.filters);
-  const featuredIds = opts.featuredTenantIds;
+  const featuredIds = opts.featuredTenantIds ?? new Set<string>();
+  const mapItem = opts.mapItem ?? ((t: ProviderTenantRow) => t as unknown as T);
 
   // ── Page 1: fetch featured (cap 8) + non-featured to fill the page ──────
   if (!opts.cursor) {
@@ -842,7 +843,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
     const filteredTenants = filterByRadius(allTenants, opts.filters);
 
     return {
-      items: filteredTenants.map(opts.mapItem),
+      items: filteredTenants.map(mapItem),
       nextCursor,
       total,
     };
@@ -900,7 +901,7 @@ export async function fetchProviderPage<T = ProviderListItem>(opts: {
   const filteredPage = filterByRadius(page, opts.filters);
 
   return {
-    items: filteredPage.map(opts.mapItem),
+    items: filteredPage.map(mapItem),
     nextCursor,
     total: null, // only computed on page 1
   };

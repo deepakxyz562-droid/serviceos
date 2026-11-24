@@ -134,7 +134,7 @@ export function resolveBusinessPresenceMode(params: {
   const slug = normalizeSlugValue(tenant.publicSlug || tenant.slug || tenant.name, tenant.id);
   const industry = tenant.industry || tenant.brandProfile?.industry || null;
   const city = tenant.city || tenant.brandProfile?.location || null;
-  const isBgos = tenant.signupMode === 'bgos' || tenant.marketplaceOptIn === false;
+  const isBgos = tenant.signupMode === 'bgos' || tenant.productType === 'bgos';
 
   const shortHostedUrl = `https://bgos.site/${slug}`;
   const hostedCanonicalUrl = isBgos

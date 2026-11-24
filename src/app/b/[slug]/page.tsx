@@ -72,14 +72,12 @@ export async function generateMetadata({
   }
 
   if (!profile) {
-    if (!isBgosHost) {
-      const canonical = await getCanonicalUrlBySlug(slug);
-      if (canonical) {
-        return {
-          robots: { index: false, follow: true },
-          alternates: { canonical },
-        };
-      }
+    const canonical = await getCanonicalUrlBySlug(slug);
+    if (canonical) {
+      return {
+        robots: { index: false, follow: true },
+        alternates: { canonical },
+      };
     }
     return {
       title: 'Business Not Found',
@@ -159,11 +157,9 @@ export default async function ShortBusinessUrlPage({
   }
 
   if (!profile) {
-    if (!isBgosHost) {
-      const marketplaceCanonical = await getCanonicalUrlBySlug(slug);
-      if (marketplaceCanonical) {
-        permanentRedirect(marketplaceCanonical);
-      }
+    const marketplaceCanonical = await getCanonicalUrlBySlug(slug);
+    if (marketplaceCanonical) {
+      permanentRedirect(marketplaceCanonical);
     }
 
     return (

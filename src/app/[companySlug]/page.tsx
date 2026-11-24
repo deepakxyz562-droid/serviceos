@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import Link from 'next/link';
 import {
   Wrench,
@@ -10,6 +10,11 @@ import {
 } from 'lucide-react';
 
 import { getAppUrl } from '@/lib/brand';
+import { getCanonicalUrlBySlug } from '@/lib/public-business';
+import {
+  getBgosPublicBusinessProfile,
+  getBgosPublicCanonicalUrl,
+} from '@/lib/bgos-public-business';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import {
   mapIndustryToPluralSlug,
@@ -101,7 +106,23 @@ export async function generateMetadata({
   const { companySlug } = await params;
 
   const industryId = pluralSlugToIndustry(companySlug);
-  if (!industryId) return {};
+  if (!industryId) {
+    const canonical = await getCanonicalUrlBySlug(companySlug);
+    if (canonical) {
+      return {
+        robots: { index: false, follow: true },
+        alternates: { canonical },
+      };
+    }
+    const bgosProfile = await getBgosPublicBusinessProfile(companySlug);
+    if (bgosProfile) {
+      return {
+        robots: { index: false, follow: true },
+        alternates: { canonical: getBgosPublicCanonicalUrl(bgosProfile.slug) },
+      };
+    }
+    return {};
+  }
 
   const industryPluralName = getIndustryPluralDisplayName(industryId);
   const industrySingularName = getIndustryDisplayName(industryId);
@@ -141,9 +162,21 @@ export default async function IndustryHubPage({
 }) {
   const { companySlug } = await params;
 
-  // Validate the plural industry slug. 404 if unknown.
+  // Validate the plural industry slug.
   const industryId = pluralSlugToIndustry(companySlug);
   if (!industryId) {
+    // 1. If this single slug is a Fieseros CRM trade contractor, redirect to 3-segment canonical URL
+    const canonical = await getCanonicalUrlBySlug(companySlug);
+    if (canonical) {
+      permanentRedirect(canonical);
+    }
+
+    // 2. If this single slug is a BGOS merchant, redirect to bgos.site profile
+    const bgosProfile = await getBgosPublicBusinessProfile(companySlug);
+    if (bgosProfile) {
+      permanentRedirect(getBgosPublicCanonicalUrl(bgosProfile.slug));
+    }
+
     notFound();
   }
 

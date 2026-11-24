@@ -6,6 +6,7 @@ import { cache } from '@/lib/cache';
 import { getBgosAiQuotaForPlan, normalizeBgosPlanCode } from '@/lib/bgos-billing';
 import { syncSuperadminPlanState } from '@/lib/bgos-entitlement';
 import { toValidDate } from '@/lib/safe-date';
+import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 
 // GET: List all subscriptions with tenant info, filters, and usage data
 export async function GET(request: NextRequest) {
@@ -71,9 +72,12 @@ export async function GET(request: NextRequest) {
               phone: true,
               whatsappPhone: true,
               address: true,
+              city: true,
               country: true,
               currency: true,
               industry: true,
+              signupMode: true,
+              workspaces: { select: { productType: true } },
               plan: true,
               planStatus: true,
               formsPlan: true,
@@ -124,7 +128,19 @@ export async function GET(request: NextRequest) {
         ownerName: owner?.name || '',
         ownerEmail: owner?.email || '',
         ownerPhone: owner?.phone || '',
-        publicProfileUrl: slug ? `https://bgos.site/${slug}` : '',
+        publicProfileUrl: (() => {
+          if (!slug) return '';
+          const isBgos =
+            tenant?.signupMode === 'bgos' ||
+            (Array.isArray(tenant?.workspaces) && tenant.workspaces.some((w: any) => w.productType === 'bgos'));
+          if (isBgos) {
+            return `https://bgos.site/${slug}`;
+          }
+          if (tenant?.industry && tenant?.city) {
+            return `${origin}/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${slug}`;
+          }
+          return `${origin}/marketplace/${slug}`;
+        })(),
         marketplaceUrl: slug ? `${origin}/marketplace/${slug}` : '',
         adminDetailUrl: tenantId ? `${origin}/dashboard/superadmin/tenants/${tenantId}` : '',
         plan: s.plan,

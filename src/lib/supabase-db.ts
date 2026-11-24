@@ -1184,8 +1184,8 @@ export function applyWhereFilters(
       }
       continue;
     }
-    if (field === 'NOT' && value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      // Apply NOT filter by negating each condition in the object.
+    if (field === 'NOT' && value !== null && typeof value === 'object') {
+      // Apply NOT filter by negating each condition in the object (or array of objects).
       //
       // CRITICAL — NULL semantics:
       // Prisma's `NOT: { field: value }` semantics EXCLUDE rows where
@@ -1201,55 +1201,56 @@ export function applyWhereFilters(
       // Fix: for every "not equals value" branch, emit
       //   `(field IS NULL OR field != value)`
       // via PostgREST's `or()` so NULL rows are preserved.
-      const notConditions = value as WhereInput;
-      for (const [notField, notValue] of Object.entries(notConditions)) {
-        if (notValue === undefined) continue;
-        if (notValue !== null && typeof notValue === 'object' && !Array.isArray(notValue) && !(notValue instanceof Date)) {
-          // Negate operator conditions
-          const op = notValue as WhereOperator;
-          if (op.equals !== undefined) {
-            if (op.equals === null) {
+      const notList = Array.isArray(value) ? value : [value];
+      for (const notItem of notList) {
+        if (!notItem || typeof notItem !== 'object' || Array.isArray(notItem)) continue;
+        const notConditions = notItem as WhereInput;
+        for (const [notField, notValue] of Object.entries(notConditions)) {
+          if (notValue === undefined) continue;
+
+          // Skip relation operators that are not direct table columns (e.g. { workspaces: { some: ... } })
+          if (notValue !== null && typeof notValue === 'object' && !Array.isArray(notValue) && !(notValue instanceof Date)) {
+            const keys = Object.keys(notValue);
+            if (keys.includes('some') || keys.includes('every') || keys.includes('none')) {
+              continue;
+            }
+          }
+
+          if (notValue !== null && typeof notValue === 'object' && !Array.isArray(notValue) && !(notValue instanceof Date)) {
+            // Negate operator conditions
+            const op = notValue as WhereOperator;
+            if (op.equals !== undefined) {
+              if (op.equals === null) {
+                // NOT equals null → field IS NOT NULL
+                query.not(notField, 'is', null);
+              } else {
+                // NOT equals value → (field IS NULL OR field != value)
+                query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(op.equals)}`);
+              }
+            } else if (op.in !== undefined) {
+              // NOT IN: (field IS NULL OR field != v1 OR field != v2 OR ...)
+              const values = op.in as (string | number | boolean)[];
+              const parts = [`${notField}.is.null`];
+              for (const v of values) {
+                parts.push(`${notField}.neq.${toOrLiteral(v)}`);
+              }
+              query.or(parts.join(','));
+            } else if (op.contains !== undefined) {
+              // NOT contains: NULL rows should be included (NULL doesn't contain anything).
+              query.or(`${notField}.is.null,${notField}.not.ilike.${formatPostgrestOrValue(`%${op.contains}%`)}`);
+            } else {
+              // Fallback: treat as a simple not-equals, preserving NULLs.
+              query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
+            }
+          } else {
+            // Simple value: NOT equals
+            if (notValue === null) {
               // NOT equals null → field IS NOT NULL
               query.not(notField, 'is', null);
             } else {
               // NOT equals value → (field IS NULL OR field != value)
-              query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(op.equals)}`);
+              query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
             }
-          } else if (op.in !== undefined) {
-            // NOT IN: (field IS NULL OR field != v1 OR field != v2 OR ...)
-            //
-            // All conditions MUST go inside a SINGLE or=() group so PostgREST
-            // ORs them together. The previous implementation emitted
-            //   query.or('field.is.null')   // a standalone or=() group
-            //   query.neq(field, v1)        // a top-level AND filter
-            //   query.neq(field, v2)        // a top-level AND filter
-            // which PostgREST interpreted as
-            //   (field IS NULL) AND (field != v1) AND (field != v2)
-            // — a contradiction that dropped EVERY non-NULL row. This was the
-            // root cause of the production pipeline-kanban bug where active
-            // deals (stage NOT IN ['won','lost']) were all filtered out and
-            // the board appeared empty.
-            const values = op.in as (string | number | boolean)[];
-            const parts = [`${notField}.is.null`];
-            for (const v of values) {
-              parts.push(`${notField}.neq.${toOrLiteral(v)}`);
-            }
-            query.or(parts.join(','));
-          } else if (op.contains !== undefined) {
-            // NOT contains: NULL rows should be included (NULL doesn't contain anything).
-            query.or(`${notField}.is.null,${notField}.not.ilike.${formatPostgrestOrValue(`%${op.contains}%`)}`);
-          } else {
-            // Fallback: treat as a simple not-equals, preserving NULLs.
-            query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
-          }
-        } else {
-          // Simple value: NOT equals
-          if (notValue === null) {
-            // NOT equals null → field IS NOT NULL
-            query.not(notField, 'is', null);
-          } else {
-            // NOT equals value → (field IS NULL OR field != value)
-            query.or(`${notField}.is.null,${notField}.neq.${toOrLiteral(notValue)}`);
           }
         }
       }
