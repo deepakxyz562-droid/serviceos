@@ -96,30 +96,17 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Stored replies use compact JSON with text (or the legacy replyText key).
     // A review needs a reply if:
-    // 1) It has no text reply at all, OR
-    // 2) It is a Google review whose reply has NOT been confirmed published to Google.
+    // 1) For Google reviews: its reply has NOT been confirmed published to Google.
+    // 2) For internal/other reviews: it has no text reply at all.
+    // We use a clean top-level NOT filter so both Postgres/SQLite and the Supabase REST
+    // adapter evaluate it correctly without corrupting nested PostgREST operators.
     if (searchParams.get('needsReply') === 'true') {
-      where.AND = [
-        ...(Array.isArray(where.AND) ? where.AND : []),
-        {
-          OR: [
-            {
-              AND: [
-                { NOT: { responseJson: { contains: '"text":"' } } },
-                { NOT: { responseJson: { contains: '"replyText":"' } } },
-              ],
-            },
-            {
-              AND: [
-                { source: 'google' },
-                { NOT: { responseJson: { contains: '"publishedToGoogle":true' } } },
-              ],
-            },
-          ],
+      where.NOT = {
+        responseJson: {
+          contains: source === 'google' ? '"publishedToGoogle":true' : '"text":',
         },
-      ];
+      };
     }
     if (searchParams.get('countOnly') === 'true') {
       return NextResponse.json({ total: await db.review.count({ where }) });
@@ -157,20 +144,11 @@ export async function GET(request: NextRequest) {
         db.review.count({
           where: {
             ...baseWhere,
-            OR: [
-              {
-                AND: [
-                  { NOT: { responseJson: { contains: '"text":"' } } },
-                  { NOT: { responseJson: { contains: '"replyText":"' } } },
-                ],
+            NOT: {
+              responseJson: {
+                contains: source === 'google' ? '"publishedToGoogle":true' : '"text":',
               },
-              {
-                AND: [
-                  { source: 'google' },
-                  { NOT: { responseJson: { contains: '"publishedToGoogle":true' } } },
-                ],
-              },
-            ],
+            },
           },
         }),
       ]);

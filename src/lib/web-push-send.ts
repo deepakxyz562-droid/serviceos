@@ -402,8 +402,38 @@ async function sendWebPushToUserInternal(
   // This runs regardless of whether VAPID is configured, so mobile push
   // works even on servers without Web Push (VAPID) keys.
   if (expoSubs.length > 0) {
+    // Deduplicate subscriptions by physical Expo push token so we never send
+    // duplicate notifications to the same device if multiple database rows exist.
+    const uniqueExpoSubs = new Map<string, typeof expoSubs[0]>();
+    const redundantSubIds: string[] = [];
+
+    for (const sub of expoSubs) {
+      const expoToken = extractExpoToken(sub.endpoint);
+      if (!expoToken) {
+        redundantSubIds.push(sub.id);
+        continue;
+      }
+      if (uniqueExpoSubs.has(expoToken)) {
+        redundantSubIds.push(sub.id);
+      } else {
+        uniqueExpoSubs.set(expoToken, sub);
+      }
+    }
+
+    // Automatically deactivate redundant duplicate rows in the background
+    if (redundantSubIds.length > 0) {
+      db.pushSubscription
+        .updateMany({
+          where: { id: { in: redundantSubIds } },
+          data: { isActive: false },
+        })
+        .catch((cleanErr) => {
+          console.warn('[web-push] Failed to clean up duplicate push subscriptions:', cleanErr);
+        });
+    }
+
     await Promise.all(
-      expoSubs.map(async (sub) => {
+      Array.from(uniqueExpoSubs.values()).map(async (sub) => {
         const expoToken = extractExpoToken(sub.endpoint);
         if (!expoToken) {
           // Malformed endpoint — shouldn't happen, but skip gracefully.
@@ -428,6 +458,7 @@ async function sendWebPushToUserInternal(
         } else {
           failed++;
           // 404 / 410 = device unregistered → deactivate (same logic as Web Push).
+          let didDeactivate = false;
           if (result.status === 404 || result.status === 410) {
             try {
               await db.pushSubscription.update({
@@ -435,6 +466,7 @@ async function sendWebPushToUserInternal(
                 data: { isActive: false },
               });
               deactivated++;
+              didDeactivate = true;
             } catch {
               /* non-fatal */
             }
@@ -444,6 +476,7 @@ async function sendWebPushToUserInternal(
             endpointPreview,
             status: result.status,
             error: result.error,
+            deactivated: didDeactivate,
           });
         }
 

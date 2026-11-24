@@ -163,6 +163,37 @@ export async function POST(request: NextRequest) {
         savedId = created.id;
       }
 
+      // Enforce single-device token ownership:
+      // A physical device token (endpoint) can only belong to one active user at a time.
+      // Deactivate any legacy subscriptions on this endpoint belonging to other users
+      // (e.g. from previous logins on this device) to guarantee complete tenant isolation.
+      await db.pushSubscription
+        .updateMany({
+          where: {
+            endpoint: finalEndpoint,
+            userId: { not: user.id },
+            isActive: true,
+          },
+          data: { isActive: false },
+        })
+        .catch((err) => {
+          console.warn('[push/subscribe] Device ownership transfer warning:', err);
+        });
+
+      // If user switched tenants, ensure their active subscriptions carry the latest tenantId
+      if (user.tenantId) {
+        await db.pushSubscription
+          .updateMany({
+            where: {
+              userId: user.id,
+              isActive: true,
+              tenantId: { not: user.tenantId },
+            },
+            data: { tenantId: user.tenantId },
+          })
+          .catch(() => {});
+      }
+
       return NextResponse.json({ id: savedId, ok: true }, { status: 201 });
     } catch (dbErr) {
       // Log the FULL error so Vercel logs show the exact failure reason.

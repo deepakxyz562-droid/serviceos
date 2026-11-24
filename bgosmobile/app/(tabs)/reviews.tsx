@@ -2334,7 +2334,7 @@ export default function ReviewRepliesScreen() {
                               </Text>
                             ) : (
                               <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>
-                                {reply.moderationState === "PENDING" ? "Pending Google approval · editing locked" : reply.moderationState === "REJECTED" ? "Rejected by Google" : "Publication unconfirmed"}
+                                {reply.moderationState === "PENDING" ? "Pending Google approval · editing locked" : reply.moderationState === "REJECTED" ? "Rejected by Google" : "Draft · Not on Google Maps"}
                               </Text>
                             )}
                           </View>

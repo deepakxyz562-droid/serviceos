@@ -215,6 +215,7 @@ export async function syncGoogleReviewsForTenant(
         if (
           !parsedExisting?.text ||
           parsedExisting.text !== gRev.reply.comment ||
+          parsedExisting.publishedToGoogle !== true ||
           parsedExisting.moderationState !== gRev.reply.reviewReplyState
         ) {
           parsedExisting.text = gRev.reply.comment;
@@ -223,6 +224,17 @@ export async function syncGoogleReviewsForTenant(
           parsedExisting.moderationState = gRev.reply.reviewReplyState;
           parsedExisting.policyViolation = gRev.reply.policyViolation;
           responseJsonChanged = true;
+        }
+      } else {
+        // Authoritative missing reply on Google Maps:
+        // If previously marked as publishedToGoogle, reset to false because Google has no reply.
+        // PRESERVE any local draft text (e.g. parsedExisting.text) so the owner's draft is not lost.
+        if (parsedExisting.publishedToGoogle !== false) {
+          parsedExisting.publishedToGoogle = false;
+          responseJsonChanged = true;
+        }
+        if (existing.status !== 'pending' && !parsedExisting.publishedToGoogle) {
+          updateData.status = 'pending';
         }
       }
 
@@ -243,14 +255,19 @@ export async function syncGoogleReviewsForTenant(
     // legitimately receive identical feedback. Provider resource IDs identify reviews.
 
     const currentReplyMeta = safeParseJson(existing.responseJson);
-    const hasReply = Boolean(
+    const hasPublishedReply = Boolean(
       gRev.reply?.comment ||
-        (typeof currentReplyMeta?.text === 'string' && currentReplyMeta.text.trim()) ||
-        (typeof currentReplyMeta?.replyText === 'string' && currentReplyMeta.replyText.trim()),
+        (currentReplyMeta?.publishedToGoogle === true &&
+          ((typeof currentReplyMeta?.text === 'string' && currentReplyMeta.text.trim()) ||
+           (typeof currentReplyMeta?.replyText === 'string' && currentReplyMeta.replyText.trim()))),
+    );
+    const hasExistingDraft = Boolean(
+      (typeof currentReplyMeta?.text === 'string' && currentReplyMeta.text.trim()) ||
+      (typeof currentReplyMeta?.replyText === 'string' && currentReplyMeta.replyText.trim())
     );
 
     let autoRepliedThisRun = false;
-    if (autoReplySettings.enabled && !hasReply) {
+    if (autoReplySettings.enabled && !hasPublishedReply && !hasExistingDraft) {
       try {
         const businessName = tenant?.name || 'our company';
         const isHighRating = gRev.rating >= autoReplySettings.minRating;

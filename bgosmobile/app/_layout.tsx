@@ -9,7 +9,7 @@ import type { NotificationResponse } from 'expo-notifications';
 import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
 import { notificationDestination } from '../src/lib/notification-routing';
 import { apiRequest } from '../src/lib/api';
-import { enablePush, isPushPermissionGranted } from '../src/lib/push';
+import { autoSyncPushToken, enablePush, isPushPermissionGranted } from '../src/lib/push';
 import { useAuthStore } from '../src/stores/auth-store';
 import { RootErrorBoundary } from '../src/components/navigation/error-boundary';
 import { AnimatedSplash } from '../src/components/navigation/animated-splash';
@@ -106,7 +106,7 @@ export default function RootLayout() {
 
     if (!pushSyncedRef.current && Platform.OS !== 'web' && !isExpoGoRuntime) {
       pushSyncedRef.current = true;
-      void enablePush().catch(() => {});
+      void autoSyncPushToken(2).catch(() => {});
     }
 
     let cancelled = false;

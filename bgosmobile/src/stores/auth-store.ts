@@ -21,7 +21,7 @@ import { invalidateResourceScope } from '../lib/resource-cache';
 
 function triggerPushSync() {
   try {
-    const fn = (pushModule as { autoSyncPushToken?: () => Promise<void> }).autoSyncPushToken;
+    const fn = (pushModule as unknown as { autoSyncPushToken?: (retries?: number) => Promise<unknown> }).autoSyncPushToken;
     if (typeof fn === 'function') {
       void Promise.resolve(fn()).catch(() => {});
     }
@@ -161,18 +161,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Apple sign-in failed', isLoading: false }); return false; }
   },
   logout: async () => {
-    // Capture credentials before clearing. Local sign-out never waits on the network.
+    // Capture credentials before clearing. Local sign-out never hangs on slow networks.
     const token = await getToken().catch(() => null);
     const refreshToken = await getRefreshToken().catch(() => null);
     const pushCleanup = Promise.resolve(pushModule.unregisterPush(token)).catch(() => {});
     const revoke = refreshToken ? Promise.resolve(apiRequest('/api/auth/logout', { method: 'POST', body: { refreshToken }, skipAuth: true })).catch(() => {}) : Promise.resolve();
+    // Await up to 2 seconds for server-side push deactivation and token revoke
+    await Promise.race([
+      Promise.allSettled([pushCleanup, revoke]),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
     try { await clearTokens(); }
     catch (error) { set({ error: error instanceof Error ? error.message : 'Could not clear saved credentials.' }); throw error; }
     finally {
       invalidateResourceScope();
       set({ user: null, isAuthenticated: false, isLoading: false, onboardingRequired: false });
     }
-    void Promise.allSettled([pushCleanup, revoke]);
   },
   deleteAccount: async () => {
     const token = await getToken().catch(() => null);
