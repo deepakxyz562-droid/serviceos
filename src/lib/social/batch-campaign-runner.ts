@@ -28,6 +28,59 @@ export interface GeneratedDailyPost {
 
 const MAX_CAMPAIGN_TITLE_CHARS = 60;
 
+export interface CampaignSocialAccountRow {
+  id: string;
+  platform: string;
+  accountName?: string | null;
+  accountId?: string | null;
+  metadata?: string | null;
+  isActive?: boolean;
+}
+
+/**
+ * Scope campaign publish targets to at most one active SocialAccount per requested platform.
+ * When multiple GBP locations exist, prefer the active/selected locationId instead of emitting duplicate GBP entries.
+ */
+export function resolveDeduplicatedCampaignTargets(
+  socialAccounts: CampaignSocialAccountRow[],
+  targetPlatforms: readonly string[],
+  preferredGbpLocationId?: string | null,
+): Array<{ platform: string; socialAccountId: string; status: 'pending' }> {
+  const activeAccounts = (socialAccounts || []).filter((acc) => acc && acc.isActive !== false);
+  const targets: Array<{ platform: string; socialAccountId: string; status: 'pending' }> = [];
+  const seenPlatforms = new Set<string>();
+
+  for (const platform of targetPlatforms) {
+    if (!platform || seenPlatforms.has(platform)) continue;
+    const matches = activeAccounts.filter((acc) => acc.platform === platform);
+    if (matches.length === 0) continue;
+
+    let chosen = matches[0];
+    if (platform === 'googlebusiness' && preferredGbpLocationId) {
+      const preferred = matches.find((acc) => {
+        if (acc.id === preferredGbpLocationId || acc.accountId === preferredGbpLocationId) return true;
+        if (acc.metadata) {
+          try {
+            const meta = JSON.parse(acc.metadata) as Record<string, unknown>;
+            if (meta.locationId === preferredGbpLocationId || meta.name === preferredGbpLocationId) return true;
+          } catch {}
+        }
+        return false;
+      });
+      if (preferred) chosen = preferred;
+    }
+
+    seenPlatforms.add(platform);
+    targets.push({
+      platform: chosen.platform,
+      socialAccountId: chosen.id,
+      status: 'pending',
+    });
+  }
+
+  return targets;
+}
+
 export function clampCampaignHeadline(rawTitle: string, maxChars = MAX_CAMPAIGN_TITLE_CHARS): string {
   const clean = (rawTitle || '')
     .replace(/\s+/g, ' ')
@@ -347,14 +400,15 @@ export async function runBatchCampaignJob(
           ? params.platforms
           : (['googlebusiness', 'instagram', 'facebook'] as const);
 
-      const connectedTargetAccounts = (tenant.socialAccounts || []).filter((acc) =>
-        targetPlatforms.includes(acc.platform as any),
+      const preferredGbpLocationId =
+        params.locationId ||
+        (typeof settingsObj.activeGbpLocationId === 'string' ? settingsObj.activeGbpLocationId : null);
+
+      const publishTargets = resolveDeduplicatedCampaignTargets(
+        tenant.socialAccounts || [],
+        targetPlatforms,
+        preferredGbpLocationId,
       );
-      const publishTargets = connectedTargetAccounts.map((acc) => ({
-        platform: acc.platform,
-        socialAccountId: acc.id,
-        status: 'pending',
-      }));
 
       // Stage 2: GBP-Photos-First Visual Pool (zero blocking AI image generation per post)
       ctxJson = await updateJobProgress(jobId, 'processing', {

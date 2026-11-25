@@ -190,10 +190,10 @@ export async function POST(request: NextRequest) {
     const userPrompt = (body.prompt || body.title || '').trim();
     const imagePrompt = `High quality commercial advertising photography for ${businessName} (${industry} in ${city}): ${userPrompt || 'Signature premium service and customer excellence'}. Clean composition, authentic natural lighting, ultra sharp focus.`;
 
-    // Priority 1: Recraft V4.1 Flash V2 (OpenRouter) -> Priority 2: NVIDIA FLUX.1 Schnell -> fallbacks
+    // Priority 1: NVIDIA FLUX.1 Schnell -> Priority 2: Cloudflare Workers AI -> remaining fallbacks
     const generated = await generateDesignImage(
       imagePrompt,
-      'openrouter',
+      'nvidia',
       AbortSignal.timeout(45000),
       false,
       {

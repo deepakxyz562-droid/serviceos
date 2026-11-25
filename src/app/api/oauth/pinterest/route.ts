@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
-import {
-  encodeOAuthState,
-  getPublicAppUrl,
-} from '@/lib/social/oauth-page';
+import { resolveOAuthRequestAuth } from '@/lib/social/oauth-auth';
+import { encodeOAuthState } from '@/lib/social/oauth-page';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
 /**
@@ -26,20 +23,10 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
  * Pinterest's auth URL ends with `/oauth/` (trailing slash) — preserved as-is.
  */
 export async function GET(request: NextRequest) {
-  // 1. Auth check.
-  const authUser = await getAuthUser(request);
-  if (!authUser) {
-    return NextResponse.json(
-      { error: 'Authentication required' },
-      { status: 401 },
-    );
-  }
-  if (!authUser.tenantId) {
-    return NextResponse.json(
-      { error: 'Could not resolve tenant.' },
-      { status: 400 },
-    );
-  }
+  // 1. Auth check (cookie, Bearer, mobile handoff ticket, or ?auth= query token).
+  const authResult = await resolveOAuthRequestAuth(request);
+  if (authResult.response) return authResult.response;
+  const { authUser, tenantId, originHost } = authResult;
 
   // 2. Look up superadmin-configured OAuth app credentials.
   const cred = await db.integrationCredential.findFirst({
@@ -64,17 +51,23 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. Build state (CSRF token — tenantId + userId + provider + ts).
+  const returnUrlParam =
+    request.nextUrl.searchParams.get('returnUrl') || request.nextUrl.searchParams.get('redirectUri');
+  const redirectUri = `${originHost}/api/oauth/pinterest/callback`;
   const state = encodeOAuthState({
-    tenantId: authUser.tenantId,
+    tenantId,
     userId: authUser.id,
     provider: 'pinterest',
+    v: {
+      redirectUri,
+      originHost,
+      returnUrl: returnUrlParam || undefined,
+    },
     ts: Date.now(),
   });
 
   // 4. Build the authorization URL.
   const meta = OAUTH_PROVIDERS.pinterest;
-  const appUrl = getPublicAppUrl(request);
-  const redirectUri = `${appUrl}/api/oauth/pinterest/callback`;
 
   const authUrl = new URL(meta.authUrl);
   authUrl.searchParams.set('response_type', 'code');

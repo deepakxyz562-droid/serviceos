@@ -7,12 +7,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, ui } from '../ui';
 import { useResource } from '../../hooks/use-resource';
-import { apiRequest } from '../../lib/api';
-import { WEB_URL } from '../../lib/constants';
+import { connectSocialPlatform } from '../../lib/social-connect';
 
 interface SocialAccount {
   id: string;
@@ -27,13 +25,14 @@ export function StayActiveSocialMediaCard() {
   const [connectingKey, setConnectingKey] = useState<string | null>(null);
 
   const accounts = accountsRes.data?.data || [];
+  const gbpAccount = accounts.find((a) => a.platform === 'googlebusiness' && a.isActive);
   const fbAccount = accounts.find((a) => a.platform === 'facebook' && a.isActive);
   const igAccount = accounts.find((a) => a.platform === 'instagram' && a.isActive);
   const liAccount = accounts.find((a) => a.platform === 'linkedin' && a.isActive);
   const pinAccount = accounts.find((a) => a.platform === 'pinterest' && a.isActive);
   const thAccount = accounts.find((a) => a.platform === 'threads' && a.isActive);
 
-  const connectedAccounts = [fbAccount, igAccount, liAccount, pinAccount, thAccount].filter(Boolean) as SocialAccount[];
+  const connectedAccounts = [gbpAccount, fbAccount, igAccount, liAccount, pinAccount, thAccount].filter(Boolean) as SocialAccount[];
   const connectedCount = connectedAccounts.length;
 
   type SupportedConnectPlatform = 'facebook' | 'instagram' | 'linkedin' | 'pinterest' | 'threads';
@@ -49,26 +48,10 @@ export function StayActiveSocialMediaCard() {
     const platformLabel = platformLabels[platform] || platform;
     setConnectingKey(platform);
     try {
-      let ticket = '';
-      try {
-        const ticketRes = await apiRequest<{ ticket: string }>('/api/bgos/mobile-auth/handoff', { method: 'POST' });
-        if (ticketRes?.ticket) ticket = ticketRes.ticket;
-      } catch {}
-
-      const ticketQuery = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
-      const returnUrlQuery = ticket ? `&returnUrl=${encodeURIComponent('bgos://auth-callback')}` : `?returnUrl=${encodeURIComponent('bgos://auth-callback')}`;
-      const originHostQuery = `&originHost=${encodeURIComponent(WEB_URL)}`;
-      const oauthUrl = `${WEB_URL}/api/oauth/${platform}${ticketQuery}${returnUrlQuery}${originHostQuery}`;
-
-      const result = await WebBrowser.openAuthSessionAsync(oauthUrl, 'bgos://auth-callback');
+      const outcome = await connectSocialPlatform(platform, { returnView: 'growth' });
       await accountsRes.refresh();
-
-      if (result.type === 'success' && result.url?.includes('error=')) {
-        try {
-          const urlObj = new URL(result.url);
-          const err = urlObj.searchParams.get('error');
-          if (err) Alert.alert('Connection Error', decodeURIComponent(err));
-        } catch {}
+      if (outcome.error) {
+        Alert.alert('Connection Error', outcome.error);
       }
     } catch {
       Alert.alert('Connection Failed', `Could not connect ${platformLabel}. Please try again.`);
@@ -78,21 +61,26 @@ export function StayActiveSocialMediaCard() {
   }
 
   // ── When accounts are connected: show a sleek compact status strip (no giant buttons) ──
+  const platformLabel = (p: string) =>
+    p === 'googlebusiness' ? 'Google' : p.charAt(0).toUpperCase() + p.slice(1);
+
   if (connectedCount >= 2) {
-    const summary = connectedAccounts.map((a) => a.accountName || a.platform).slice(0, 3).join(', ');
+    const summary = connectedAccounts.map((a) => platformLabel(a.platform)).slice(0, 4).join(', ');
     return (
       <View style={styles.compactConnectedStrip}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
           <View style={styles.greenDot} />
           <Text style={styles.compactConnectedText} numberOfLines={1}>
-            {connectedCount} Channels Active ({summary})
+            {connectedCount} Channels Connected ({summary})
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Manage Connected Accounts"
           onPress={() => {
-            const list = connectedAccounts.map((a) => `• ${a.platform.toUpperCase()}: ${a.accountName || 'Active'}`).join('\n');
+            const list = connectedAccounts
+              .map((a) => `• ${platformLabel(a.platform)}: ${a.accountName || 'Active'}`)
+              .join('\n');
             Alert.alert(
               'Connected Social Channels',
               list,
@@ -106,7 +94,7 @@ export function StayActiveSocialMediaCard() {
           }}
           style={styles.managePill}
         >
-          <Text style={styles.managePillText}>Manage ⌵</Text>
+          <Text style={styles.managePillText}>Manage</Text>
         </Pressable>
       </View>
     );

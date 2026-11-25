@@ -45,6 +45,11 @@ import {
   computeMediaSeoReadiness,
   slugifySeoFilename,
 } from '../../../../shared/image-review';
+import {
+  ChannelSelectorSection,
+  useConnectedSocialChannels,
+} from '../social/channel-selector';
+import { getPlatformMeta, stripRawCtaLines } from '../social/platform-meta';
 
 export type MediaScheduleMode = 'daily' | 'weekly' | 'instant' | 'draft';
 export type GbpCategoryType =
@@ -148,6 +153,8 @@ export function MediaMetadataSheet({
   const [tags, setTags] = useState<string[]>([]);
   const [category, setCategory] = useState<GbpCategoryType>('ADDITIONAL');
   const [postDestination, setPostDestination] = useState<'photo_media' | 'whats_new'>('photo_media');
+  const { accounts: connectedChannels, reload: reloadChannels } = useConnectedSocialChannels(visible);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness']);
   const [scheduleMode, setScheduleMode] = useState<MediaScheduleMode>(
     initialScheduleMode || (pendingAssets.length > 1 ? 'daily' : 'instant'),
   );
@@ -223,7 +230,7 @@ export function MediaMetadataSheet({
     if (editingItem) {
       setCurrentPhotoUrl(resolvePhotoUrl(editingItem.thumbnailUrl || editingItem.url || null));
       if (editingItem.title) setTitle(editingItem.title);
-      if (editingItem.description) setDescription(editingItem.description);
+      if (editingItem.description) setDescription(stripRawCtaLines(editingItem.description));
       if (Array.isArray(editingItem.tags)) setTags(editingItem.tags);
     } else if (selectedTemplate) {
       applyTemplate(selectedTemplate);
@@ -237,6 +244,26 @@ export function MediaMetadataSheet({
     void loadBusinessMetadata(reqKey);
     void loadTemplates(templateTab, reqKey);
   }, [visible, editingItem, pendingAssets, selectedTemplate]);
+
+  useEffect(() => {
+    if (!visible || connectedChannels.length === 0) return;
+    const available = Array.from(
+      new Set(
+        connectedChannels
+          .map((c) => (c.platform || '').trim().toLowerCase())
+          .filter((p) => ['googlebusiness', 'facebook', 'instagram', 'linkedin'].includes(p)),
+      ),
+    );
+    if (available.length > 0) {
+      setSelectedPlatforms((prev) => {
+        const prevValid = prev.filter((p) => available.includes(p));
+        if (prevValid.length > 1 || (prevValid.length === 1 && prevValid[0] !== 'googlebusiness')) {
+          return prevValid;
+        }
+        return available;
+      });
+    }
+  }, [visible, connectedChannels]);
 
   async function handleUploadPending(asset: PendingUpload) {
     setUploadingMedia(true);
@@ -291,7 +318,7 @@ export function MediaMetadataSheet({
       }
       if (!isEditMode && !selectedTemplate && !selectedTemplateId) {
         if (res?.title) setTitle(res.title);
-        if (res?.description) setDescription(res.description);
+        if (res?.description) setDescription(stripRawCtaLines(res.description));
         if (Array.isArray(res?.tags)) setTags(res.tags);
       }
     } catch {
@@ -371,9 +398,11 @@ export function MediaMetadataSheet({
 
     if (tpl.defaultCaption) {
       setDescription(
-        tpl.defaultCaption
-          .replace(/\{businessName\}/g, bName)
-          .replace(/\{city\}/g, businessInfo?.city || 'Patna'),
+        stripRawCtaLines(
+          tpl.defaultCaption
+            .replace(/\{businessName\}/g, bName)
+            .replace(/\{city\}/g, businessInfo?.city || 'Patna'),
+        ),
       );
     } else {
       const city = businessInfo?.city || 'Patna';
@@ -389,7 +418,6 @@ export function MediaMetadataSheet({
         `✓ 100% satisfaction assurance: Trusted by local clients for punctual, professional service.\n\n` +
         `Choosing the right local partner makes all the difference. Reach out to ${bName} today for dependable support.\n\n` +
         `Call ${bName} in ${city} to discuss ${topic.toLowerCase()} and get started.\n\n` +
-        `CTA: CALL\n\n` +
         `#${topic.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()} #${city.toLowerCase()} #googlebusiness #localseo`
       );
     }
@@ -479,16 +507,22 @@ export function MediaMetadataSheet({
   }
 
   async function handlePublishOrSchedule() {
+    if (selectedPlatforms.length === 0) {
+      setErrorMsg('Please select at least one social platform before publishing.');
+      return;
+    }
     setErrorMsg(null);
     setSubmitting(true);
     try {
+      const cleanedDescription = stripRawCtaLines(description.trim());
       const res = await apiRequest<{ success?: boolean; message?: string }>('/api/social/photos', {
         method: isEditMode ? 'PATCH' : 'POST',
         body: {
           postId: editingItem?.postId || editingItem?.id,
           postType: postDestination,
+          platforms: selectedPlatforms,
           title: title.trim() || `${effectiveBusinessName} Post`,
-          description: description.trim(),
+          description: cleanedDescription,
           tags,
           category,
           mediaUrls: currentPhotoUrl ? [currentPhotoUrl] : [],
@@ -501,14 +535,15 @@ export function MediaMetadataSheet({
         },
       });
 
+      const channelLabels = selectedPlatforms.map((p) => getPlatformMeta(p).shortLabel).join(', ');
       if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
-        setCelebrationMessage(res?.message || 'Post scheduled successfully for best Google visibility!');
+        setCelebrationMessage(res?.message || `Scheduled successfully across ${channelLabels}.`);
         try {
-          await onSaved(res?.message || 'Post scheduled successfully for best Google visibility!');
+          await onSaved(res?.message || `Scheduled successfully across ${channelLabels}.`);
         } catch {}
         setScheduledCelebration(true);
       } else {
-        await onSaved(res?.message || 'Published to Google Business Profile successfully.');
+        await onSaved(res?.message || `Published successfully to ${channelLabels}.`);
         onClose();
       }
     } catch (err: unknown) {
@@ -901,80 +936,96 @@ export function MediaMetadataSheet({
                 ) : (
                   <View style={styles.descriptionTextBox}>
                     <Text style={styles.descriptionText}>
-                      {description ||
+                      {stripRawCtaLines(description) ||
                         `${effectiveBusinessName} provides reputable ${effectiveIndustry.toLowerCase()} with dependable results.`}
                     </Text>
                   </View>
                 )}
               </View>
 
-              {/* ── CARD 5: GOOGLE PLACEMENT & TIMING ── */}
+              {/* ── CARD 5: CHANNELS, PLACEMENT & SCHEDULE ── */}
+              <ChannelSelectorSection
+                selectedPlatforms={selectedPlatforms}
+                onChange={setSelectedPlatforms}
+                accounts={connectedChannels}
+                onAccountsChanged={reloadChannels}
+                title="Publishing Channels"
+                subtitle="Select the social platforms to receive this post"
+              />
+
               <View style={styles.cardContainer}>
                 <View style={styles.cardHeaderRow}>
-                  <MaterialIcons name="tune" size={18} color="#2563EB" />
-                  <Text style={styles.cardTitle}>Google Placement & Timing</Text>
+                  <MaterialIcons name="tune" size={18} color="#0F172A" />
+                  <Text style={styles.cardTitle}>
+                    {selectedPlatforms.includes('googlebusiness') ? 'Placement & Schedule' : 'Publishing Schedule'}
+                  </Text>
                 </View>
 
-                {/* Placement Selector */}
-                <Text style={styles.sectionSublabel}>Where to post on Google</Text>
-                <View style={styles.optionsRow}>
-                  <Pressable
-                    onPress={() => setPostDestination('photo_media')}
-                    style={[
-                      styles.choiceOption,
-                      postDestination === 'photo_media' && styles.choiceOptionSelected,
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="photo-library"
-                      size={20}
-                      color={postDestination === 'photo_media' ? '#2563EB' : '#64748B'}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text
+                {selectedPlatforms.includes('googlebusiness') && (
+                  <>
+                    <Text style={styles.sectionSublabel}>Google Business Placement</Text>
+                    <View style={styles.optionsRow}>
+                      <Pressable
+                        onPress={() => setPostDestination('photo_media')}
                         style={[
-                          styles.choiceOptionTitle,
-                          postDestination === 'photo_media' && styles.choiceOptionTitleSelected,
+                          styles.choiceOption,
+                          postDestination === 'photo_media' && styles.choiceOptionSelected,
                         ]}
                       >
-                        Google Photo Gallery
-                      </Text>
-                      <Text style={styles.choiceOptionDesc}>
-                        Permanent album on Google Maps Photos
-                      </Text>
-                    </View>
-                  </Pressable>
+                        <MaterialIcons
+                          name="photo-library"
+                          size={20}
+                          color={postDestination === 'photo_media' ? '#009F50' : '#64748B'}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.choiceOptionTitle,
+                              postDestination === 'photo_media' && styles.choiceOptionTitleSelected,
+                            ]}
+                          >
+                            Google Photo Gallery
+                          </Text>
+                          <Text style={styles.choiceOptionDesc}>
+                            Permanent album on Google Maps Photos
+                          </Text>
+                        </View>
+                      </Pressable>
 
-                  <Pressable
-                    onPress={() => setPostDestination('whats_new')}
-                    style={[
-                      styles.choiceOption,
-                      postDestination === 'whats_new' && styles.choiceOptionSelected,
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="campaign"
-                      size={20}
-                      color={postDestination === 'whats_new' ? '#2563EB' : '#64748B'}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text
+                      <Pressable
+                        onPress={() => setPostDestination('whats_new')}
                         style={[
-                          styles.choiceOptionTitle,
-                          postDestination === 'whats_new' && styles.choiceOptionTitleSelected,
+                          styles.choiceOption,
+                          postDestination === 'whats_new' && styles.choiceOptionSelected,
                         ]}
                       >
-                        Google Update Post
-                      </Text>
-                      <Text style={styles.choiceOptionDesc}>
-                        Announcement post with caption & Call button
-                      </Text>
+                        <MaterialIcons
+                          name="campaign"
+                          size={20}
+                          color={postDestination === 'whats_new' ? '#009F50' : '#64748B'}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.choiceOptionTitle,
+                              postDestination === 'whats_new' && styles.choiceOptionTitleSelected,
+                            ]}
+                          >
+                            Google Update Post
+                          </Text>
+                          <Text style={styles.choiceOptionDesc}>
+                            Announcement post with caption & Call CTA
+                          </Text>
+                        </View>
+                      </Pressable>
                     </View>
-                  </Pressable>
-                </View>
+                  </>
+                )}
 
                 {/* Timing Selector */}
-                <Text style={[styles.sectionSublabel, { marginTop: 4 }]}>Publishing Schedule</Text>
+                <Text style={[styles.sectionSublabel, { marginTop: selectedPlatforms.includes('googlebusiness') ? 6 : 0 }]}>
+                  Timing
+                </Text>
                 <View style={styles.optionsRow}>
                   <Pressable
                     onPress={() => setScheduleMode('instant')}
@@ -986,7 +1037,7 @@ export function MediaMetadataSheet({
                     <MaterialIcons
                       name="bolt"
                       size={20}
-                      color={scheduleMode === 'instant' ? '#2563EB' : '#64748B'}
+                      color={scheduleMode === 'instant' ? '#009F50' : '#64748B'}
                     />
                     <View style={{ flex: 1 }}>
                       <Text
@@ -998,7 +1049,7 @@ export function MediaMetadataSheet({
                         Post Now
                       </Text>
                       <Text style={styles.choiceOptionDesc}>
-                        Immediate upload to Google
+                        Immediate publish to {selectedPlatforms.length > 1 ? `${selectedPlatforms.length} selected channels` : 'selected channel'}
                       </Text>
                     </View>
                   </Pressable>
@@ -1013,7 +1064,7 @@ export function MediaMetadataSheet({
                     <MaterialIcons
                       name="event-repeat"
                       size={20}
-                      color={scheduleMode === 'daily' ? '#2563EB' : '#64748B'}
+                      color={scheduleMode === 'daily' ? '#009F50' : '#64748B'}
                     />
                     <View style={{ flex: 1 }}>
                       <Text
@@ -1033,7 +1084,7 @@ export function MediaMetadataSheet({
               </View>
             </ScrollView>
 
-            {/* ── FIXED BOTTOM ACTION BAR (SHARE, DOWNLOAD, POST PHOTO) ── */}
+            {/* ── FIXED BOTTOM ACTION BAR ── */}
             <View style={[styles.bottomActionBar, { height: 72 + insets.bottom, paddingBottom: insets.bottom }]}>
               <Pressable
                 onPress={handleWhatsAppShare}
@@ -1055,15 +1106,19 @@ export function MediaMetadataSheet({
 
               <Pressable
                 onPress={handlePublishOrSchedule}
-                disabled={submitting || uploadingMedia}
+                disabled={submitting || uploadingMedia || selectedPlatforms.length === 0}
                 style={({ pressed }) => [
                   styles.actionPrimaryBtn,
-                  (submitting || uploadingMedia) && { opacity: 0.7 },
+                  (submitting || uploadingMedia || selectedPlatforms.length === 0) && { opacity: 0.65 },
                   pressed && { opacity: 0.85 },
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  postDestination === 'whats_new' ? 'Post Google Update' : 'Post Photo'
+                  selectedPlatforms.length > 1
+                    ? `Post to ${selectedPlatforms.length} Channels`
+                    : postDestination === 'whats_new'
+                      ? 'Post Google Update'
+                      : 'Post Photo'
                 }
               >
                 {submitting || uploadingMedia ? (
@@ -1082,15 +1137,19 @@ export function MediaMetadataSheet({
                       color="#FFFFFF"
                     />
                     <Text style={styles.actionPrimaryBtnText}>
-                      {isEditMode
-                        ? 'Save Changes'
-                        : scheduleMode === 'daily' || scheduleMode === 'weekly'
-                          ? postDestination === 'whats_new'
-                            ? 'Schedule Update'
-                            : 'Schedule Post'
-                          : postDestination === 'whats_new'
-                            ? 'Post Update'
-                            : 'Post Photo'}
+                      {selectedPlatforms.length === 0
+                        ? 'Select Channel'
+                        : isEditMode
+                          ? 'Save Changes'
+                          : scheduleMode === 'daily' || scheduleMode === 'weekly'
+                            ? selectedPlatforms.length > 1
+                              ? `Schedule (${selectedPlatforms.length})`
+                              : 'Schedule Post'
+                            : selectedPlatforms.length > 1
+                              ? `Publish (${selectedPlatforms.length} Channels)`
+                              : postDestination === 'whats_new' && selectedPlatforms[0] === 'googlebusiness'
+                                ? 'Post Update'
+                                : 'Post Photo'}
                     </Text>
                   </>
                 )}
@@ -1743,8 +1802,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   choiceOptionSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: '#009F50',
+    backgroundColor: '#F0FDF4',
   },
   choiceOptionTitle: {
     fontSize: 13,
@@ -1752,7 +1811,7 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   choiceOptionTitleSelected: {
-    color: '#1D4ED8',
+    color: '#047857',
   },
   choiceOptionDesc: {
     fontSize: 11,

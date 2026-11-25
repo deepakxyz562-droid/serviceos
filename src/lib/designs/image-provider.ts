@@ -20,6 +20,24 @@ export interface GeneratedImageResult {
 const IS_TEST_ENV = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const KEY_CACHE_TTL_MS = 30_000;
 const QUOTA_COOLDOWN_MS = 120_000;
+const DB_QUOTA_SKIP_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+export function isProviderKeyRowQuotaExhausted(row: {
+  lastError?: string | null;
+  lastErrorAt?: string | Date | null;
+}): boolean {
+  if (!row?.lastError) return false;
+  const errLower = String(row.lastError).toLowerCase();
+  const isHardQuotaError =
+    /\b402\b|prepayment credits|credits are depleted|insufficient.*balance|free-models-per-day|daily.*limit/i.test(
+      errLower,
+    );
+  if (!isHardQuotaError) return false;
+  if (!row.lastErrorAt) return true;
+  const ts = Date.parse(String(row.lastErrorAt));
+  if (!Number.isFinite(ts)) return true;
+  return Date.now() - ts < DB_QUOTA_SKIP_WINDOW_MS;
+}
 
 type ApiKeyProvider = 'gemini' | 'openrouter' | 'siliconflow' | 'nvidia' | 'kie';
 
@@ -149,17 +167,30 @@ async function warmImageKeyCache(): Promise<void> {
     providerCredCache.clear();
     let cfRow: any | null = null;
     for (const prov of ['gemini', 'openrouter', 'siliconflow', 'nvidia', 'kie'] as ApiKeyProvider[]) {
-      const match = (rows || []).find((r: any) => r?.provider === prov && r?.encryptedKey);
-      if (match?.encryptedKey) {
-        const parsed = parseCredentialValue(decryptKey(match.encryptedKey));
+      const providerRows = (rows || []).filter((r: any) => r?.provider === prov && r?.encryptedKey);
+      const healthyMatch = providerRows.find((r: any) => !isProviderKeyRowQuotaExhausted(r));
+      if (healthyMatch?.encryptedKey) {
+        const parsed = parseCredentialValue(decryptKey(healthyMatch.encryptedKey));
         providerCredCache.set(
           prov,
           parsed.secret
-            ? { secret: parsed.secret, keyRowId: match.id, baseUrl: parsed.baseUrl, modelOverride: parsed.modelOverride }
+            ? {
+                secret: parsed.secret,
+                keyRowId: healthyMatch.id,
+                baseUrl: parsed.baseUrl,
+                modelOverride: parsed.modelOverride,
+              }
             : null,
         );
       } else {
         const envSecret = envSecretForProvider(prov);
+        const exhaustedRow = providerRows.find((r: any) => isProviderKeyRowQuotaExhausted(r));
+        if (exhaustedRow && !envSecret) {
+          providerCooldowns.set(prov, {
+            until: Date.now() + QUOTA_COOLDOWN_MS,
+            reason: `${prov} key recently reported quota exhaustion`,
+          });
+        }
         providerCredCache.set(prov, envSecret ? { secret: envSecret, keyRowId: null } : null);
       }
     }
@@ -1105,13 +1136,20 @@ Rules:
       format: isPosterMode ? 'poster' : 'photo',
     });
 
-    const aiRes = await callAI({
+    const aiPromise = callAI({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPayload },
       ],
       temperature: 0.3,
-      timeoutMs: 2_500,
+      timeoutMs: 1_500,
+    });
+    let synthTimer: ReturnType<typeof setTimeout> | null = null;
+    const budgetPromise = new Promise<never>((_, reject) => {
+      synthTimer = setTimeout(() => reject(new Error('Prompt synthesis budget exceeded (1.5s)')), 1_500);
+    });
+    const aiRes = await Promise.race([aiPromise, budgetPromise]).finally(() => {
+      if (synthTimer !== null) clearTimeout(synthTimer);
     });
 
     let synthesized = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
@@ -1869,12 +1907,12 @@ async function callKieImage(params: {
 }
 
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  openrouter: ['nvidia', 'gemini', 'cloudflare', 'kie', 'siliconflow'],
-  nvidia: ['openrouter', 'gemini', 'cloudflare', 'kie', 'siliconflow'],
-  cloudflare: ['openrouter', 'nvidia', 'gemini', 'kie', 'siliconflow'],
-  gemini: ['openrouter', 'nvidia', 'cloudflare', 'kie', 'siliconflow'],
-  kie: ['openrouter', 'nvidia', 'gemini', 'cloudflare', 'siliconflow'],
-  siliconflow: ['openrouter', 'nvidia', 'gemini', 'cloudflare', 'kie'],
+  nvidia: ['cloudflare', 'openrouter', 'kie', 'siliconflow', 'gemini'],
+  cloudflare: ['nvidia', 'openrouter', 'kie', 'siliconflow', 'gemini'],
+  openrouter: ['nvidia', 'cloudflare', 'kie', 'siliconflow', 'gemini'],
+  gemini: ['nvidia', 'cloudflare', 'openrouter', 'kie', 'siliconflow'],
+  kie: ['nvidia', 'cloudflare', 'openrouter', 'siliconflow', 'gemini'],
+  siliconflow: ['nvidia', 'cloudflare', 'openrouter', 'kie', 'gemini'],
 };
 
 async function callSingleTextImageProvider(params: {

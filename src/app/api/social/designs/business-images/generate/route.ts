@@ -384,12 +384,12 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < scenesToGenerate.length; i++) {
       const prompt = scenesToGenerate[i];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 35000);
+      const timeout = setTimeout(() => controller.abort(), 45000);
 
       let imageBytes: Buffer | null = null;
 
-      // Priority #1: OpenRouter Recraft V4.1 Flash V2 -> immediate healthy fallback to NVIDIA FLUX.1 Schnell.
-      const preferredProvider: ImageProvider = 'openrouter';
+      // Priority #1: NVIDIA FLUX.1 Schnell (~4s) -> immediate healthy fallback to Cloudflare Workers AI (~13s).
+      const preferredProvider: ImageProvider = 'nvidia';
 
       try {
         const result = await generateDesignImage(
@@ -476,16 +476,16 @@ export async function POST(request: NextRequest) {
     if (generatedUrls.length === 0) {
       const rawError = generationErrors[0] || 'Image generation failed to produce commercial assets.';
       const isKeyConfig = /Configure an active|credentials|API_KEY|AUTH_KEY|not configured/i.test(rawError);
-      const isQuota = /quota|rate limit|429|402/i.test(rawError);
       const isTimeout = /timeout|abort|504|ETIMEDOUT/i.test(rawError);
+      const isQuota = !isTimeout && /quota|rate limit|429|402/i.test(rawError);
 
       let userMessage = rawError;
       if (isKeyConfig) {
         userMessage = `AI provider credentials or AWS S3 storage are not configured: ${rawError}`;
-      } else if (isQuota) {
-        userMessage = `AI provider rate limit or quota exceeded. Please try again in a few moments.`;
       } else if (isTimeout) {
         userMessage = `AI diffusion rendering timed out. Please try another scene or retry.`;
+      } else if (isQuota) {
+        userMessage = `AI provider rate limit or quota exceeded. Please try again in a few moments.`;
       }
 
       const supportEmail = 'support@bgos.site';

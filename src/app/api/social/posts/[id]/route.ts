@@ -144,12 +144,15 @@ interface PatchBody {
   content?: string;
   mediaUrls?: string[];
   linkUrl?: string | null;
+  status?: 'draft' | 'scheduled';
   scheduledAt?: string | null;
   gbpPostType?: string | null;
   gbpOfferData?: { title: string; startDate: string; endDate: string; couponCode?: string } | null;
+  gbpCta?: { actionType?: string; url?: string } | null;
   pinterestBoard?: string | null;
-  // Allow re-targeting (only on drafts).
+  // Allow re-targeting (only on drafts / scheduled posts).
   targets?: { platform: string; socialAccountId: string }[];
+  platforms?: string[];
 }
 
 export async function PATCH(
@@ -203,23 +206,66 @@ export async function PATCH(
     if (body.scheduledAt !== undefined) {
       data.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
     }
+    if (body.status === 'draft' || body.status === 'scheduled') {
+      data.status = body.status;
+    }
     if (body.gbpPostType !== undefined) data.gbpPostType = body.gbpPostType || null;
+    if (body.gbpCta && typeof body.gbpCta === 'object') {
+      const actionType = body.gbpCta.actionType || 'LEARN_MORE';
+      data.gbpCallToAction = JSON.stringify({
+        actionType,
+        ...(actionType !== 'CALL' && body.gbpCta.url ? { url: body.gbpCta.url } : {}),
+      });
+    }
     if (body.gbpOfferData !== undefined) {
       data.gbpOfferData = body.gbpOfferData ? JSON.stringify(body.gbpOfferData) : null;
     }
     if (body.pinterestBoard !== undefined) data.pinterestBoard = body.pinterestBoard || null;
 
     if (Array.isArray(body.targets) && body.targets.length > 0) {
+      const dedupedTargets = new Map<string, { platform: string; socialAccountId: string }>();
+      for (const t of body.targets) {
+        if (t?.platform && !dedupedTargets.has(t.platform)) {
+          dedupedTargets.set(t.platform, { platform: t.platform, socialAccountId: t.socialAccountId });
+        }
+      }
       data.publishTargets = JSON.stringify(
-        body.targets.map((t) => ({
+        Array.from(dedupedTargets.values()).map((t) => ({
           platform: t.platform,
           socialAccountId: t.socialAccountId,
           status: 'pending',
         })),
       );
+    } else if (Array.isArray(body.platforms) && body.platforms.length > 0) {
+      const requested = Array.from(
+        new Set(body.platforms.map((p) => String(p || '').trim().toLowerCase()).filter(Boolean)),
+      );
+      const owned = await db.socialAccount.findMany({
+        where: { tenantId, platform: { in: requested }, isActive: true },
+        select: { id: true, platform: true },
+      });
+      const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+      const activeGbp = requested.includes('googlebusiness') ? await prepareGoogleAccount(tenantId) : null;
+      const resolvedTargets: Array<{ platform: string; socialAccountId: string; status: string }> = [];
+      for (const platform of requested) {
+        if (platform === 'googlebusiness' && activeGbp?.id) {
+          resolvedTargets.push({ platform: 'googlebusiness', socialAccountId: activeGbp.id, status: 'pending' });
+        } else {
+          const match = owned.find((a) => a.platform === platform);
+          if (match) {
+            resolvedTargets.push({ platform: match.platform, socialAccountId: match.id, status: 'pending' });
+          }
+        }
+      }
+      if (resolvedTargets.length > 0) {
+        data.publishTargets = JSON.stringify(resolvedTargets);
+      }
     }
 
-    const saved=await db.socialPost.updateMany({where:{id,tenantId,status:'draft',updatedAt:existing.updatedAt},data:{...data,updatedAt:new Date()}});
+    const saved = await db.socialPost.updateMany({
+      where: { id, tenantId, status: existing.status, updatedAt: existing.updatedAt },
+      data: { ...data, updatedAt: new Date() },
+    });
     if(saved.count!==1)return NextResponse.json({error:'The draft changed while saving. Reopen it and retry.'},{status:409});
     const updated=await db.socialPost.findFirst({where:{id,tenantId},
       select: {

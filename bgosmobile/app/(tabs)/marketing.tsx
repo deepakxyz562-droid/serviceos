@@ -64,7 +64,6 @@ import { PostsBoard, PostDetailModal, type PostPill, type SocialPostRow } from '
 import { SocialCalendarView } from '../../src/components/gbp/social-calendar';
 import { StayActiveSocialMediaCard } from '../../src/components/social/stay-active-card';
 import { CleanCampaignHub } from '../../src/components/marketing/clean-campaign-hub';
-import { UpcomingPostsCarousel } from '../../src/components/gbp/upcoming-posts-carousel';
 import { CreateGbpPostModal, type GeneratedPostData } from '../../src/components/gbp/create-gbp-post-modal';
 import { PostReviewEditModal } from '../../src/components/gbp/post-review-edit-modal';
 import { FullscreenImageModal } from '../../src/components/gbp/fullscreen-image-modal';
@@ -747,7 +746,6 @@ export default function MarketingScreen() {
     }>;
   }>('/api/social/ai-posts', 0, activeMode === 'studio');
   const [localAiPosts, setLocalAiPosts] = useState<any[]>([]);
-  const [dismissedUpcomingIds, setDismissedUpcomingIds] = useState<string[]>([]);
   const [selectedAiPostForDetail, setSelectedAiPostForDetail] = useState<SocialPostRow | null>(null);
   const [activeAiPostIndex, setActiveAiPostIndex] = useState(0);
   const aiPostSliderRef = useRef<ScrollViewInstance | null>(null);
@@ -3132,88 +3130,14 @@ export default function MarketingScreen() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MODE 2: POSTS & CALENDAR (List View vs Interactive Calendar View)
+          MODE 2: POSTS & CALENDAR (Clean Enterprise Workspace)
           ══════════════════════════════════════════════════════════════════════ */}
       {activeMode === 'posts' && (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90 }}>
-          {/* Quick-Launch 30-Day Autonomous Campaign Banner */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open 30-Day Campaign Planner"
-            onPress={() => router.push('/campaign-planner')}
-            style={{
-              backgroundColor: '#ECFDF5',
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              marginBottom: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderWidth: 1,
-              borderColor: '#A7F3D0',
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#009F50', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name="auto-awesome" size={18} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#065F46' }}>
-                  30-Day Autonomous Campaign
-                </Text>
-                <Text style={{ fontSize: 11.5, color: '#047857', marginTop: 1 }}>
-                  Tap to generate or review your month&apos;s posts
-                </Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#009F50" />
-          </Pressable>
-
-          {/* Benchmark: Upcoming Posts Carousel (Screenshot 1) */}
-          <UpcomingPostsCarousel
-            businessName={effectiveBusinessName}
-            businessCategory={brandProfile.data?.profile?.industry || gbpPlace.data?.place?.category}
-            defaultWebsiteUrl={
-              brandProfile.data?.profile?.website ||
-              gbpPlace.data?.place?.website ||
-              ''
-            }
-            refreshTrigger={boardRefresh}
-            deletedPostIds={dismissedUpcomingIds}
-            onDeletePost={(id) => setDismissedUpcomingIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
-            onCreateWithAi={() => setCreatePostModalOpen(true)}
-            onViewPost={(post) => {
-              const fullContent =
-                post.caption && post.caption.startsWith(post.headline)
-                  ? post.caption
-                  : `${post.headline}\n\n${post.caption}`;
-
-              const row: SocialPostRow = {
-                id: post.id,
-                content: fullContent,
-                title: post.headline,
-                status: (post.status as any) || 'scheduled',
-                scheduledAt: post.scheduledTime,
-                mediaUrls: post.imageUrl ? [post.imageUrl] : [],
-                gbpPostType: post.type?.toLowerCase().includes('offer')
-                  ? 'offer'
-                  : post.type?.toLowerCase().includes('event')
-                    ? 'event'
-                    : 'standard',
-                ctaAction: post.ctaAction || 'CALL',
-                ctaUrl: post.ctaUrl,
-                businessName: effectiveBusinessName,
-              };
-              setSelectedAiPostForDetail(row);
-            }}
-            onPostPublished={() => setBoardRefresh((k) => k + 1)}
-          />
-
-          {/* Connected Social Accounts Header */}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 90, gap: 10 }}>
+          {/* Connected Social Accounts Strip */}
           <StayActiveSocialMediaCard />
 
-          {/* Segmented Switcher: Posts List vs Content Calendar */}
+          {/* Segmented Switcher: Posts vs Calendar */}
           <View style={styles.postViewSwitcher}>
             <Pressable
               onPress={() => setPostSubView('list')}
@@ -3222,10 +3146,10 @@ export default function MarketingScreen() {
               <MaterialIcons
                 name="view-list"
                 size={16}
-                color={postSubView === 'list' ? '#009F50' : '#64748B'}
+                color={postSubView === 'list' ? '#047857' : '#64748B'}
               />
               <Text style={[styles.postViewBtnText, postSubView === 'list' && styles.postViewBtnTextActive]}>
-                Posts & Approvals
+                Posts
               </Text>
             </Pressable>
 
@@ -3236,52 +3160,60 @@ export default function MarketingScreen() {
               <MaterialIcons
                 name="calendar-month"
                 size={16}
-                color={postSubView === 'calendar' ? '#009F50' : '#64748B'}
+                color={postSubView === 'calendar' ? '#047857' : '#64748B'}
               />
               <Text style={[styles.postViewBtnText, postSubView === 'calendar' && styles.postViewBtnTextActive]}>
-                Content Calendar
+                Calendar
               </Text>
             </Pressable>
           </View>
 
           {postSubView === 'list' ? (
             <>
-              {/* Quick Header with Posting Time Preference */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
-                <View>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Posts & Approvals</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Change daily posting time"
-                    onPress={() => setTimePickerOpen(true)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
-                  >
-                    <MaterialIcons name="schedule" size={13} color="#64748B" />
-                    <Text style={{ fontSize: 12, color: '#64748B' }}>
-                      Daily posting time: <Text style={{ color: '#2563EB', fontWeight: '700' }}>{apConfig.postingTime || '10:00 AM'}</Text> (Change)
-                    </Text>
-                  </Pressable>
-                </View>
+              {/* Slim Toolbar: Daily Posting Time + Create Post CTA */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 2 }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Create New Post"
+                  accessibilityLabel="Change daily posting time"
+                  onPress={() => setTimePickerOpen(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 9,
+                  }}
+                >
+                  <MaterialIcons name="schedule" size={14} color="#64748B" />
+                  <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+                    Daily: <Text style={{ color: '#0F172A', fontWeight: '700' }}>{apConfig.postingTime || '10:00 AM'}</Text>
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Create Post"
                   onPress={() => setCreatePostModalOpen(true)}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 4,
                     backgroundColor: '#009F50',
-                    paddingHorizontal: 12,
+                    paddingHorizontal: 13,
                     paddingVertical: 7,
-                    borderRadius: 20,
+                    borderRadius: 10,
                   }}
                 >
                   <MaterialIcons name="add" size={16} color="#FFFFFF" />
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>New Post</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>New Post</Text>
                 </Pressable>
               </View>
 
-              {/* Shared Modern Posts Board */}
+              {/* Posts & Approvals Board */}
               <PostsBoard
                 refreshKey={boardRefresh}
                 initialPill={resolvedInitialPill}
@@ -6358,7 +6290,6 @@ export default function MarketingScreen() {
           }}
           onDelete={async (postToDelete) => {
             const pid = postToDelete.id;
-            setDismissedUpcomingIds((prev) => (prev.includes(pid) ? prev : [...prev, pid]));
             setLocalAiPosts((prev) => prev.filter((p) => p.id !== pid));
             setSelectedAiPostForDetail(null);
             setBoardRefresh((k) => k + 1);

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -12,12 +11,10 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Screen, ErrorNotice, Loading } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
-import { WEB_URL } from '../src/lib/constants';
+import { connectSocialPlatform, type SocialConnectPlatform } from '../src/lib/social-connect';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
 
 interface Account {
@@ -135,31 +132,20 @@ function IntegrationsScreen() {
   const waActive = Boolean(waConfig.data?.isConfigured);
   const totalConnected = activeAccounts.length + (waActive ? 1 : 0);
 
-  // Connect Channel via OAuth
+  // Connect Channel via OAuth (shared launcher)
   const handleConnect = async (channel: ChannelDef) => {
     if (channel.key === 'whatsapp') {
       router.push('/(tabs)/reviews');
       return;
     }
 
-    const token = await getToken().catch(() => null);
-    const returnUrl = 'bgos://gbp-callback';
-    const targetUrl =
-      channel.key === 'googlebusiness'
-        ? `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
-          `&redirectUri=${encodeURIComponent(returnUrl)}` +
-          `&originHost=${encodeURIComponent(WEB_URL)}` +
-          (token ? `&auth=${encodeURIComponent(token)}` : '')
-        : `${WEB_URL}${channel.oauthPath}?product=bgos&originHost=${encodeURIComponent(WEB_URL)}` +
-          (token ? `&auth=${encodeURIComponent(token)}` : '');
-
     try {
-      await WebBrowser.openAuthSessionAsync(targetUrl, returnUrl);
-    } catch {
-      try {
-        await Linking.openURL(targetUrl);
-      } catch {
-        Alert.alert('Connection Link', `Please open ${targetUrl} in your browser to authorize.`);
+      const outcome = await connectSocialPlatform(channel.key as SocialConnectPlatform, {
+        returnView: 'growth',
+        oauthPath: channel.oauthPath,
+      });
+      if (outcome.error) {
+        Alert.alert('Connection Notice', outcome.error);
       }
     } finally {
       await refreshAll();

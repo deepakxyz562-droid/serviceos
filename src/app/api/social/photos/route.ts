@@ -267,6 +267,98 @@ function parseMediaUrls(raw: unknown): string[] {
   return [];
 }
 
+type SupportedMediaPlatform =
+  | 'googlebusiness'
+  | 'facebook'
+  | 'instagram'
+  | 'linkedin'
+  | 'pinterest'
+  | 'threads';
+
+const SUPPORTED_MEDIA_PLATFORMS = new Set<SupportedMediaPlatform>([
+  'googlebusiness',
+  'facebook',
+  'instagram',
+  'linkedin',
+  'pinterest',
+  'threads',
+]);
+
+function normalizeRequestedPlatforms(raw: unknown): SupportedMediaPlatform[] {
+  if (!Array.isArray(raw) || raw.length === 0) return ['googlebusiness'];
+  const deduped: SupportedMediaPlatform[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const norm = item.trim().toLowerCase() as SupportedMediaPlatform;
+    if (SUPPORTED_MEDIA_PLATFORMS.has(norm) && !deduped.includes(norm)) {
+      deduped.push(norm);
+    }
+  }
+  return deduped.length > 0 ? deduped : ['googlebusiness'];
+}
+
+async function resolveMediaPublishTargets(params: {
+  tenantId: string;
+  rawPlatforms: unknown;
+  googleAccount: { id: string } | null;
+  mediaMetaObj: StoredMediaMeta;
+}): Promise<Array<{ platform: string; socialAccountId: string; status: 'pending'; mediaMeta?: StoredMediaMeta }>> {
+  const requested = normalizeRequestedPlatforms(params.rawPlatforms);
+  const nonGoogleRequested = requested.filter((p) => p !== 'googlebusiness');
+
+  const socialByPlatform = new Map<string, string>();
+  if (
+    nonGoogleRequested.length > 0 &&
+    typeof (db as any).socialAccount?.findMany === 'function'
+  ) {
+    try {
+      const accounts = await db.socialAccount.findMany({
+        where: {
+          tenantId: params.tenantId,
+          platform: { in: nonGoogleRequested },
+          isActive: true,
+        },
+        select: { id: true, platform: true },
+      });
+      for (const acc of accounts) {
+        if (acc?.platform && acc?.id && !socialByPlatform.has(acc.platform)) {
+          socialByPlatform.set(acc.platform, acc.id);
+        }
+      }
+    } catch {
+      // ignore — caller inspects whether socialAccountId resolved
+    }
+  }
+
+  return requested.map((platform) => {
+    if (platform === 'googlebusiness') {
+      return {
+        platform: 'googlebusiness',
+        socialAccountId: params.googleAccount?.id || '',
+        status: 'pending' as const,
+        mediaMeta: params.mediaMetaObj,
+      };
+    }
+    return {
+      platform,
+      socialAccountId: socialByPlatform.get(platform) || '',
+      status: 'pending' as const,
+    };
+  });
+}
+
+function formatPlatformDisplayList(platforms: readonly string[]): string {
+  const labels: Record<string, string> = {
+    googlebusiness: 'Google Business Profile',
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    linkedin: 'LinkedIn',
+    pinterest: 'Pinterest',
+    threads: 'Threads',
+  };
+  return platforms.map((p) => labels[p] || p).join(', ');
+}
+
 function buildDescriptionWithKeywords(description: string, title?: string, tags?: string[]): string {
   const base = (description || '').trim();
   if (base) return base;
@@ -602,11 +694,15 @@ export async function POST(request: NextRequest) {
     );
 
     const googleAccount = await prepareGoogleAccount(user.tenantId);
+    const requestedPlatforms = normalizeRequestedPlatforms(body.platforms);
+    const nonGooglePlatforms = requestedPlatforms.filter((p) => p !== 'googlebusiness');
     const uploadedPhotos: Array<{
       id?: string;
       url: string;
       thumbnailUrl?: string;
       status: string;
+      reviewStatus?: 'approved' | 'pending' | 'rejected';
+      statusLabel?: string;
       scheduledAt?: string;
       title?: string;
       tags?: string[];
@@ -670,8 +766,15 @@ export async function POST(request: NextRequest) {
         ...seoFields,
       };
       const mediaMetaJson = JSON.stringify(mediaMetaObj);
+      const instantTargets = await resolveMediaPublishTargets({
+        tenantId: user.tenantId,
+        rawPlatforms: requestedPlatforms,
+        googleAccount,
+        mediaMetaObj,
+      });
+      const connectedInstantTargets = instantTargets.filter((t) => Boolean(t.socialAccountId));
 
-      if (googleAccount) {
+      if (connectedInstantTargets.length > 0) {
         try {
           const postRecord = await db.socialPost.create({
             data: {
@@ -679,14 +782,7 @@ export async function POST(request: NextRequest) {
               status: 'draft',
               content: effectiveDescription,
               mediaUrls: JSON.stringify([publicItemUrl]),
-              publishTargets: JSON.stringify([
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: googleAccount.id,
-                  status: 'pending',
-                  mediaMeta: mediaMetaObj,
-                },
-              ]),
+              publishTargets: JSON.stringify(connectedInstantTargets),
               scheduledAt: null,
               gbpPostType: effectivePostType,
               gbpOfferData: mediaMetaJson,
@@ -702,16 +798,16 @@ export async function POST(request: NextRequest) {
           });
           const finishedTargets = parsePublishTargetsRaw(finished?.publishTargets);
           const gbpRes = finishedTargets.find((t) => t.platform === 'googlebusiness');
+          const isOk = finished?.status === 'published' || finished?.status === 'partial';
           uploadedPhotos.push({
             id: postRecord.id,
             url: gbpRes?.permalink || publicItemUrl,
             thumbnailUrl: firstItem.thumbnailUrl,
-            status:
-              finished?.status === 'published'
-                ? 'published'
-                : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
+            status: isOk
+              ? finished?.status || 'published'
+              : `saved_locally: ${finished?.failureReason || 'Publish failed'}`,
             reviewStatus: 'approved' as const,
-            statusLabel: 'Live on Google Maps',
+            statusLabel: gbpRes ? 'Live on Google Maps' : 'Published Live',
             title: firstItem.title,
             tags: firstItem.tags,
             ...seoFields,
@@ -725,15 +821,7 @@ export async function POST(request: NextRequest) {
               status: 'draft',
               content: effectiveDescription,
               mediaUrls: JSON.stringify([publicItemUrl]),
-              publishTargets: JSON.stringify([
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: googleAccount.id,
-                  status: 'pending',
-                  error: msg,
-                  mediaMeta: mediaMetaObj,
-                },
-              ]),
+              publishTargets: JSON.stringify(connectedInstantTargets),
               scheduledAt: null,
               gbpPostType: effectivePostType,
               gbpOfferData: mediaMetaJson,
@@ -758,14 +846,7 @@ export async function POST(request: NextRequest) {
             status: 'draft',
             content: effectiveDescription,
             mediaUrls: JSON.stringify([publicItemUrl]),
-            publishTargets: JSON.stringify([
-              {
-                platform: 'googlebusiness',
-                socialAccountId: '',
-                status: 'pending',
-                mediaMeta: mediaMetaObj,
-              },
-            ]),
+            publishTargets: JSON.stringify(instantTargets),
             scheduledAt: null,
             gbpPostType: effectivePostType,
             gbpOfferData: mediaMetaJson,
@@ -776,7 +857,7 @@ export async function POST(request: NextRequest) {
           id: savedDraft.id,
           url: publicItemUrl,
           thumbnailUrl: firstItem.thumbnailUrl,
-          status: 'saved_locally (Google account not connected)',
+          status: 'saved_locally (No selected channel connected)',
           title: firstItem.title,
           tags: firstItem.tags,
           ...seoFields,
@@ -822,20 +903,20 @@ export async function POST(request: NextRequest) {
             ...subSeoFields,
           };
 
+          const tailTargets = await resolveMediaPublishTargets({
+            tenantId: user.tenantId,
+            rawPlatforms: requestedPlatforms,
+            googleAccount,
+            mediaMetaObj: subMetaObj,
+          });
+
           const created = await db.socialPost.create({
             data: {
               tenantId: user.tenantId,
               status: 'scheduled',
               content: caption,
               mediaUrls: JSON.stringify([itemPublicUrl]),
-              publishTargets: JSON.stringify([
-                {
-                  platform: 'googlebusiness',
-                  socialAccountId: googleAccount?.id || '',
-                  status: 'pending',
-                  mediaMeta: subMetaObj,
-                },
-              ]),
+              publishTargets: JSON.stringify(tailTargets),
               scheduledAt: scheduledTime,
               gbpPostType: subPostType,
               gbpOfferData: JSON.stringify(subMetaObj),
@@ -880,20 +961,19 @@ export async function POST(request: NextRequest) {
           mediaFormat: item.mediaFormat || 'PHOTO',
           ...seoFields,
         };
+        const draftTargets = await resolveMediaPublishTargets({
+          tenantId: user.tenantId,
+          rawPlatforms: requestedPlatforms,
+          googleAccount,
+          mediaMetaObj,
+        });
         const created = await db.socialPost.create({
           data: {
             tenantId: user.tenantId,
             status: 'draft',
             content: effectiveDescription,
             mediaUrls: JSON.stringify([publicItemUrl]),
-            publishTargets: JSON.stringify([
-              {
-                platform: 'googlebusiness',
-                socialAccountId: googleAccount?.id || '',
-                status: 'pending',
-                mediaMeta: mediaMetaObj,
-              },
-            ]),
+            publishTargets: JSON.stringify(draftTargets),
             scheduledAt: null,
             gbpPostType: effectivePostType,
             gbpOfferData: JSON.stringify(mediaMetaObj),
@@ -961,14 +1041,12 @@ export async function POST(request: NextRequest) {
           ...seoFields,
         };
 
-        const publishTargets = [
-          {
-            platform: 'googlebusiness',
-            socialAccountId: googleAccount?.id || '',
-            status: 'pending',
-            mediaMeta: mediaMetaObj,
-          },
-        ];
+        const publishTargets = await resolveMediaPublishTargets({
+          tenantId: user.tenantId,
+          rawPlatforms: requestedPlatforms,
+          googleAccount,
+          mediaMetaObj,
+        });
 
         const created = await db.socialPost.create({
           data: {
@@ -1006,13 +1084,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const publishedCount = uploadedPhotos.filter((p) => p.status === 'published').length;
+    const publishedCount = uploadedPhotos.filter(
+      (p) => p.status === 'published' || p.status === 'partial',
+    ).length;
     const savedLocalCount = uploadedPhotos.filter((p) => p.status.includes('saved_locally')).length;
+    const channelSummary = formatPlatformDisplayList(requestedPlatforms);
+    const hasSocialExtras = nonGooglePlatforms.length > 0;
 
     return NextResponse.json({
       success: true,
       count: uploadedPhotos.length,
       scheduleMode,
+      platforms: requestedPlatforms,
       locale,
       results: uploadedPhotos,
       message:
@@ -1020,15 +1103,19 @@ export async function POST(request: NextRequest) {
           ? `Saved ${uploadedPhotos.length} media item(s) to drafts (Not Posted).`
           : scheduleMode === 'instant'
             ? savedLocalCount > 0 && publishedCount === 0
-              ? `Saved ${uploadedPhotos.length} media item(s) in BGOS (connect Google Business Profile to publish live).`
+              ? `Saved ${uploadedPhotos.length} media item(s) in BGOS (connect ${channelSummary} to publish live).`
               : requestedPostType === 'whats_new'
                 ? items.length > 1
                   ? `Published update post live. Scheduled remaining ${items.length - 1} item(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                  : `Update post published live to Google Business Profile (Visible in Updates tab).`
+                  : hasSocialExtras
+                    ? `Update post published live to Google Business Profile & ${formatPlatformDisplayList(nonGooglePlatforms)}.`
+                    : `Update post published live to Google Business Profile (Visible in Updates tab).`
                 : items.length > 1
-                  ? `Uploaded 1 photo to Google Photos gallery. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
-                  : `Photo uploaded successfully to Google Photos gallery.`
-            : `Scheduled ${uploadedPhotos.length} ${requestedPostType === 'whats_new' ? 'update post(s)' : 'photo(s)'} (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
+                  ? `Uploaded 1 photo to ${channelSummary}. Scheduled remaining ${items.length - 1} photo(s) daily at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}.`
+                  : hasSocialExtras
+                    ? `Published live to ${channelSummary}.`
+                    : `Photo uploaded successfully to Google Photos gallery.`
+            : `Scheduled ${uploadedPhotos.length} ${requestedPostType === 'whats_new' ? 'update post(s)' : 'photo(s)'} for ${channelSummary} (${scheduleMode} at ${String(preferredHour).padStart(2, '0')}:${String(preferredMinute).padStart(2, '0')} ${locale.timeZone}).`,
     });
   } catch (error: unknown) {
     console.error('Error in photo upload/schedule:', error);
@@ -1150,10 +1237,25 @@ export async function PATCH(request: NextRequest) {
 
       const googleAccount = await prepareGoogleAccount(user.tenantId);
       const baseMeta = { ...nextMeta, gbpPostType: effectivePostType };
+      const existingTargets = parsePublishTargetsRaw(existing.publishTargets);
+      const rawPatchPlatforms = Array.isArray(body.platforms) && body.platforms.length > 0
+        ? body.platforms
+        : existingTargets.length > 0
+          ? existingTargets.map((t) => t.platform).filter(Boolean)
+          : ['googlebusiness'];
 
-      if (!googleAccount) {
+      const resolvedPatchTargets = (
+        await resolveMediaPublishTargets({
+          tenantId: user.tenantId,
+          rawPlatforms: rawPatchPlatforms,
+          googleAccount,
+          mediaMetaObj: baseMeta,
+        })
+      ).filter((t) => Boolean(t.socialAccountId));
+
+      if (resolvedPatchTargets.length === 0) {
         return NextResponse.json(
-          { error: 'Connect your Google Business Profile first to publish this media live.' },
+          { error: 'Connect at least one selected channel before publishing live.' },
           { status: 400 },
         );
       }
@@ -1164,6 +1266,7 @@ export async function PATCH(request: NextRequest) {
           content: effectiveDescription,
           gbpPostType: effectivePostType,
           gbpOfferData: JSON.stringify(baseMeta),
+          publishTargets: JSON.stringify(resolvedPatchTargets),
           status: 'draft',
           failureReason: null,
         },
@@ -1179,18 +1282,25 @@ export async function PATCH(request: NextRequest) {
       const targets = parsePublishTargetsRaw(publishedPost?.publishTargets);
       const gbpTarget = targets.find((t) => t.platform === 'googlebusiness');
 
-      if (publishedPost?.status === 'failed' || gbpTarget?.status === 'failed') {
-        const errMsg = publishedPost?.failureReason || gbpTarget?.error || 'Google publish failed';
+      if (publishedPost?.status === 'failed' || (gbpTarget && gbpTarget.status === 'failed' && targets.length === 1)) {
+        const errMsg = publishedPost?.failureReason || gbpTarget?.error || 'Publish failed';
         return NextResponse.json({ error: errMsg }, { status: 502 });
       }
+
+      const publishedChannels = targets
+        .filter((t) => t.status === 'published')
+        .map((t) => t.platform);
 
       return NextResponse.json({
         success: true,
         published: true,
         googleUrl: gbpTarget?.permalink || sourceUrl,
         reviewStatus: 'approved' as const,
-        statusLabel: 'Live on Google Maps',
-        message: 'Photo published live to Google Business Profile gallery.',
+        statusLabel: gbpTarget?.status === 'published' ? 'Live on Google Maps' : 'Published Live',
+        message:
+          publishedChannels.length > 0
+            ? `Published live to ${formatPlatformDisplayList(publishedChannels)}.`
+            : 'Photo published live.',
         item: {
           id: existing.id,
           title: baseMeta.title,
@@ -1199,7 +1309,7 @@ export async function PATCH(request: NextRequest) {
           category: baseMeta.category || 'ADDITIONAL',
           status: publishedPost?.status || 'published',
           reviewStatus: 'approved' as const,
-          statusLabel: 'Live on Google Maps',
+          statusLabel: gbpTarget?.status === 'published' ? 'Live on Google Maps' : 'Published Live',
           url: gbpTarget?.permalink || sourceUrl,
           scheduledFor: null,
         },
@@ -1236,12 +1346,21 @@ export async function PATCH(request: NextRequest) {
     }
 
     const existingTargets = parsePublishTargetsRaw(existing.publishTargets);
-    const nextTargets =
+    let nextTargets =
       existingTargets.length > 0
         ? existingTargets.map((t, idx) =>
             idx === 0 || t.platform === 'googlebusiness' ? { ...t, mediaMeta: nextMeta } : t,
           )
         : [{ platform: 'googlebusiness', socialAccountId: '', status: 'pending', mediaMeta: nextMeta }];
+    if (Array.isArray(body.platforms) && body.platforms.length > 0) {
+      const gbpAcc = await prepareGoogleAccount(user.tenantId);
+      nextTargets = await resolveMediaPublishTargets({
+        tenantId: user.tenantId,
+        rawPlatforms: body.platforms,
+        googleAccount: gbpAcc,
+        mediaMetaObj: nextMeta,
+      });
+    }
     updateData.publishTargets = JSON.stringify(nextTargets);
     updateData.gbpOfferData = JSON.stringify(nextMeta);
 

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
-import {
-  encodeOAuthState,
-  getPublicAppUrl,
-  resolveOAuthOrigin,
-} from '@/lib/social/oauth-page';
+import { resolveOAuthRequestAuth } from '@/lib/social/oauth-auth';
+import { encodeOAuthState } from '@/lib/social/oauth-page';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
 /**
@@ -31,20 +27,10 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
  * a non-404 response and the browser proceeds to redirect.
  */
 export async function GET(request: NextRequest) {
-  // 1. Auth check.
-  const authUser = await getAuthUser(request);
-  if (!authUser) {
-    return NextResponse.json(
-      { error: 'Authentication required' },
-      { status: 401 },
-    );
-  }
-  if (!authUser.tenantId) {
-    return NextResponse.json(
-      { error: 'Could not resolve tenant.' },
-      { status: 400 },
-    );
-  }
+  // 1. Auth check (cookie, Bearer, mobile handoff ticket, or ?auth= query token).
+  const authResult = await resolveOAuthRequestAuth(request);
+  if (authResult.response) return authResult.response;
+  const { authUser, tenantId, originHost: effectiveOrigin } = authResult;
 
   // 2. Look up superadmin-configured OAuth app credentials.
   const cred = await db.integrationCredential.findFirst({
@@ -71,14 +57,12 @@ export async function GET(request: NextRequest) {
 
   // 3. Resolve redirect URI and context
   const searchParams = request.nextUrl.searchParams;
-  const originHostParam = searchParams.get('originHost');
   const returnUrlParam = searchParams.get('returnUrl') || searchParams.get('redirectUri');
-  const effectiveOrigin = resolveOAuthOrigin(request, originHostParam);
   const redirectUri = cred?.redirectUri?.trim() || `${effectiveOrigin}/api/oauth/linkedin/callback`;
 
   // 4. Build state (CSRF token — tenantId + userId + provider + ts + v context).
   const state = encodeOAuthState({
-    tenantId: authUser.tenantId,
+    tenantId,
     userId: authUser.id,
     provider: 'linkedin',
     v: {
