@@ -386,9 +386,25 @@ export function WebCampaignPlanner({ businessName }: { businessName?: string }) 
 
                   {/* Caption */}
                   <div className="p-4 space-y-2.5">
-                    <p className="text-xs text-foreground line-clamp-3 leading-relaxed">
-                      {post.content}
-                    </p>
+                    {(() => {
+                      const lines = (post.content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+                      const rawHead = lines[0] || '';
+                      const isStructured = lines.length > 1 && rawHead.length <= 72;
+                      const headline = isStructured
+                        ? rawHead
+                        : (post.title || rawHead.slice(0, 58).replace(/\s+\S*$/, '') || 'Campaign Post');
+                      const bodyPreview = isStructured ? lines.slice(1).join(' ') : post.content;
+                      return (
+                        <>
+                          <p className="text-sm font-bold text-slate-900 line-clamp-1">{headline}</p>
+                          {bodyPreview && bodyPreview.toLowerCase() !== headline.toLowerCase() ? (
+                            <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                              {bodyPreview}
+                            </p>
+                          ) : null}
+                        </>
+                      );
+                    })()}
 
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
                       <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">

@@ -90,6 +90,7 @@ vi.mock('@/lib/designs/image-provider', async (importOriginal) => {
 import { resolveTenantVisuals, pickPostVisualUrl } from '@/lib/designs/ai-visual-engine';
 import { POST as generateBusinessImagePost } from '@/app/api/social/designs/business-images/generate/route';
 import { POST as batchCampaignPost } from '@/app/api/social/ai-batch-campaign/route';
+import { formatStructuredCampaignPost } from '@/lib/social/batch-campaign-runner';
 
 describe('GBP-Photos-First Visual Engine, Async 30-Day Campaign & Recraft V4.1 Flash V2 Priority', () => {
   beforeEach(() => {
@@ -250,5 +251,37 @@ describe('GBP-Photos-First Visual Engine, Async 30-Day Campaign & Recraft V4.1 F
     expect(JSON.stringify(insertedRows)).not.toContain('it_software-001.webp');
     expect(mocks.generateDesignImage).not.toHaveBeenCalled();
     expect(json.status).toBe('completed');
+
+    // Structured post layout: concise <= 60 char title, distinct intro, and ✓ bullets
+    const firstLines = insertedRows[0].content.split('\n').map((l: string) => l.trim()).filter(Boolean);
+    expect(firstLines[0].length).toBeLessThanOrEqual(60);
+    expect(firstLines[1]).toBeTruthy();
+    expect(firstLines[1].toLowerCase()).not.toBe(firstLines[0].toLowerCase());
+    expect(insertedRows[0].content).toContain('✓ ');
+  });
+
+  it('clamps overly long campaign headlines cleanly and never duplicates intro as title', () => {
+    const formatted = formatStructuredCampaignPost(
+      {
+        dayOffset: 1,
+        postingTime: '11:30',
+        theme: 'offer',
+        title:
+          'Plan a wonderfully unforgettable family gathering at our private pool venue across every single season in town',
+        caption: 'Spend relaxed family hours with private pool access and lawn games.',
+        bullets: ['Exclusive pool slot', 'Freshly prepared snacks', 'Clean seating lawn'],
+        conclusion: 'Call today to reserve your preferred weekend date.',
+        hashtags: ['#DelhiFarm', '#PoolParty'],
+        ctaText: 'CALL',
+        visualConcept: 'Family pool deck',
+      },
+      { businessName: 'Delhi Farm', industry: 'Holiday Home', city: 'Kanvi' },
+    );
+
+    expect(formatted.title.length).toBeLessThanOrEqual(60);
+    const lines = formatted.content.split('\n').map((l) => l.trim()).filter(Boolean);
+    expect(lines[0]).toBe(formatted.title);
+    expect(lines[1]).toBe('Spend relaxed family hours with private pool access and lawn games.');
+    expect(formatted.content).toContain('✓ Exclusive pool slot');
   });
 });

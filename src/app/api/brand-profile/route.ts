@@ -567,6 +567,9 @@ export async function PUT(request: NextRequest) {
         ensureAndSyncBusinessChatbot(tenantId, { triggerSource: 'brand_profile_update' }),
       )
       .catch(() => {});
+    import('@/lib/designs/business-image-suggestions')
+      .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(tenantId))
+      .catch(() => {});
 
     return NextResponse.json({ profile, logo: syncedTenantLogo ?? undefined });
   } catch (error: unknown) {

@@ -167,6 +167,9 @@ export async function syncServiceCatalogAndGbp(
   await ensureAndSyncBusinessChatbot(tenantId, {
     triggerSource: options?.triggerSource || 'service_sync',
   }).catch(() => {});
+  import('@/lib/designs/business-image-suggestions')
+    .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(tenantId))
+    .catch(() => {});
 
   return { servicesCount: nextSeoServices.length, googleSync };
 }

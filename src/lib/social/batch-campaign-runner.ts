@@ -19,9 +19,78 @@ export interface GeneratedDailyPost {
   theme: 'offer' | 'review' | 'tip' | 'showcase' | 'community';
   title: string;
   caption: string;
+  bullets?: string[];
+  conclusion?: string;
   hashtags: string[];
   ctaText: string;
   visualConcept: string;
+}
+
+const MAX_CAMPAIGN_TITLE_CHARS = 60;
+
+export function clampCampaignHeadline(rawTitle: string, maxChars = MAX_CAMPAIGN_TITLE_CHARS): string {
+  const clean = (rawTitle || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[✓•\-\*#:\s]+|[.,;:!?]+$/g, '')
+    .trim();
+  if (!clean) return 'Featured Update';
+  if (clean.length <= maxChars) return clean;
+  const sliced = clean.slice(0, maxChars);
+  const lastSpace = sliced.lastIndexOf(' ');
+  return (lastSpace >= Math.floor(maxChars * 0.55) ? sliced.slice(0, lastSpace) : sliced).trim();
+}
+
+export function formatStructuredCampaignPost(
+  item: GeneratedDailyPost,
+  params: { businessName: string; industry: string; city: string; phone?: string },
+): { title: string; content: string } {
+  const fallbackHeadline = `${item.theme === 'offer' ? 'Featured' : 'Trusted'} ${params.industry}`.trim();
+  let title = clampCampaignHeadline(item.title || fallbackHeadline);
+  const rawBody = (item.caption || '').replace(/\s+/g, ' ').trim();
+  let intro = rawBody;
+
+  // Never let title and intro be identical sentences
+  if (intro && intro.toLowerCase().startsWith(title.toLowerCase()) && intro.length <= title.length + 12) {
+    title = clampCampaignHeadline(`${params.businessName}: ${params.industry}`);
+  }
+  if (title.toLowerCase() === intro.toLowerCase()) {
+    intro = `Discover trusted ${params.industry.toLowerCase()} with ${params.businessName}${params.city ? ` in ${params.city}` : ''}.`;
+  }
+
+  const bullets = (Array.isArray(item.bullets) ? item.bullets : [])
+    .map((b) => String(b || '').replace(/^[✓•\-\*\s]+/, '').trim())
+    .filter((b) => b.length >= 6)
+    .slice(0, 5);
+
+  const conclusion = (item.conclusion || '').replace(/\s+/g, ' ').trim();
+  const cta = (item.ctaText || 'CALL').trim().toUpperCase();
+  const normalizedCta =
+    /book/i.test(cta)
+      ? 'BOOK ONLINE'
+      : /offer|save|discount/i.test(cta)
+        ? 'GET OFFER'
+        : /order/i.test(cta)
+          ? 'ORDER'
+          : /learn|view|more/i.test(cta)
+            ? 'LEARN MORE'
+            : 'CALL';
+
+  const tags = (Array.isArray(item.hashtags) ? item.hashtags : [])
+    .map((t) => String(t || '').trim())
+    .filter((t) => /^#[a-zA-Z0-9_]+$/.test(t))
+    .slice(0, 4);
+
+  const parts: string[] = [title];
+  if (intro) parts.push(intro);
+  if (bullets.length > 0) parts.push(bullets.map((b) => `✓ ${b}`).join('\n'));
+  if (conclusion && conclusion.toLowerCase() !== intro.toLowerCase()) parts.push(conclusion);
+  parts.push(`CTA: ${normalizedCta}${params.phone ? `\nPhone: ${params.phone}` : ''}`);
+  if (tags.length > 0) parts.push(tags.join(' '));
+
+  return {
+    title,
+    content: parts.join('\n\n').slice(0, 1450),
+  };
 }
 
 export interface CampaignPostSummary {
@@ -73,28 +142,60 @@ export function generateDynamicFallbackCampaign(
 
     let title = '';
     let caption = '';
-    let ctaText = 'Book Now';
+    let bullets: string[] = [];
+    let conclusion = '';
+    let ctaText = 'BOOK ONLINE';
 
     if (theme === 'offer') {
-      title = `${businessName}: Featured ${featuredService}`;
-      caption = `Looking for reliable ${featuredService} in ${cleanCity}? ${businessName} delivers trusted ${cleanIndustry.toLowerCase()} tailored to your needs.${phoneText}`;
-      ctaText = 'Call Now';
+      title = clampCampaignHeadline(`${featuredService} Spotlight`);
+      caption = `Looking for reliable ${featuredService} in ${cleanCity}? ${businessName} delivers dependable ${cleanIndustry.toLowerCase()} tailored around your requirements.`;
+      bullets = [
+        `Priority scheduling for ${featuredService} across ${cleanCity}`,
+        'Clear scope and transparent upfront pricing',
+        'Dedicated specialists supporting your request start to finish',
+      ];
+      conclusion = `Connect with ${businessName} today to check available booking slots.${phoneText}`;
+      ctaText = 'CALL';
     } else if (theme === 'review') {
-      title = `Trusted ${cleanIndustry} in ${cleanCity}`;
-      caption = `See why local clients across ${cleanCity} rely on ${businessName} for responsive support and quality ${featuredService}.${phoneText}`;
-      ctaText = 'Learn More';
+      title = clampCampaignHeadline(`Why ${cleanCity} Trusts ${businessName}`);
+      caption = `Clients across ${cleanCity} count on ${businessName} for consistent quality and responsive care in ${featuredService}.`;
+      bullets = [
+        `Verified local experience in ${cleanIndustry}`,
+        'Consistent turnaround and clear communication',
+        'High customer satisfaction across repeat engagements',
+      ];
+      conclusion = `Reach out to ${businessName} in ${cleanCity} to see how our team can help.${phoneText}`;
+      ctaText = 'LEARN MORE';
     } else if (theme === 'tip') {
-      title = `${cleanIndustry} Insight from ${businessName}`;
-      caption = `Pro tip for ${cleanCity} clients: proactive ${featuredService} keeps outcomes consistent and avoids costly delays.${phoneText}`;
-      ctaText = 'Learn More';
+      title = clampCampaignHeadline(`Smart Tips for ${featuredService}`);
+      caption = `Proactive planning for ${featuredService} helps ${cleanCity} clients avoid delays and get better long-term outcomes.`;
+      bullets = [
+        `Assess your ${featuredService} needs early before peak demand`,
+        'Work with verified specialists using documented standards',
+        'Review maintenance checklists for predictable performance',
+      ];
+      conclusion = `Have questions for ${businessName}? Our team in ${cleanCity} is ready to assist.${phoneText}`;
+      ctaText = 'LEARN MORE';
     } else if (theme === 'showcase') {
-      title = `Inside ${businessName}: ${featuredService}`;
-      caption = `Every ${featuredService} engagement in ${cleanCity} follows ${businessName}'s documented standards and local expertise.${phoneText}`;
-      ctaText = 'View Work';
+      title = clampCampaignHeadline(`Inside Our ${featuredService} Process`);
+      caption = `Every ${featuredService} project with ${businessName} in ${cleanCity} follows careful quality standards and attention to detail.`;
+      bullets = [
+        `Structured ${cleanIndustry.toLowerCase()} execution tailored to your goals`,
+        'Trained team committed to reliable delivery',
+        'Responsive post-service follow-up and local support',
+      ];
+      conclusion = `Schedule a quick consultation with ${businessName} in ${cleanCity}.${phoneText}`;
+      ctaText = 'BOOK ONLINE';
     } else {
-      title = `Serving ${cleanCity} with Pride`;
-      caption = `Thank you for choosing ${businessName} for ${cleanIndustry.toLowerCase()} across ${cleanCity}. We're here whenever your team needs support.${phoneText}`;
-      ctaText = 'Contact Us';
+      title = clampCampaignHeadline(`Serving ${cleanCity} with Care`);
+      caption = `Thank you for choosing ${businessName} for ${cleanIndustry.toLowerCase()} in ${cleanCity}. We remain committed to dependable local service.`;
+      bullets = [
+        `Local team dedicated to ${cleanCity} customers`,
+        `Full coverage across ${featuredService}`,
+        'Prompt callback support when you reach out',
+      ];
+      conclusion = `Contact ${businessName} anytime to discuss your upcoming ${cleanIndustry.toLowerCase()} needs.${phoneText}`;
+      ctaText = 'CALL';
     }
 
     items.push({
@@ -103,6 +204,8 @@ export function generateDynamicFallbackCampaign(
       theme,
       title,
       caption,
+      bullets,
+      conclusion,
       hashtags: [`#${cityTag}${indTag}`, `#${bizTag}`, `#${indTag}`].filter((t) => t.length > 1),
       ctaText,
       visualConcept: `${businessName} ${featuredService} in ${cleanCity}`,
@@ -296,9 +399,12 @@ Current Month: ${monthName}
 Rules:
 - Distribute evenly across themes: "offer", "review", "tip", "showcase", "community".
 - Never mention unrelated industries or fabricated claims.
-- Keep captions concise (<280 chars for GBP compatibility) with a real CTA (using actual business phone/name, never [Phone]/[Link] placeholders).
+- "title" MUST be a short, punchy headline (4 to 8 words, strictly under 60 characters) and MUST NOT repeat the opening sentence of "caption".
+- "caption" should be a distinct 1-2 sentence intro (90–180 chars) describing the value for ${city} customers without [Phone]/[Link] placeholders.
+- "bullets" MUST include 3 concise value highlight strings (6–12 words each, no leading checkmark symbols).
+- "conclusion" should be 1 brief closing CTA sentence.
 - Include 3-4 hashtags relevant to ${city} and ${industry}.
-- Respond ONLY with a valid JSON array of ${totalDays} objects: [{"dayOffset":1,"postingTime":"11:30","theme":"offer","title":"...","caption":"...","hashtags":["#..."],"ctaText":"Call Now","visualConcept":"..."}]`;
+- Respond ONLY with a valid JSON array of ${totalDays} objects: [{"dayOffset":1,"postingTime":"11:30","theme":"offer","title":"Short Headline Here","caption":"Distinct 1-2 sentence intro...","bullets":["Highlight 1","Highlight 2","Highlight 3"],"conclusion":"Closing CTA sentence.","hashtags":["#Tag1","#Tag2","#Tag3"],"ctaText":"CALL","visualConcept":"..."}]`;
 
       let generatedItems: GeneratedDailyPost[] = [];
       for (let attempt = 0; attempt < 2 && generatedItems.length === 0; attempt++) {
@@ -399,6 +505,12 @@ Rules:
 
         const postId = `camp_${jobShort}_${dayOffset}_${crypto.randomBytes(3).toString('hex')}`;
         const gbpPostType = item.theme === 'offer' ? 'offer' : 'whats_new';
+        const formatted = formatStructuredCampaignPost(item, {
+          businessName,
+          industry,
+          city,
+          phone,
+        });
 
         rowsToInsert.push({
           id: postId,
@@ -406,7 +518,7 @@ Rules:
           createdById: params.userId,
           status: 'draft',
           approvalStatus: 'pending',
-          content: item.caption || item.title,
+          content: formatted.content,
           mediaUrls: JSON.stringify(mediaUrls),
           publishTargets: JSON.stringify(publishTargets),
           scheduledAt: postDay,
@@ -418,8 +530,8 @@ Rules:
           dayOffset,
           scheduledAt: postDay.toISOString(),
           theme: item.theme,
-          title: item.title,
-          content: item.caption || item.title,
+          title: formatted.title,
+          content: formatted.content,
           mediaUrl: chosenMediaUrl,
           mediaSource: chosenVisual?.source || 'none',
           status: 'draft',

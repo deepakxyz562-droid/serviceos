@@ -86,7 +86,7 @@ const SCENE_IDEAS_RESPONSE_SCHEMA: Record<string, unknown> = {
     },
     scenes: {
       type: 'array',
-      description: 'Exactly 4 distinct, non-overlapping visual photography concepts tailored to this business.',
+      description: '6 distinct, non-overlapping visual photography concepts tailored to this business (4 minimum).',
       items: {
         type: 'object',
         properties: {
@@ -259,9 +259,15 @@ function validateAndDeduplicateScenes(
   const record = raw as Record<string, unknown>;
   const rawScenes = Array.isArray(record.scenes)
     ? record.scenes
-    : Array.isArray(raw)
-      ? raw
-      : null;
+    : Array.isArray(record.concepts)
+      ? record.concepts
+      : Array.isArray(record.sceneIdeas)
+        ? record.sceneIdeas
+        : Array.isArray(record.items)
+          ? record.items
+          : Array.isArray(raw)
+            ? raw
+            : null;
 
   if (!rawScenes || rawScenes.length === 0) {
     throw new Error('AI response contained no scene concepts');
@@ -339,11 +345,11 @@ function validateAndDeduplicateScenes(
     acceptedTitleTokens.push(titleTokens);
     acceptedDescTokens.push(descTokens);
 
-    if (accepted.length === 4) break;
+    if (accepted.length === 6) break;
   }
 
   if (accepted.length < 4) {
-    throw new Error(`Expected 4 distinct validated scenes, got ${accepted.length}`);
+    throw new Error(`Expected at least 4 distinct validated scenes, got ${accepted.length}`);
   }
 
   return { brandVisualDirection, scenes: accepted };
@@ -422,16 +428,30 @@ async function generateValidatedSceneBundle(
   const userPayload = buildBusinessContextPromptPayload(ctx);
 
   const systemPrompt = `You are a Principal Commercial Photography Art Director for local businesses.
-Analyze the full business context provided in JSON (business name, description, Google category, services & service descriptions, location/service areas, brand tone, USPs, target audience, brand story, and brand colors) and design 4 distinct photography concepts tailored specifically to THIS business.
+Analyze the full business context provided in JSON (business name, description, Google category, services & service descriptions, location/service areas, brand tone, USPs, target audience, brand story, and brand colors) and design 6 distinct photography concepts tailored specifically to THIS business.
 
 STRICT REQUIREMENTS:
 1. Context Grounding: Base every concept on the business's ACTUAL offerings, service descriptions, customer outcomes, and brand tone — never invent generic filler or unrelated trades.
-2. Organic Concept Diversity: Select 4 genuinely distinct, non-overlapping visual concepts that naturally fit how this specific business operates and wins customers (distinct subjects, environments, camera framing, and storytelling moments). Do NOT produce 4 slight variations of the same scene.
+2. Organic Concept Diversity: Select 6 genuinely distinct, non-overlapping visual concepts that naturally fit how this specific business operates and wins customers (distinct subjects, environments, camera framing, and storytelling moments). Do NOT produce slight variations of the same scene.
 3. Brand Consistency: First define "brandVisualDirection" describing one unified lighting mood, color temperature, and aesthetic accent harmonized with the business's brand tone and brandColorPalette. Reflect that cohesive visual direction consistently inside every "promptBlueprint".
 4. Dynamic Categories: Generate concise, meaningful snake_case "category" identifiers tailored to each scene's role for this business (for example: "executive_consultation", "kitchen_prep", "on_site_response", "client_onboarding", etc.).
-5. Photorealistic Image Prompts: Each "promptBlueprint" (55–85 words) must describe physical visual subjects, authentic setting, lighting, composition, and lens depth of field ONLY. It MUST end with: "NO TEXT, no words, no letters, no logos, no typography, no watermarks."
-6. Freshness on Refresh: If "avoidRepeatingPreviousConcepts" is provided, propose 4 completely new angles and titles that do NOT repeat or paraphrase any listed concept.
-7. Return valid JSON matching the exact schema.`;
+5. Photorealistic Image Prompts: Each "promptBlueprint" (45–75 words) must describe physical visual subjects, authentic setting, lighting, composition, and lens depth of field ONLY. It MUST end with: "NO TEXT, no words, no letters, no logos, no typography, no watermarks."
+6. Freshness on Refresh: If "avoidRepeatingPreviousConcepts" is provided, propose 6 completely new angles and titles that do NOT repeat or paraphrase any listed concept.
+7. Output Format: Respond ONLY with a strict JSON object (no markdown fences) matching this exact structure:
+{
+  "brandVisualDirection": "1-2 sentence cohesive lighting, color & camera direction string",
+  "scenes": [
+    {
+      "id": "unique-kebab-id",
+      "title": "Short 3-7 word scene title",
+      "icon": "single emoji",
+      "badge": "2-3 WORD BADGE",
+      "category": "concise_snake_case_role",
+      "sceneDescription": "1-2 concise sentences explaining this scene for the business",
+      "promptBlueprint": "45-75 word photorealistic image prompt ending with NO TEXT, no words, no letters, no logos, no typography, no watermarks."
+    }
+  ]
+}`;
 
   let lastError: unknown = null;
 
@@ -555,7 +575,7 @@ export async function getOrGenerateCachedSceneSuggestions(params: {
         rawCache &&
         typeof rawCache === 'object' &&
         Array.isArray(rawCache.scenes) &&
-        rawCache.scenes.length === 4
+        rawCache.scenes.length >= 4
       ) {
         cachedEntry = rawCache;
       }
@@ -705,4 +725,221 @@ Return ONLY a strict JSON object with:
   }
 
   return baseline;
+}
+
+const cleanLocationField = (v?: string | null): string => {
+  const s = (v || '').trim();
+  return !s || /^(not specified|n\/a|na|none|null|undefined|unknown|your city)$/i.test(s) ? '' : s;
+};
+
+/**
+ * Shared loader assembling the full business identity payload from Tenant, BrandProfile, GBP account,
+ * and Service catalog — used identically by GET /suggestions and background pre-warming.
+ */
+export async function loadBusinessSceneContextFromTenant(params: {
+  tenantId: string;
+  categoryOverride?: string | null;
+  businessNameOverride?: string | null;
+  isRefresh?: boolean;
+}): Promise<{
+  existingSettingsJson: string | null | undefined;
+  context: BusinessContextForSuggestions;
+}> {
+  const { tenantId, categoryOverride, businessNameOverride, isRefresh } = params;
+
+  const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
+    db.tenant
+      .findUnique({
+        where: { id: tenantId },
+        select: {
+          name: true,
+          industry: true,
+          description: true,
+          city: true,
+          settingsJson: true,
+        },
+      })
+      .catch(() => null),
+    (
+      db.brandProfile?.findUnique?.({
+        where: { tenantId },
+      }) ?? Promise.resolve(null)
+    ).catch(() => null),
+    (
+      db.socialAccount?.findFirst?.({
+        where: { tenantId, platform: 'googlebusiness', isActive: true },
+      }) ?? Promise.resolve(null)
+    ).catch(() => null),
+    (
+      db.service?.findMany?.({
+        where: { tenantId },
+        select: { name: true, description: true, longDescription: true },
+        take: 15,
+      }) ?? Promise.resolve([])
+    ).catch(() => []),
+  ]);
+
+  let gbpCategory = '';
+  let gbpTitle = '';
+  let gbpCity = '';
+  let gbpServiceAreas: string[] = [];
+  if (gbpAccount?.metadata) {
+    try {
+      const meta =
+        typeof gbpAccount.metadata === 'string'
+          ? JSON.parse(gbpAccount.metadata)
+          : (gbpAccount.metadata as Record<string, any>);
+      gbpCategory = meta.primaryCategory || meta.category || '';
+      gbpTitle = meta.locationTitle || meta.businessName || '';
+      gbpCity = meta.city || '';
+      if (Array.isArray(meta.serviceAreas)) {
+        gbpServiceAreas = meta.serviceAreas.filter((a: unknown): a is string => typeof a === 'string');
+      }
+    } catch {}
+  }
+
+  let parsedSettings: Record<string, any> = {};
+  if (tenant?.settingsJson) {
+    try {
+      const parsed = JSON.parse(tenant.settingsJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsedSettings = parsed;
+      }
+    } catch {}
+  }
+
+  if (!gbpCategory) gbpCategory = parsedSettings.activeGbpCategory || '';
+  if (!gbpTitle) gbpTitle = parsedSettings.activeGbpTitle || '';
+  const settingsCity = parsedSettings.activeGbpCity || '';
+
+  const businessName =
+    businessNameOverride ||
+    brandProfile?.businessName ||
+    gbpTitle ||
+    tenant?.name ||
+    'Local Business';
+
+  const category =
+    categoryOverride ||
+    brandProfile?.industry ||
+    gbpCategory ||
+    tenant?.industry ||
+    'Services';
+
+  const city =
+    cleanLocationField(gbpCity) ||
+    cleanLocationField(settingsCity) ||
+    cleanLocationField(tenant?.city) ||
+    cleanLocationField(brandProfile?.location) ||
+    cleanLocationField(brandProfile?.serviceArea?.split(',')[0]) ||
+    '';
+
+  const serviceAreas =
+    gbpServiceAreas.length > 0
+      ? gbpServiceAreas
+      : brandProfile?.serviceArea
+        ? brandProfile.serviceArea
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+        : [];
+
+  const servicesDetailedMap = new Map<string, DetailedBusinessServiceContext>();
+  const addServiceEntry = (name?: string | null, description?: string | null, targetKeyword?: string | null) => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return;
+    const key = cleanName.toLowerCase();
+    const prev = servicesDetailedMap.get(key);
+    servicesDetailedMap.set(key, {
+      name: cleanName,
+      description: (description || '').trim() || prev?.description || null,
+      targetKeyword: (targetKeyword || '').trim() || prev?.targetKeyword || null,
+    });
+  };
+
+  for (const s of merchantServices as Array<{ name?: string; description?: string | null; longDescription?: string | null }>) {
+    addServiceEntry(s?.name, s?.description || s?.longDescription);
+  }
+  if (Array.isArray(parsedSettings.seoServices)) {
+    for (const s of parsedSettings.seoServices) {
+      if (s && typeof s === 'object') {
+        addServiceEntry(s.name, s.description, s.targetKeyword);
+      }
+    }
+  }
+  if (brandProfile?.services) {
+    try {
+      const bpServices = JSON.parse(brandProfile.services);
+      if (Array.isArray(bpServices)) {
+        for (const item of bpServices) {
+          if (typeof item === 'string') addServiceEntry(item);
+        }
+      }
+    } catch {}
+  }
+
+  const brandBrain = (parsedSettings.brandBrain || {}) as Record<string, any>;
+  const brandDetails = (brandBrain.brandDetails || {}) as Record<string, any>;
+  if (Array.isArray(brandBrain.sellingItems)) {
+    for (const it of brandBrain.sellingItems) {
+      if (it && typeof it === 'object') {
+        addServiceEntry(it.name, it.description);
+      }
+    }
+  }
+
+  const servicesDetailed = Array.from(servicesDetailedMap.values());
+  const services = servicesDetailed.map((s) => s.name);
+
+  return {
+    existingSettingsJson: tenant?.settingsJson,
+    context: {
+      tenantId,
+      businessName,
+      category,
+      businessDescription: brandProfile?.aiGeneratedSummary || tenant?.description || null,
+      services,
+      servicesDetailed,
+      city,
+      serviceAreas,
+      usps: brandProfile?.usps || null,
+      targetCustomer: brandProfile?.targetCustomer || null,
+      customerPainPoints: brandProfile?.customerPainPoints || null,
+      currentOffers: brandProfile?.currentOffers || null,
+      brandStory: brandDetails.businessStory || null,
+      tone: brandProfile?.tone || null,
+      voiceDescription: brandProfile?.voiceDescription || null,
+      brandColors: {
+        primary: brandDetails.brandColor || null,
+        secondary: brandDetails.secondaryColor || null,
+      },
+      isRefresh,
+    },
+  };
+}
+
+/**
+ * Background pre-warmer: populates persistent AI scene ideas cache after onboarding,
+ * GBP location sync, Brand Brain edits, or service catalog updates so Studio opens with 0ms wait.
+ */
+export async function prewarmTenantSceneSuggestions(
+  tenantId: string,
+  overrides?: { categoryOverride?: string | null; businessNameOverride?: string | null },
+): Promise<void> {
+  if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') return;
+  try {
+    const loaded = await loadBusinessSceneContextFromTenant({
+      tenantId,
+      categoryOverride: overrides?.categoryOverride,
+      businessNameOverride: overrides?.businessNameOverride,
+      isRefresh: false,
+    });
+    await getOrGenerateCachedSceneSuggestions({
+      tenantId,
+      existingSettingsJson: loaded.existingSettingsJson,
+      context: loaded.context,
+    });
+  } catch (err) {
+    console.warn(`[scene-ideas-prewarm] Non-fatal prewarm notice for ${tenantId}:`, err);
+  }
 }

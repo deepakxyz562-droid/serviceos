@@ -247,9 +247,12 @@ export function PostCard({
 }) {
   const badge = statusBadge(post);
   const media = post.mediaUrls?.[0];
-  const lines = (post.content || '').split('\n').map((l) => l.trim()).filter(Boolean);
-  const title = lines[0] || 'Business Update';
-  const snippet = lines.length > 1 ? lines.slice(1).join(' ') : lines[0] || 'No description';
+  const cardParsed = parsePostStructure(
+    post.content || '',
+    post.title || (post.designJson as any)?.headline || 'Standard Post',
+  );
+  const title = cardParsed.title || 'Business Update';
+  const snippet = cardParsed.intro || cardParsed.conclusion || 'No description';
 
   const targets = post.publishTargets || [];
   const googlePostUrl = getGooglePostUrl(post);
@@ -410,11 +413,31 @@ export interface ParsedPostContent {
   phone?: string;
 }
 
+const GENERIC_POST_TITLES = new Set([
+  'standard post',
+  'offer post',
+  'event post',
+  'business update',
+  'local business update',
+]);
+
+function trimHeadlineOnWordBoundary(text: string, maxChars = 60): string {
+  const cleaned = text.replace(/\s+/g, ' ').replace(/[.,;:!?]+$/g, '').trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  const slice = cleaned.slice(0, maxChars);
+  const lastSpace = slice.lastIndexOf(' ');
+  return (lastSpace >= Math.floor(maxChars * 0.5) ? slice.slice(0, lastSpace) : slice).trim();
+}
+
 export function parsePostStructure(content: string, fallbackTitle?: string): ParsedPostContent {
   const lines = (content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const cleanFallback = (fallbackTitle || '').trim();
+  const hasSpecificFallback =
+    Boolean(cleanFallback) && !GENERIC_POST_TITLES.has(cleanFallback.toLowerCase());
+
   if (lines.length === 0) {
     return {
-      title: fallbackTitle || 'Local Business Update',
+      title: cleanFallback || 'Local Business Update',
       intro: '',
       bullets: [],
       conclusion: '',
@@ -460,6 +483,21 @@ export function parsePostStructure(content: string, fallbackTitle?: string): Par
     }
 
     if (readingSection === 'title') {
+      // Single-paragraph / flat legacy posts: never put an entire paragraph into the bold headline
+      if (line.length > 72 || (lines.length === 1 && line.split(/\s+/).length > 10)) {
+        const sentenceSplit = line.match(/^([^.!?]{8,62}[.!?])\s+([\s\S]+)$/);
+        if (sentenceSplit && !hasSpecificFallback) {
+          title = trimHeadlineOnWordBoundary(sentenceSplit[1], 62);
+          intro = sentenceSplit[2].trim();
+        } else {
+          title = hasSpecificFallback
+            ? trimHeadlineOnWordBoundary(cleanFallback, 62)
+            : trimHeadlineOnWordBoundary(line, 58);
+          intro = line;
+        }
+        readingSection = 'intro';
+        continue;
+      }
       title = line;
       readingSection = 'intro';
       continue;
@@ -475,11 +513,13 @@ export function parsePostStructure(content: string, fallbackTitle?: string): Par
     }
   }
 
-  if (!title) title = fallbackTitle || 'Local Business Update';
+  if (!title) title = cleanFallback || 'Local Business Update';
 
-  // If content has no separate intro/conclusion, use content directly
-  if (!intro && content) {
-    intro = content;
+  // Ensure intro never duplicates title verbatim
+  if (!intro && content && lines.length > 1) {
+    intro = lines.slice(1).join('\n\n');
+  } else if (intro.trim().toLowerCase() === title.trim().toLowerCase()) {
+    intro = '';
   }
 
   return {

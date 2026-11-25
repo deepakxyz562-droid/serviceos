@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../src/lib/api';
 import { uploadFileToStorage, normalizePendingUpload } from '../src/lib/upload';
 import { useResource } from '../src/hooks/use-resource';
+import { parsePostStructure } from '../src/components/gbp/posts-list';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -454,6 +455,7 @@ export default function CampaignPlannerScreen() {
 
               const isScheduled = post.status === 'scheduled' || post.approvalStatus === 'approved';
 
+              const parsedPost = parsePostStructure(post.content || '', post.title);
               return (
                 <View key={post.id || index} style={styles.postCard}>
                   {/* Card Header: Date & Status */}
@@ -495,10 +497,15 @@ export default function CampaignPlannerScreen() {
                     )}
                   </View>
 
-                  {/* Caption */}
-                  <Text style={styles.captionText} numberOfLines={3}>
-                    {post.content}
+                  {/* Structured Headline + Distinct Description Snippet */}
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 }} numberOfLines={1}>
+                    {parsedPost.title}
                   </Text>
+                  {parsedPost.intro ? (
+                    <Text style={styles.captionText} numberOfLines={3}>
+                      {parsedPost.intro}
+                    </Text>
+                  ) : null}
 
                   {/* Channels */}
                   <View style={styles.channelsRow}>

@@ -536,6 +536,9 @@ export async function POST(request: NextRequest) {
     await ensureAndSyncBusinessChatbot(user.tenantId, {
       triggerSource: 'gbp_profile_bound',
     }).catch(() => {});
+    import('@/lib/designs/business-image-suggestions')
+      .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(user.tenantId))
+      .catch(() => {});
 
     const targetShortId = `#${profileId.slice(-4)}`;
     const targetProfile: GbpDiscoveredProfile = {

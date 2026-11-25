@@ -119,10 +119,8 @@ function isProviderName(s: string): s is ProviderName {
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   nvidia: [
+    'nvidia/nemotron-3.5-bolt-e4b',
     'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
-    'nvidia/nemotron-3-ultra-550b-a55b',
-    'minimaxai/minimax-m3.1-flash',
-    'mistralai/mistral-large-4-1t-a52b',
   ],
   openrouter: OPENROUTER_MODELS,
   openai: ['gpt-4o-mini'],
