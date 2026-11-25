@@ -416,10 +416,15 @@ export async function GET(request: NextRequest) {
       title: string;
       category?: string;
       address?: string;
+      city?: string;
+      regionCode?: string;
+      serviceAreas?: string[];
+      isServiceAreaBusiness?: boolean;
       phone?: string;
       website?: string;
       placeId?: string | null;
       mapsUri?: string;
+      metadata?: Record<string, any>;
       regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string }>;
     } = placeDetailsResult.status === 'fulfilled'
       ? placeDetailsResult.value
@@ -427,6 +432,7 @@ export async function GET(request: NextRequest) {
           title: fallbackName,
           category: fallbackCategory,
           address: fallbackAddress,
+          city: fallbackCity || undefined,
           phone: fallbackPhone,
           website: fallbackWebsite,
           placeId: fallbackPlaceId,
@@ -493,6 +499,8 @@ export async function GET(request: NextRequest) {
             : (placeDetails.title || fallbackName));
     const resolvedCategory = placeDetails.category || placesBackfill?.category || fallbackCategory;
     const resolvedAddress = placeDetails.address || placesBackfill?.formattedAddress || fallbackAddress;
+    const resolvedCity = placeDetails.city || fallbackCity || null;
+    const resolvedRegionCode = placeDetails.regionCode || (tenant as any)?.country || null;
     const resolvedPhone = placeDetails.phone || placesBackfill?.phone || fallbackPhone;
     const resolvedWebsite = placeDetails.website || placesBackfill?.website || fallbackWebsite;
     const resolvedHours = regularHours || placeDetails.regularHours || placesBackfill?.regularHours || null;
@@ -500,6 +508,29 @@ export async function GET(request: NextRequest) {
     const resolvedTotalReviews = totalReviews > 0 ? totalReviews : (placesBackfill?.userRatingCount ?? 0);
     const resolvedAvgRating = totalReviews > 0 ? avgRating : (placesBackfill?.rating ?? 0);
     const resolvedPlaceId = candidatePlaceId;
+
+    // Backfill tenant city / country / activeGbpCity dynamically from Google Business Profile when missing
+    if (
+      (resolvedCity && (!(tenant as any)?.city || (tenant as any).city !== resolvedCity)) ||
+      (resolvedRegionCode && (!(tenant as any)?.country || (tenant as any).country !== resolvedRegionCode))
+    ) {
+      const nextSettings = { ...tenantSettings };
+      if (resolvedCity) nextSettings.activeGbpCity = resolvedCity;
+      if (resolvedCategory && resolvedCategory !== 'Professional Services') {
+        nextSettings.activeGbpCategory = resolvedCategory;
+      }
+      if (resolvedAddress) nextSettings.activeGbpAddress = resolvedAddress;
+      void db.tenant
+        .update({
+          where: { id: user.tenantId },
+          data: {
+            ...(resolvedCity ? { city: resolvedCity } : {}),
+            ...(resolvedRegionCode ? { country: resolvedRegionCode } : {}),
+            settingsJson: JSON.stringify(nextSettings),
+          },
+        })
+        .catch(() => {});
+    }
 
     let totalViews = searchImpressions + mapsImpressions;
     if (totalViews === 0) {
@@ -580,9 +611,12 @@ export async function GET(request: NextRequest) {
             )}`
           : null);
 
-    let pendingGoogleUpdate = getPendingGoogleUpdate(tenant.settingsJson);
+    let pendingGoogleUpdate = getPendingGoogleUpdate(tenant?.settingsJson);
     if (pendingGoogleUpdate && pendingGoogleUpdate.status === 'PENDING') {
-      if (placeDetails && (placeDetails as any).metadata && (placeDetails as any).metadata.hasPendingEdits === false) {
+      const submittedMs = new Date(pendingGoogleUpdate.submittedAt).getTime();
+      const ageMinutes = (Date.now() - submittedMs) / (1000 * 60);
+      const googleFinished = placeDetails?.metadata?.hasPendingEdits === false;
+      if (googleFinished || Number.isNaN(ageMinutes) || ageMinutes > 5) {
         pendingGoogleUpdate = {
           ...pendingGoogleUpdate,
           status: 'COMPLETED',
@@ -604,7 +638,10 @@ export async function GET(request: NextRequest) {
         title: resolvedTitle,
         category: resolvedCategory,
         address: resolvedAddress,
-        city: fallbackCity,
+        city: resolvedCity,
+        regionCode: resolvedRegionCode,
+        serviceAreas: placeDetails.serviceAreas || [],
+        isServiceAreaBusiness: Boolean(placeDetails.isServiceAreaBusiness),
         phone: resolvedPhone,
         website: resolvedWebsite,
         description: fallbackDescription,
@@ -683,8 +720,8 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
 
-    // If pushing live to Google, enforce pending lock to prevent duplicate concurrent submissions
-    if (body.pushToGoogle === true) {
+    // If pushing live to Google, enforce short pending lock unless caller passes forceOverride
+    if (body.pushToGoogle === true && body.forceOverride !== true) {
       const tenantForLock = await db.tenant.findUnique({
         where: { id: user.tenantId },
         select: { settingsJson: true },
@@ -1010,10 +1047,13 @@ export async function PATCH(request: NextRequest) {
     invalidatePlacePayloadCache(user.tenantId);
     invalidateBootstrapCache(user.tenantId);
 
-    const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
-    await ensureAndSyncBusinessChatbot(user.tenantId, {
-      triggerSource: 'gbp_place_update',
-    }).catch(() => {});
+    import('@/lib/bgos-business-chatbot')
+      .then(({ ensureAndSyncBusinessChatbot }) =>
+        ensureAndSyncBusinessChatbot(user.tenantId!, {
+          triggerSource: 'gbp_place_update',
+        }),
+      )
+      .catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -683,7 +683,7 @@ export default function HomeScreen() {
     gbpPlace.data?.place?.title ||
     gbpPlace.data?.tenantFallback?.name ||
     activeProfile?.name ||
-    'FieserOS';
+    'BGOS';
 
   const resolvedReviewUrl = useMemo(() => {
     return (

@@ -221,6 +221,8 @@ export function PosterTemplateGallery({
   } | null>(null);
   const [activeGeneratingStep, setActiveGeneratingStep] = useState<string>('');
   const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
   const [businessSuggestions, setBusinessSuggestions] = useState<
     Array<{ id: string; title: string; promptBlueprint: string; icon?: string; badge?: string }>
@@ -231,21 +233,30 @@ export function PosterTemplateGallery({
 
   const fetchSuggestions = async (refresh = false) => {
     if (!business.category && !business.businessName) return;
+    setSuggestionsError(null);
     if (refresh) setRefreshingSuggestions(true);
+    else setLoadingSuggestions(true);
     try {
       const params = new URLSearchParams();
       if (business.category) params.set('category', business.category);
       if (business.businessName) params.set('businessName', business.businessName);
       if (refresh) params.set('refresh', 'true');
       const res = await fetch(`/api/social/designs/business-images/suggestions?${params.toString()}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data?.suggestions && data.suggestions.length > 0) {
-        setBusinessSuggestions(data.suggestions);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success || !Array.isArray(data?.suggestions) || data.suggestions.length === 0) {
+        setSuggestionsError(
+          data?.error || 'Could not generate AI scene ideas right now. Please try again.',
+        );
+        return;
       }
+      setBusinessSuggestions(data.suggestions);
     } catch (err) {
       console.warn('Failed to load business image suggestions:', err);
+      setSuggestionsError(
+        err instanceof Error ? err.message : 'Network error loading AI scene ideas. Please try again.',
+      );
     } finally {
+      setLoadingSuggestions(false);
       setRefreshingSuggestions(false);
     }
   };
@@ -299,7 +310,7 @@ export function PosterTemplateGallery({
         const errMsg = data?.error || data?.message || 'Failed to generate image';
         const mailto =
           data?.supportMailto ||
-          `mailto:${data?.supportEmail || 'support@fieseros.com'}?subject=${encodeURIComponent(`AI Image Generation Issue: ${business.businessName || 'Business'}`)}&body=${encodeURIComponent(`Error: ${errMsg}`)}`;
+          `mailto:${data?.supportEmail || 'support@bgos.site'}?subject=${encodeURIComponent(`AI Image Generation Issue: ${business.businessName || 'Business'}`)}&body=${encodeURIComponent(`Error: ${errMsg}`)}`;
         toast.error(
           <div className="flex flex-col gap-1 text-left">
             <span className="font-medium">{errMsg}</span>
@@ -307,7 +318,7 @@ export function PosterTemplateGallery({
               href={mailto}
               className="text-xs text-amber-200 underline hover:text-white mt-1"
             >
-              Contact Support ({data?.supportEmail || 'support@fieseros.com'})
+              Contact Support ({data?.supportEmail || 'support@bgos.site'})
             </a>
           </div>,
           { duration: 8000 }
@@ -710,36 +721,58 @@ export function PosterTemplateGallery({
                 </p>
                 <button
                   type="button"
-                  disabled={refreshingSuggestions || generatingImages}
+                  disabled={loadingSuggestions || refreshingSuggestions || generatingImages}
                   onClick={() => fetchSuggestions(true)}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-50"
                 >
-                  <RefreshCw className={cn('size-3', refreshingSuggestions && 'animate-spin')} />
+                  <RefreshCw className={cn('size-3', (refreshingSuggestions || loadingSuggestions) && 'animate-spin')} />
                   <span>Refresh Ideas</span>
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {businessSuggestions.map((sug) => (
+
+              {suggestionsError && (
+                <div className="rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/30 p-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-rose-700 dark:text-rose-300">{suggestionsError}</p>
                   <button
-                    key={sug.id}
                     type="button"
-                    disabled={generatingImages}
-                    onClick={() => handleGenerateScene(sug)}
-                    className="p-2.5 rounded-xl border border-border/80 bg-card hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-left flex flex-col justify-between gap-1.5 cursor-pointer disabled:opacity-50"
+                    disabled={loadingSuggestions || refreshingSuggestions}
+                    onClick={() => fetchSuggestions(businessSuggestions.length > 0)}
+                    className="shrink-0 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2.5 py-1 cursor-pointer disabled:opacity-50"
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-base">{sug.icon || '🏢'}</span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {sug.badge || 'SCENE'}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold text-foreground leading-snug">{sug.title}</p>
-                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                      Tap to generate <Wand2 className="size-2.5" />
-                    </span>
+                    Retry
                   </button>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {loadingSuggestions && businessSuggestions.length === 0 ? (
+                <div className="rounded-xl border border-border bg-muted/40 p-4 flex items-center gap-2.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin text-emerald-600" />
+                  <span>Analyzing your business services &amp; brand profile to generate tailored AI scenes...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {businessSuggestions.map((sug) => (
+                    <button
+                      key={sug.id}
+                      type="button"
+                      disabled={generatingImages}
+                      onClick={() => handleGenerateScene(sug)}
+                      className="p-2.5 rounded-xl border border-border/80 bg-card hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-left flex flex-col justify-between gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-base">{sug.icon || '📸'}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {sug.badge || 'SCENE'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-foreground leading-snug">{sug.title}</p>
+                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                        Tap to generate <Wand2 className="size-2.5" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Publish Post CTA */}

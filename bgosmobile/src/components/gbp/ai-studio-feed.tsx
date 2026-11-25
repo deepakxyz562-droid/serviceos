@@ -109,7 +109,7 @@ export function AiStudioFeed({
   const [activeGeneratingStep, setActiveGeneratingStep] = useState<string>('');
   const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
 
-  // ── Gemini Business Image Suggestions State ──
+  // ── AI Business Image Suggestions State (server-backed, context-cached) ──
   const [businessSuggestions, setBusinessSuggestions] = useState<
     Array<{
       id: string;
@@ -121,11 +121,13 @@ export function AiStudioFeed({
       promptBlueprint: string;
     }>
   >([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [generatingImages, setGeneratingImages] = useState(false);
 
-  // Fetch Gemini Business Scene Suggestions for the selected business
+  // Fetch AI Business Scene Suggestions (cached per business context on backend; fresh concepts on refresh)
   const fetchBusinessSuggestions = async (refresh = false) => {
+    setSuggestionsError(null);
     if (refresh) setRefreshingSuggestions(true);
     else setLoadingSuggestions(true);
     try {
@@ -136,7 +138,8 @@ export function AiStudioFeed({
       });
       const res = await apiRequest<{
         success: boolean;
-        suggestions: Array<{
+        error?: string;
+        suggestions?: Array<{
           id: string;
           title: string;
           icon: string;
@@ -145,12 +148,22 @@ export function AiStudioFeed({
           sceneDescription: string;
           promptBlueprint: string;
         }>;
-      }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`);
-      if (res?.suggestions && res.suggestions.length > 0) {
+      }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`, {
+        timeoutMs: 25000,
+      });
+      if (res?.success && Array.isArray(res?.suggestions) && res.suggestions.length > 0) {
         setBusinessSuggestions(res.suggestions);
+      } else {
+        setSuggestionsError(
+          res?.error || 'Could not generate AI scene ideas right now. Please tap Retry.',
+        );
       }
-    } catch (err) {
-      // fail silently with baseline fallback
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not reach AI scene generator. Please check your connection and tap Retry.';
+      setSuggestionsError(msg);
     } finally {
       setLoadingSuggestions(false);
       setRefreshingSuggestions(false);
@@ -687,7 +700,7 @@ export function AiStudioFeed({
                 </View>
                 <Pressable
                   onPress={() => fetchBusinessSuggestions(true)}
-                  disabled={refreshingSuggestions || generatingImages}
+                  disabled={loadingSuggestions || refreshingSuggestions || generatingImages}
                   style={styles.refreshIdeasBtn}
                 >
                   {refreshingSuggestions ? (
@@ -701,41 +714,75 @@ export function AiStudioFeed({
                 </Pressable>
               </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalScenesScroll}
-              >
-                {businessSuggestions.map((sug) => (
+              {suggestionsError ? (
+                <View style={styles.inlineErrorCard}>
+                  <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+                  <Text style={styles.inlineErrorText}>{suggestionsError}</Text>
                   <Pressable
-                    key={sug.id}
-                    onPress={() => {
-                      setCustomPrompt(sug.title);
-                      void handleGenerateAiImage({
-                        prompt: sug.promptBlueprint,
-                        sceneTitle: sug.title,
-                        suggestionId: sug.id,
-                      });
-                    }}
-                    disabled={generatingImages}
-                    style={styles.sceneHorizontalCard}
+                    onPress={() => fetchBusinessSuggestions(businessSuggestions.length > 0)}
+                    disabled={loadingSuggestions || refreshingSuggestions}
+                    style={styles.inlineRetryBtn}
                   >
-                    <View style={styles.sceneCardTop}>
-                      <Text style={styles.sceneEmoji}>{sug.icon}</Text>
-                      <View style={styles.sceneBadge}>
-                        <Text style={styles.sceneBadgeText}>{sug.badge}</Text>
-                      </View>
-                    </View>
-                    <Text numberOfLines={2} style={styles.sceneTitleText}>
-                      {sug.title}
-                    </Text>
-                    <View style={styles.sceneTapCta}>
-                      <Text style={styles.sceneTapCtaText}>Tap to Generate</Text>
-                      <MaterialIcons name="bolt" size={13} color="#009F50" />
-                    </View>
+                    <Text style={styles.inlineRetryBtnText}>Retry</Text>
                   </Pressable>
-                ))}
-              </ScrollView>
+                </View>
+              ) : null}
+
+              {loadingSuggestions && businessSuggestions.length === 0 ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    padding: 16,
+                  }}
+                >
+                  <ActivityIndicator size="small" color="#009F50" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#475569', flex: 1 }}>
+                    Analyzing your services &amp; brand identity to design tailored AI scenes...
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalScenesScroll}
+                >
+                  {businessSuggestions.map((sug) => (
+                    <Pressable
+                      key={sug.id}
+                      onPress={() => {
+                        setCustomPrompt(sug.title);
+                        void handleGenerateAiImage({
+                          prompt: sug.promptBlueprint,
+                          sceneTitle: sug.title,
+                          suggestionId: sug.id,
+                        });
+                      }}
+                      disabled={generatingImages}
+                      style={styles.sceneHorizontalCard}
+                    >
+                      <View style={styles.sceneCardTop}>
+                        <Text style={styles.sceneEmoji}>{sug.icon}</Text>
+                        <View style={styles.sceneBadge}>
+                          <Text style={styles.sceneBadgeText}>{sug.badge}</Text>
+                        </View>
+                      </View>
+                      <Text numberOfLines={2} style={styles.sceneTitleText}>
+                        {sug.title}
+                      </Text>
+                      <View style={styles.sceneTapCta}>
+                        <Text style={styles.sceneTapCtaText}>Tap to Generate</Text>
+                        <MaterialIcons name="bolt" size={13} color="#009F50" />
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* Aspect Ratio Selector */}

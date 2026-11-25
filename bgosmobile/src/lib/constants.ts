@@ -39,12 +39,11 @@ function resolveDefaultHost(): string {
 export const API_BASE_URL = resolveDefaultHost();
 
 // Web URL for browser checkout, payment gateways, legal pages & OAuth:
-// Always use live HTTPS domain (https://fieseros.com) so Razorpay, UPI & OAuth work seamlessly
-export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com').replace(/\/$/, '');
+// Always use live HTTPS domain (https://bgos.site) so Razorpay, UPI & OAuth work seamlessly
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://bgos.site').replace(/\/$/, '');
 
 // Dedicated Payment Gateway host for Razorpay Standard Checkout & UPI.
-// Razorpay merchant accounts enforce strict origin verification locked to the registered website (https://fieseros.com).
-export const PAYMENT_WEB_URL = (process.env.EXPO_PUBLIC_PAYMENT_URL || 'https://fieseros.com').replace(/\/$/, '');
+export const PAYMENT_WEB_URL = (process.env.EXPO_PUBLIC_PAYMENT_URL || 'https://bgos.site').replace(/\/$/, '');
 
 // Standalone BGOS Business Page & Booking Card host (never redirects to Marketplace)
 export const BGOS_PUBLIC_WEB_URL = (
@@ -82,7 +81,7 @@ export function resolvePhotoUrl(url?: string | null): string {
 // BGOS Support details (Meta Verified WhatsApp Business)
 export const BGOS_SUPPORT_WHATSAPP_DIGITS = '916127967087';
 export const BGOS_SUPPORT_PHONE_DISPLAY = '+91 61279 67087';
-export const BGOS_SUPPORT_EMAIL = 'support@fieseros.com';
+export const BGOS_SUPPORT_EMAIL = 'support@bgos.site';
 
 export const API_PATHS = {
   login: '/api/auth/login',

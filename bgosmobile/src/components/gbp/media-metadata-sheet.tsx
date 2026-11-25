@@ -666,7 +666,7 @@ export function MediaMetadataSheet({
                       ]}
                     >
                       {activeHeadline ? (
-                        <Text numberOfLines={1} style={styles.canvasHeadlineText}>
+                        <Text numberOfLines={2} style={styles.canvasHeadlineText}>
                           {activeHeadline}
                         </Text>
                       ) : null}

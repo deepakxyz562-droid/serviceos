@@ -62,16 +62,16 @@ export function checkAndEnforcePendingLock(settingsJson?: string | null): {
   }
 
   if (pending.status === 'PENDING') {
-    // If pending for more than 48 hours without update, fail open to avoid permanent deadlocks
+    // Auto-expire PENDING lock after 5 minutes to prevent SAB / delayed-review deadlocks
     const submittedMs = new Date(pending.submittedAt).getTime();
-    const ageHours = (Date.now() - submittedMs) / (1000 * 60 * 60);
-    if (!Number.isNaN(ageHours) && ageHours > 48) {
+    const ageMinutes = (Date.now() - submittedMs) / (1000 * 60);
+    if (Number.isNaN(ageMinutes) || ageMinutes > 5) {
       return { locked: false };
     }
 
     return {
       locked: true,
-      reason: `A previous update (${pending.label}) is currently pending Google's review. New updates are locked until Google completes processing.`,
+      reason: `A previous update (${pending.label}) was just sent to Google. You can still proceed or wait a moment for Google to finish processing.`,
       pending,
     };
   }

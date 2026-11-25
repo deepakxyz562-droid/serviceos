@@ -1105,7 +1105,7 @@ Rules:
         { role: 'user', content: userPayload },
       ],
       temperature: 0.3,
-      timeoutMs: 8_000,
+      timeoutMs: 3_500,
     });
 
     let synthesized = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');
@@ -1236,7 +1236,7 @@ async function callOpenRouterImage(params: {
   try {
     response = await fetch(requestUrl, {
       method: 'POST',
-      signal: combineSignals(params.signal, 20_000),
+      signal: combineSignals(params.signal, 10_000),
       headers,
       body: JSON.stringify(requestBody),
     });
@@ -1254,7 +1254,7 @@ async function callOpenRouterImage(params: {
       try {
         const retryRes = await fetch(requestUrl, {
           method: 'POST',
-          signal: combineSignals(params.signal, 20_000),
+          signal: combineSignals(params.signal, 10_000),
           headers: {
             ...headers,
             Authorization: `Bearer ${envSecret}`,
@@ -1392,7 +1392,7 @@ async function callGeminiOrOpenRouterImage(params: {
         requestUrl,
         {
           method: 'POST',
-          signal: combineSignals(params.signal, 20_000),
+          signal: combineSignals(params.signal, 10_000),
           headers: {
             'Content-Type': 'application/json',
             ...(params.provider === 'gemini'
@@ -1421,7 +1421,7 @@ async function callGeminiOrOpenRouterImage(params: {
             requestUrl,
             {
               method: 'POST',
-              signal: combineSignals(params.signal, 20_000),
+              signal: combineSignals(params.signal, 10_000),
               headers: {
                 'Content-Type': 'application/json',
                 ...(params.provider === 'gemini'
@@ -2067,10 +2067,11 @@ export async function resolveCuratedImageFallback(
 
   let fallbackFetchErr: unknown = null;
   try {
-    const res = await fetch(stockUrl, { signal: AbortSignal.timeout(10000) });
-    if (res.ok) {
-      const arrayBuf = await res.arrayBuffer();
-      const bytes = Buffer.from(arrayBuf);
+    if (stockUrl && stockUrl.startsWith('/')) {
+      const { readFile } = await import('fs/promises');
+      const pathMod = await import('path');
+      const localPath = pathMod.join(process.cwd(), 'public', stockUrl.replace(/^\/+/, ''));
+      const bytes = await readFile(localPath);
       if (bytes.length > 0) {
         return {
           bytes,
@@ -2081,8 +2082,24 @@ export async function resolveCuratedImageFallback(
             'AI image providers were temporarily at capacity; selected a curated royalty-free business photo fallback.',
         };
       }
-    } else {
-      fallbackFetchErr = new Error(`Stock fallback returned HTTP ${res.status}`);
+    } else if (stockUrl) {
+      const res = await fetch(stockUrl, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        const bytes = Buffer.from(arrayBuf);
+        if (bytes.length > 0) {
+          return {
+            bytes,
+            model: 'curated-occasion-stock',
+            cost: 0,
+            sourceType: 'stock_fallback',
+            fallbackReason:
+              'AI image providers were temporarily at capacity; selected a curated royalty-free business photo fallback.',
+          };
+        }
+      } else {
+        fallbackFetchErr = new Error(`Stock fallback returned HTTP ${res.status}`);
+      }
     }
   } catch (err) {
     fallbackFetchErr = err;

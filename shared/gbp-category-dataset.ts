@@ -636,4 +636,54 @@ export const MASTER_GBP_CATEGORIES: GbpCategoryDefinition[] = [
       cta: 'BOOK 3D CONSULTATION',
     },
   },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 11. PRIVATE SECURITY, GUARDING & SURVEILLANCE
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: 'gcid:security_service',
+    displayName: 'Security service',
+    pillar: 'security_services',
+    aliases: [
+      'security guard service',
+      'security agency',
+      'private security service',
+      'bodyguard service',
+      'bouncer service',
+      'security patrol',
+      'security',
+    ],
+    relatedCategories: ['Security guard service', 'Security system supplier', 'Private investigator', 'Event management company'],
+    coreProducts: [
+      'Armed Security Guards (PSO & Gunmen)',
+      'VIP & Executive Bodyguard Protection',
+      'Event Bouncers & Crowd Management',
+      '24/7 Corporate & Industrial Guarding',
+      'Emergency SOS Rapid Response Patrol',
+      'CCTV & Access Control Monitoring',
+      'Cash & Bank Escort Security',
+      'Residential Society & Gate Security',
+    ],
+    customerIntentKeywords: [
+      'private security agency in {city}',
+      'hire armed security guard gunman in {city}',
+      'vip bodyguard and bouncer service {city}',
+      '24/7 corporate security guards near me',
+      'licensed security guard company {city}',
+    ],
+    visualSearchTerms: [
+      'uniformed private security officers corporate lobby',
+      'executive bodyguard protection team suit',
+      'modern security cctv command center monitoring',
+    ],
+    preferredTheme: 'cyber_tech',
+    defaultHooks: {
+      offerHeadline: '24/7 PSARA-Licensed Armed Guards & Rapid SOS Response',
+      showcaseHeadline: 'Elite Corporate Security, VIP Bodyguards & Event Protection in {city}',
+      trustHeadline: 'Trusted Security Guard & Executive Protection Partner in {city}',
+      subtitle: 'Police-verified, trained security officers, armed gunmen, and 24/7 rapid SOS patrol teams.',
+      bullets: ['24/7 Rapid SOS Emergency Response', 'Police-Verified & Trained Personnel', 'PSARA Licensed & Fully Insured'],
+      cta: 'BOOK SECURITY DEPLOYMENT',
+    },
+  },
 ];

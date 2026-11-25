@@ -106,9 +106,7 @@ function normaliseList(input: StringList | null | undefined): string[] {
  */
 async function generateAiSummary(input: BrandProfileInput): Promise<string | null> {
   try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default;
-    const zai = await ZAI.create();
-
+    const { callAI } = await import('@/lib/ai-client');
     const services = normaliseList(input.services);
     const usps = (input.usps || '').trim();
 
@@ -134,21 +132,21 @@ async function generateAiSummary(input: BrandProfileInput): Promise<string | nul
 
     const userPrompt = `Business facts:\n${facts.join('\n')}\n\nWrite the brand snapshot now.`;
 
-    const completion = await zai.chat.completions.create({
+    const aiRes = await callAI({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      thinking: { type: 'disabled' },
+      temperature: 0.3,
+      timeoutMs: 4_500,
     });
 
-    const text = completion?.choices?.[0]?.message?.content?.trim();
+    const text = (aiRes?.content || '').trim();
     if (!text) return null;
-    // Hard cap to keep the field predictable.
     return text.slice(0, 600);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[brand-profile] AI summary generation failed:', msg);
+    console.warn('[brand-profile] AI summary generation skipped/failed:', msg);
     return null;
   }
 }
@@ -236,9 +234,19 @@ export async function GET(request: NextRequest) {
       } catch {}
     }
 
+    const sanitizedTenantLogo = sanitizePublicImageUrl(tenant?.logo) ?? null;
+    if (brandDetails && typeof brandDetails === 'object') {
+      if (!brandDetails.logoUrl && sanitizedTenantLogo) {
+        brandDetails = { ...brandDetails, logoUrl: sanitizedTenantLogo };
+      }
+    } else if (sanitizedTenantLogo) {
+      brandDetails = { logoUrl: sanitizedTenantLogo };
+    }
+
     const bgosEmailPrefs = parseBgosEmailPrefs(tenant?.settingsJson);
 
     return NextResponse.json({
+      tenantId,
       profile,
       hours,
       phoneNumber: tenant?.phone ?? null,
@@ -246,7 +254,7 @@ export async function GET(request: NextRequest) {
       whatsappNumber: tenant?.whatsappPhone ?? null,
       businessAddress: tenant?.address ?? null,
       tenantSlug: tenant?.slug ?? null,
-      logo: sanitizePublicImageUrl(tenant?.logo) ?? null,
+      logo: sanitizedTenantLogo,
       gstNumber,
       invoicePrefix,
       defaultTaxRate,
@@ -347,10 +355,14 @@ export async function PUT(request: NextRequest) {
       competitors: competitorsJson,
     };
 
-    // Generate the AI summary (unless the caller asked us to skip it).
-    // We do this BEFORE the upsert so we can write both fields in one query.
+    // Generate the AI summary (only when not skipped and not a quick visual-only logo update).
     let aiGeneratedSummary: string | null = null;
-    if (!body.skipAiSummary) {
+    const isLogoOnlyUpdate =
+      rawBrandDetails !== undefined &&
+      !body.voiceDescription &&
+      !body.targetCustomer &&
+      !body.usps;
+    if (!body.skipAiSummary && !isLogoOnlyUpdate) {
       aiGeneratedSummary = await generateAiSummary(body);
     }
 
@@ -430,9 +442,17 @@ export async function PUT(request: NextRequest) {
         if (body.defaultTaxRate !== undefined) mergedTaxCompliance.defaultTaxRate = (body.defaultTaxRate || '').trim() || null;
 
         const existingBrandBrain = (existingSettings.brandBrain ?? {}) as Record<string, unknown>;
+        const existingBrandDetails =
+          existingBrandBrain.brandDetails && typeof existingBrandBrain.brandDetails === 'object'
+            ? (existingBrandBrain.brandDetails as Record<string, unknown>)
+            : {};
+        const mergedBrandDetails =
+          sanitizedBrandDetails && typeof sanitizedBrandDetails === 'object'
+            ? { ...existingBrandDetails, ...(sanitizedBrandDetails as Record<string, unknown>) }
+            : sanitizedBrandDetails;
         const mergedBrandBrain: Record<string, unknown> = {
           ...existingBrandBrain,
-          ...(sanitizedBrandDetails !== undefined ? { brandDetails: sanitizedBrandDetails } : {}),
+          ...(mergedBrandDetails !== undefined ? { brandDetails: mergedBrandDetails } : {}),
           ...((body as any).sellingItems !== undefined ? { sellingItems: (body as any).sellingItems } : {}),
           ...((body as any).marketingTargets !== undefined ? { marketingTargets: (body as any).marketingTargets } : {}),
           ...((body as any).aiReplySalutation !== undefined ? { aiReplySalutation: (body as any).aiReplySalutation } : {}),
@@ -522,6 +542,16 @@ export async function PUT(request: NextRequest) {
         },
       });
 
+      if (syncedTenantLogo !== undefined) {
+        await db.brandKit
+          .upsert({
+            where: { tenantId },
+            create: { tenantId, logoUrl: syncedTenantLogo },
+            update: { logoUrl: syncedTenantLogo },
+          })
+          .catch(() => {});
+      }
+
       if (body.phoneNumber && String(body.phoneNumber).trim()) {
         await db.user.updateMany({
           where: { tenantId, role: 'owner' },
@@ -532,14 +562,13 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    try {
-      const { ensureAndSyncBusinessChatbot } = await import('@/lib/bgos-business-chatbot');
-      await ensureAndSyncBusinessChatbot(tenantId, { triggerSource: 'brand_profile_update' });
-    } catch {
-      /* non-fatal chatbot background sync */
-    }
+    import('@/lib/bgos-business-chatbot')
+      .then(({ ensureAndSyncBusinessChatbot }) =>
+        ensureAndSyncBusinessChatbot(tenantId, { triggerSource: 'brand_profile_update' }),
+      )
+      .catch(() => {});
 
-    return NextResponse.json({ profile });
+    return NextResponse.json({ profile, logo: syncedTenantLogo ?? undefined });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[/api/brand-profile PUT] error:', error);

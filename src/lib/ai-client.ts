@@ -87,24 +87,24 @@ const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
  * array if a model returns 404 ("No endpoints found") or persistent 429s.
  */
 const OPENROUTER_MODELS = [
-  'nvidia/nemotron-3-ultra-550b-a55b:free',
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
   'qwen/qwen3.8-27b:free',
   'inclusionai/ling-3.0-flash-sante:free',
   'liquid/lfm-2.5-2.6b:free',
   'dots-studio/dots-3-note-preview:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
 ]
 
-/** Per-attempt timeout (60s) for rich structured intelligence responses. */
-const REQUEST_TIMEOUT_MS = 60_000
+/** Per-attempt timeout (15s) for fast failover before hitting reverse proxy limits. */
+const REQUEST_TIMEOUT_MS = 15_000
 
-/** Total end-to-end callAI waterfall budget (120s). */
-const DEFAULT_CALL_AI_BUDGET_MS = 120_000
+/** Total end-to-end callAI waterfall budget (45s). */
+const DEFAULT_CALL_AI_BUDGET_MS = 45_000
 
-/** Provider order — NVIDIA is tried first when configured, followed by Gemini,
- *  OpenRouter, OpenAI and Anthropic. */
-const PROVIDER_ORDER = ['nvidia', 'gemini', 'openrouter', 'openai', 'anthropic'] as const
+/** Provider order — Fast Gemini is tried first when configured, followed by
+ *  OpenRouter, OpenAI, Anthropic, and NVIDIA as fallback. */
+const PROVIDER_ORDER = ['gemini', 'openrouter', 'openai', 'anthropic', 'nvidia'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
@@ -267,6 +267,7 @@ interface ProviderRequestParams {
   temperature?: number
   maxTokens?: number
   json?: boolean
+  responseSchema?: Record<string, unknown>
   signal: AbortSignal
 }
 
@@ -371,6 +372,7 @@ const openRouterAdapter: AiProviderAdapter = {
     temperature,
     maxTokens,
     json,
+    responseSchema,
     signal,
   }): Promise<ProviderResult> {
     try {
@@ -452,6 +454,7 @@ const openAiAdapter: AiProviderAdapter = {
     temperature,
     maxTokens,
     json,
+    responseSchema,
     signal,
   }): Promise<ProviderResult> {
     try {
@@ -526,6 +529,7 @@ const anthropicAdapter: AiProviderAdapter = {
     temperature,
     maxTokens,
     json,
+    responseSchema,
     signal,
   }): Promise<ProviderResult> {
     // Anthropic separates the `system` message from the `messages` array.
@@ -611,6 +615,7 @@ const geminiAdapter: AiProviderAdapter = {
     temperature,
     maxTokens,
     json,
+    responseSchema,
     signal,
   }): Promise<ProviderResult> {
     // Gemini maps `system` → `systemInstruction`, and `assistant` → `model`.
@@ -638,6 +643,7 @@ const geminiAdapter: AiProviderAdapter = {
             temperature: temperature ?? 0.7,
             maxOutputTokens: maxTokens ?? 4096,
             ...(json ? { responseMimeType: 'application/json' } : {}),
+            ...(json && responseSchema ? { responseSchema } : {}),
           },
         }),
         signal,
@@ -709,6 +715,7 @@ const nvidiaAdapter: AiProviderAdapter = {
     temperature,
     maxTokens,
     json,
+    responseSchema,
     signal,
   }): Promise<ProviderResult> {
     try {
@@ -870,6 +877,7 @@ export async function callAI(
         temperature?: number
         maxTokens?: number
         json?: boolean
+        responseSchema?: Record<string, unknown>
         preferredModel?: string
         timeoutMs?: number
         usageContext?: { tenantId: string; feature: string }
@@ -877,7 +885,7 @@ export async function callAI(
     | ChatMessage[],
 ): Promise<CallAIResult> {
   const opts = Array.isArray(options) ? { messages: options } : options
-  const { messages, temperature, maxTokens, json, preferredModel, timeoutMs, usageContext } = opts
+  const { messages, temperature, maxTokens, json, responseSchema, preferredModel, timeoutMs, usageContext } = opts
 
   const chain = await loadAiKeyChain()
   let lastErrorMsg = ''
@@ -930,6 +938,7 @@ export async function callAI(
             temperature,
             maxTokens,
             json,
+            responseSchema,
             signal: controller.signal,
           })
           .catch((err: unknown): ProviderResult => {

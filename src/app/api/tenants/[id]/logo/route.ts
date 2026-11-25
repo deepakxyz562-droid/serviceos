@@ -42,7 +42,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -142,10 +142,34 @@ export async function POST(
       file: fileBuffer,
     });
 
-    // Update Tenant.logo in DB
+    // Update Tenant.logo AND sync settingsJson.brandBrain.brandDetails.logoUrl in DB
+    const existingForSettings = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settingsJson: true },
+    });
+    let nextSettingsJson: string | undefined = undefined;
+    try {
+      const parsed = existingForSettings?.settingsJson ? JSON.parse(existingForSettings.settingsJson) : {};
+      const container = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      const bb = container.brandBrain && typeof container.brandBrain === 'object' ? container.brandBrain : {};
+      const bd = bb.brandDetails && typeof bb.brandDetails === 'object' ? bb.brandDetails : {};
+      container.brandBrain = {
+        ...bb,
+        brandDetails: {
+          ...bd,
+          logoUrl: url,
+          logoFileName: fileName,
+        },
+      };
+      nextSettingsJson = JSON.stringify(container);
+    } catch {}
+
     const updatedTenant = await db.tenant.update({
       where: { id: tenantId },
-      data: { logo: url },
+      data: {
+        logo: url,
+        ...(nextSettingsJson ? { settingsJson: nextSettingsJson } : {}),
+      },
     });
 
     // Also sync BrandKit.logoUrl if a brand kit exists or create one
@@ -221,7 +245,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -240,9 +264,33 @@ export async function DELETE(
       );
     }
 
+    const existingForDel = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settingsJson: true },
+    });
+    let nextDelSettingsJson: string | undefined = undefined;
+    try {
+      const parsed = existingForDel?.settingsJson ? JSON.parse(existingForDel.settingsJson) : {};
+      const container = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      const bb = container.brandBrain && typeof container.brandBrain === 'object' ? container.brandBrain : {};
+      const bd = bb.brandDetails && typeof bb.brandDetails === 'object' ? bb.brandDetails : {};
+      container.brandBrain = {
+        ...bb,
+        brandDetails: {
+          ...bd,
+          logoUrl: null,
+          logoFileName: null,
+        },
+      };
+      nextDelSettingsJson = JSON.stringify(container);
+    } catch {}
+
     const updatedTenant = await db.tenant.update({
       where: { id: tenantId },
-      data: { logo: null },
+      data: {
+        logo: null,
+        ...(nextDelSettingsJson ? { settingsJson: nextDelSettingsJson } : {}),
+      },
     });
 
     try {

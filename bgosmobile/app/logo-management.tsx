@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Screen, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { BGOS_PUBLIC_WEB_URL } from '../src/lib/constants';
 import { uploadFileToStorage } from '../src/lib/upload';
 
 const PRESET_COLORS = [
@@ -57,8 +58,9 @@ export default function LogoManagementScreen() {
     if (brandRes.data) {
       const d = brandRes.data;
       const details = d.brandDetails || {};
-      if (details.logoUrl) {
-        setLogoUri(details.logoUrl);
+      const resolvedUrl = details.logoUrl || d.logo || null;
+      if (resolvedUrl) {
+        setLogoUri(resolvedUrl);
         setLogoFileName(details.logoFileName || 'brand-logo.png');
       } else {
         setLogoFileName('No logo uploaded yet');
@@ -68,6 +70,41 @@ export default function LogoManagementScreen() {
       if (details.logoUsage) setLogoUsage(details.logoUsage);
     }
   }, [brandRes.data]);
+
+  const persistBrandDetails = async (overrides: {
+    logoUrl?: string | null;
+    logoFileName?: string;
+  }) => {
+    const existing = brandRes.data || {};
+    const existingDetails = existing.brandDetails || {};
+    const resolvedBizName =
+      existing.profile?.businessName ||
+      gbpPlace.data?.place?.title ||
+      gbpPlace.data?.tenantFallback?.name ||
+      'My Business';
+    const resolvedIndustry =
+      existing.profile?.industry ||
+      gbpPlace.data?.place?.category ||
+      gbpPlace.data?.tenantFallback?.category ||
+      'Services';
+
+    await apiRequest('/api/brand-profile', {
+      method: 'PUT',
+      body: {
+        businessName: resolvedBizName,
+        industry: resolvedIndustry,
+        skipAiSummary: true,
+        brandDetails: {
+          ...existingDetails,
+          logoUrl: overrides.logoUrl !== undefined ? overrides.logoUrl : logoUri,
+          logoFileName: overrides.logoFileName !== undefined ? overrides.logoFileName : logoFileName,
+          brandColor,
+          secondaryColor,
+          logoUsage,
+        },
+      },
+    });
+  };
 
   const handlePickFile = async () => {
     try {
@@ -96,7 +133,9 @@ export default function LogoManagementScreen() {
             { folder: 'brand-logos', visibility: 'public' },
           );
           setLogoUri(uploadedUrl);
-          Alert.alert('Logo Uploaded', 'Logo uploaded to cloud storage. Tap Save Changes to publish.');
+          await persistBrandDetails({ logoUrl: uploadedUrl, logoFileName: name });
+          await brandRes.refresh();
+          Alert.alert('Logo Saved', 'Your brand logo has been uploaded and synced everywhere.');
         } catch (uploadErr) {
           Alert.alert(
             'Upload Failed',
@@ -172,7 +211,7 @@ export default function LogoManagementScreen() {
     setSaving(true);
     try {
       let resolvedLogoUrl = logoUri;
-      if (resolvedLogoUrl && !/^https?:\/\//i.test(resolvedLogoUrl)) {
+      if (resolvedLogoUrl && !/^https?:\/\//i.test(resolvedLogoUrl) && !resolvedLogoUrl.startsWith('/')) {
         resolvedLogoUrl = await uploadFileToStorage(
           {
             uri: resolvedLogoUrl,
@@ -185,23 +224,7 @@ export default function LogoManagementScreen() {
         setLogoUri(resolvedLogoUrl);
       }
 
-      const existing = brandRes.data || {};
-      const existingDetails = existing.brandDetails || {};
-      await apiRequest('/api/brand-profile', {
-        method: 'PUT',
-        body: {
-          businessName: existing.profile?.businessName || 'My Business',
-          industry: existing.profile?.industry || 'Services',
-          brandDetails: {
-            ...existingDetails,
-            logoUrl: resolvedLogoUrl,
-            logoFileName,
-            brandColor,
-            secondaryColor,
-            logoUsage,
-          },
-        },
-      });
+      await persistBrandDetails({ logoUrl: resolvedLogoUrl, logoFileName });
       await brandRes.refresh();
       Alert.alert('Saved', 'Logo and brand styling updated successfully!');
     } catch (err: unknown) {
@@ -213,6 +236,13 @@ export default function LogoManagementScreen() {
 
   const effectiveBusinessName =
     gbpPlace.data?.place?.title || brandRes.data?.profile?.businessName || 'My Business';
+  const effectiveCategory =
+    gbpPlace.data?.place?.category || brandRes.data?.profile?.industry || '';
+  const samplePreviewPhoto = /security|guard|gunman|bouncer|bodyguard|patrol|shieldhire/i.test(
+    `${effectiveBusinessName} ${effectiveCategory}`,
+  )
+    ? `${BGOS_PUBLIC_WEB_URL}/images/industry/security.webp`
+    : DEFAULT_SAMPLE_PHOTO;
 
   return (
     <Screen scrollable={false}>
@@ -405,7 +435,7 @@ export default function LogoManagementScreen() {
 
           <View style={styles.mockupContainer}>
             <Image
-              source={{ uri: DEFAULT_SAMPLE_PHOTO }}
+              source={{ uri: samplePreviewPhoto }}
               style={styles.mockupImage}
               resizeMode="cover"
             />
@@ -414,17 +444,14 @@ export default function LogoManagementScreen() {
               style={[
                 styles.watermarkPill,
                 logoUsage === 'black_background'
-                  ? { backgroundColor: 'rgba(0,0,0,0.85)' }
+                  ? { backgroundColor: 'rgba(15,23,42,0.92)' }
                   : { backgroundColor: 'rgba(255,255,255,0.92)' },
               ]}
             >
               {logoUri ? (
                 <Image
                   source={{ uri: logoUri }}
-                  style={[
-                    styles.watermarkImg,
-                    logoUsage === 'black_background' && { tintColor: '#FFFFFF' },
-                  ]}
+                  style={styles.watermarkImg}
                   resizeMode="contain"
                 />
               ) : (

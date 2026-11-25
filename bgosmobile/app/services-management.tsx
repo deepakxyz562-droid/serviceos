@@ -52,7 +52,15 @@ export default function ServicesManagementScreen() {
   const businessName =
     (('title' in (place || {}) ? (place as any)?.title : (place as any)?.name) || '').trim() ||
     'My Business';
-  const cityLabel = (place?.city || '').trim() || 'Your City';
+  const serviceAreaFallbackCity =
+    Array.isArray((place as any)?.serviceAreas) && (place as any).serviceAreas[0]
+      ? String((place as any).serviceAreas[0]).split(',')[0].trim()
+      : '';
+  const cityLabel =
+    (place?.city || '').trim() ||
+    serviceAreaFallbackCity ||
+    (place?.address ? place.address.split(',')[0].trim() : '') ||
+    'Local Area';
 
   const [activeTab, setActiveTab] = useState<'my-services' | 'explore'>('my-services');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -237,15 +245,6 @@ export default function ServicesManagementScreen() {
       return;
     }
 
-    const pending = placeRes.data?.place?.pendingGoogleUpdate;
-    if (pending?.status === 'PENDING' || pending?.status === 'VERIFICATION_REQUIRED') {
-      Alert.alert(
-        'Update in Progress',
-        `A previous Google update (${pending?.label || 'Profile edit'}) is currently under review by Google. To protect your listing, changes will save to draft only.`,
-      );
-      pushToGoogleAfter = false;
-    }
-
     setOptimizingTarget(singleServiceName || '__ALL__');
     try {
       const res = await apiRequest<{
@@ -294,14 +293,6 @@ export default function ServicesManagementScreen() {
   }
 
   async function handleSave(pushToGoogle: boolean) {
-    const pending = placeRes.data?.place?.pendingGoogleUpdate;
-    if (pushToGoogle && (pending?.status === 'PENDING' || pending?.status === 'VERIFICATION_REQUIRED')) {
-      Alert.alert(
-        'Update in Progress',
-        `A previous Google update (${pending?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicting edits, you cannot submit new changes until the pending update completes.`,
-      );
-      return;
-    }
     setSaving(true);
     try {
       const activeDescriptions = { ...descriptionsByName };
@@ -324,6 +315,7 @@ export default function ServicesManagementScreen() {
           services: selectedServices,
           seoServices: structuredPayload,
           pushToGoogle,
+          forceOverride: true,
         },
       });
       await placeRes.refresh();

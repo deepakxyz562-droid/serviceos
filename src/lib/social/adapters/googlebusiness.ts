@@ -1471,10 +1471,15 @@ export async function fetchGoogleBusinessPlaceDetails(
   title: string;
   category?: string;
   address?: string;
+  city?: string;
+  regionCode?: string;
+  serviceAreas?: string[];
+  isServiceAreaBusiness?: boolean;
   phone?: string;
   website?: string;
   placeId?: string;
   mapsUri?: string;
+  metadata?: Record<string, any>;
   regularHours?: Record<string, { open: boolean; openTime: string; closeTime: string }>;
 }> {
   const { accountName, locationId } = await extractLocationRef(account);
@@ -1494,10 +1499,15 @@ export async function fetchGoogleBusinessPlaceDetails(
   let title = account.accountName || meta.locationTitle || '';
   let category = meta.category || undefined;
   let address = meta.address || undefined;
+  let city: string | undefined = meta.city || undefined;
+  let regionCode: string | undefined = meta.regionCode || undefined;
+  let serviceAreas: string[] | undefined = undefined;
+  let isServiceAreaBusiness: boolean | undefined = undefined;
   let phone = meta.phone || undefined;
   let website = meta.website || undefined;
   let placeId = meta.placeId || undefined;
   let mapsUri = meta.mapsUri || undefined;
+  let metadata: Record<string, any> | undefined = undefined;
   let regularHours: Record<string, { open: boolean; openTime: string; closeTime: string }> | undefined =
     undefined;
 
@@ -1507,7 +1517,7 @@ export async function fetchGoogleBusinessPlaceDetails(
     );
     detailUrl.searchParams.set(
       'readMask',
-      'name,title,phoneNumbers,websiteUri,storefrontAddress,categories,metadata,regularHours',
+      'name,title,phoneNumbers,websiteUri,storefrontAddress,serviceArea,categories,metadata,regularHours',
     );
     const detailRes = await fetch(detailUrl.toString(), {
       method: 'GET',
@@ -1522,6 +1532,9 @@ export async function fetchGoogleBusinessPlaceDetails(
       if (detail.title) title = detail.title;
       if (detail.categories?.primaryCategory?.displayName) {
         category = detail.categories.primaryCategory.displayName;
+      }
+      if (detail.metadata && typeof detail.metadata === 'object') {
+        metadata = detail.metadata;
       }
       if (detail.metadata?.placeId) {
         placeId = detail.metadata.placeId;
@@ -1542,11 +1555,58 @@ export async function fetchGoogleBusinessPlaceDetails(
       if (detail.storefrontAddress) {
         const parts: string[] = [];
         if (detail.storefrontAddress.addressLines) parts.push(...detail.storefrontAddress.addressLines);
-        if (detail.storefrontAddress.locality) parts.push(detail.storefrontAddress.locality);
+        if (detail.storefrontAddress.locality) {
+          parts.push(detail.storefrontAddress.locality);
+          city = detail.storefrontAddress.locality.trim();
+        }
         if (detail.storefrontAddress.administrativeArea) parts.push(detail.storefrontAddress.administrativeArea);
         if (detail.storefrontAddress.postalCode) parts.push(detail.storefrontAddress.postalCode);
+        if (detail.storefrontAddress.regionCode) {
+          regionCode = String(detail.storefrontAddress.regionCode).trim().toUpperCase();
+        }
         if (detail.storefrontAddress.country) parts.push(detail.storefrontAddress.country);
         if (parts.length > 0) address = parts.join(', ');
+      }
+      if (detail.serviceArea) {
+        isServiceAreaBusiness = detail.serviceArea.businessType === 'CUSTOMER_LOCATION_ONLY';
+        if (detail.serviceArea.regionCode && !regionCode) {
+          regionCode = String(detail.serviceArea.regionCode).trim().toUpperCase();
+        }
+        const infos = detail.serviceArea.places?.placeInfos;
+        if (Array.isArray(infos) && infos.length > 0) {
+          const areaNames = infos
+            .map((p: any) => (typeof p?.placeName === 'string' ? p.placeName.trim() : ''))
+            .filter(Boolean);
+          if (areaNames.length > 0) {
+            serviceAreas = areaNames;
+            if (!city) {
+              // Extract the primary city from the first Google Business service area entry (e.g. "Delhi, India" -> "Delhi")
+              const firstParts = areaNames[0].split(',').map((s: string) => s.trim()).filter(Boolean);
+              if (firstParts.length > 0) {
+                city = firstParts[0];
+              }
+            }
+            if (!regionCode) {
+              const joined = areaNames.join(' ').toLowerCase();
+              if (joined.includes('india')) regionCode = 'IN';
+              else if (joined.includes('united states') || joined.includes(', usa')) regionCode = 'US';
+              else if (joined.includes('united kingdom')) regionCode = 'GB';
+              else if (joined.includes('canada')) regionCode = 'CA';
+              else if (joined.includes('australia')) regionCode = 'AU';
+            }
+            if (!address) {
+              address = areaNames.slice(0, 3).join(' · ');
+            }
+          }
+        }
+      }
+      if (!regionCode && phone) {
+        const cleanPhone = String(phone).replace(/[\s()-]/g, '');
+        if (cleanPhone.startsWith('+91') || /^0[6-9]\d{9}$/.test(cleanPhone)) {
+          regionCode = 'IN';
+        } else if (cleanPhone.startsWith('+1')) {
+          regionCode = 'US';
+        }
       }
       const periods = detail.regularHours?.periods;
       if (Array.isArray(periods) && periods.length > 0) {
@@ -1594,7 +1654,21 @@ export async function fetchGoogleBusinessPlaceDetails(
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title || 'Google Business')}`;
   }
 
-  const placeResult = { title, category, address, phone, website, placeId, mapsUri, regularHours };
+  const placeResult = {
+    title,
+    category,
+    address,
+    city,
+    regionCode,
+    serviceAreas,
+    isServiceAreaBusiness,
+    phone,
+    website,
+    placeId,
+    mapsUri,
+    metadata,
+    regularHours,
+  };
   PLACE_DETAILS_CACHE.set(cacheKey, { data: placeResult, expiresAt: Date.now() + CACHE_TTL_MS });
   return placeResult;
 }

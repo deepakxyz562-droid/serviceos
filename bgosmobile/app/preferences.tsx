@@ -29,6 +29,7 @@ interface SellingItem {
 }
 
 interface BrandBrainApiResponse {
+  logo?: string | null;
   profile?: {
     businessName: string;
     industry: string;
@@ -37,6 +38,11 @@ interface BrandBrainApiResponse {
     forbiddenPhrases?: string;
   };
   brandDetails?: {
+    logoUrl?: string | null;
+    logoFileName?: string;
+    brandColor?: string;
+    secondaryColor?: string;
+    logoUsage?: 'original' | 'black_background';
     phoneOnPoster?: string;
     addressOnPoster?: string;
     cityName?: string;
@@ -242,11 +248,13 @@ export default function PreferencesScreen() {
         method: 'PUT',
         body: {
           businessName: brandName,
-          industry: prefRes.data?.profile?.industry || 'Software company',
+          industry: prefRes.data?.profile?.industry || 'Local Business',
           location: cityName,
           tone,
           forbiddenPhrases: parsedForbidden,
+          skipAiSummary: true,
           brandDetails: {
+            ...(prefRes.data?.brandDetails || {}),
             phoneOnPoster,
             addressOnPoster,
             cityName,
@@ -321,22 +329,39 @@ export default function PreferencesScreen() {
       {/* 1. Header Card (Dhanda benchmark) */}
       <Card style={{ padding: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          <View
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              backgroundColor: '#EF4444',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF' }}>
-              {brandName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          {prefRes.data?.brandDetails?.logoUrl || prefRes.data?.logo ? (
+            <Image
+              source={{ uri: (prefRes.data?.brandDetails?.logoUrl || prefRes.data?.logo) as string }}
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                backgroundColor: '#FFFFFF',
+              }}
+              resizeMode="contain"
+            />
+          ) : (
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: colors.brand,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF' }}>
+                {(brandName || 'B').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>{brandName}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.ink }}>
+              {brandName || 'Brand Brain'}
+            </Text>
             <Text style={{ fontSize: 12, color: colors.muted }}>
               Preferences used for your posts and campaigns
             </Text>

@@ -114,19 +114,34 @@ export async function GET(request: NextRequest) {
         ? parsedSettings.competitorSpyCache.byKey
         : {};
 
-    // Check if stored rows contain foreign or mismatched competitors (e.g. USA / Dallas addresses for an Indian business)
-    const isIndian = /(india|bihar|patna|delhi|haryana|uttar pradesh|ghaziabad|kanvi|inr|\+91)/i.test(activeGbpAddress) || tenant?.country === 'IN';
-    const isLegacyCorrupt = storedRows.length > 0 && storedRows.some((r) => {
-      const addr = (r.address || '').toLowerCase();
-      const name = (r.name || '').toLowerCase();
-      if (isIndian && (addr.includes('usa') || addr.includes('dallas') || addr.includes(', tx') || addr.includes('united states'))) {
-        return true;
-      }
-      if (name.includes('mlm software') || name.includes('wetsoft infotech')) {
-        return true;
-      }
-      return false;
-    });
+    // Check if stored rows contain foreign or mismatched competitors (e.g. USA/Lithuania addresses or "Not specified" query cache)
+    const isIndian =
+      /(india|bihar|patna|delhi|noida|haryana|punjab|chandigarh|uttar pradesh|ghaziabad|kanvi|inr|\+91)/i.test(
+        `${activeGbpAddress} ${tenant?.city || ''} ${parsedSettings?.competitorSpyCache?.locationUsed || ''}`,
+      ) || tenant?.country === 'IN';
+    const cachedQueryUsed = String(parsedSettings?.competitorSpyCache?.queryUsed || '').toLowerCase();
+    const isLegacyCorrupt =
+      cachedQueryUsed.includes('not specified') ||
+      (storedRows.length > 0 &&
+        storedRows.some((r) => {
+          const addr = (r.address || '').toLowerCase();
+          const name = (r.name || '').toLowerCase();
+          if (
+            addr.includes('lithuania') ||
+            addr.includes('jonava') ||
+            addr.includes('kaunas') ||
+            addr.includes('vilnius')
+          ) {
+            return true;
+          }
+          if (isIndian && (addr.includes('usa') || addr.includes('dallas') || addr.includes(', tx') || addr.includes('united states'))) {
+            return true;
+          }
+          if (name.includes('mlm software') || name.includes('wetsoft infotech')) {
+            return true;
+          }
+          return false;
+        }));
 
     const combinedSelfRatings: number[] = [];
     for (const r of selfReviews) {

@@ -407,7 +407,7 @@ export function UrgentReviewCard({
   );
   const displayShortCtaUrl = useMemo(() => {
     if (queueData?.shortReviewUrl) return queueData.shortReviewUrl;
-    if (queueData?.shortRedirectCode) return `https://fieseros.com/r/${queueData.shortRedirectCode}`;
+    if (queueData?.shortRedirectCode) return `https://bgos.site/r/${queueData.shortRedirectCode}`;
     return reviewUrl;
   }, [queueData?.shortReviewUrl, queueData?.shortRedirectCode, reviewUrl]);
 

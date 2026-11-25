@@ -109,6 +109,8 @@ export async function fetchPlacesCompetitors(
 
   let gbpCategory: string | null = null;
   let gbpAddress: string | null = null;
+  let gbpCity: string | null = null;
+  let gbpRegionCode: string | null = null;
   let gbpPlaceId: string | null = tenant?.googlePlaceId || null;
   let gbpTitle: string | null = null;
 
@@ -121,6 +123,8 @@ export async function fetchPlacesCompetitors(
           gbpCategory = placeDetails.category;
         }
         if (placeDetails.address) gbpAddress = placeDetails.address;
+        if (placeDetails.city) gbpCity = placeDetails.city;
+        if (placeDetails.regionCode) gbpRegionCode = placeDetails.regionCode;
         if (placeDetails.placeId) gbpPlaceId = placeDetails.placeId;
         if (placeDetails.title) gbpTitle = placeDetails.title;
       }
@@ -187,26 +191,44 @@ export async function fetchPlacesCompetitors(
     }
   }
 
+  const isPlaceholderLocation = (val?: string | null): boolean => {
+    const clean = (val || '').trim().toLowerCase();
+    return (
+      !clean ||
+      /^(not specified|n\/a|na|none|null|undefined|unknown|your city|local area|nearby|dallas)$/i.test(clean)
+    );
+  };
+
   const verifiedAddress = gbpAddress || tenant?.address || '';
   const cityFromAddress = extractCityFromAddress(verifiedAddress);
+  const serviceAreaCity =
+    !isPlaceholderLocation(brandProfile?.serviceArea)
+      ? brandProfile!.serviceArea!.split(',')[0]?.trim() || ''
+      : '';
 
   const queryCity =
-    opts?.city?.trim() ||
-    cityFromAddress ||
-    (tenant?.city && !tenant.city.toLowerCase().includes('dallas') ? tenant.city.trim() : '') ||
-    brandProfile?.location?.trim() ||
+    (!isPlaceholderLocation(opts?.city) ? opts!.city!.trim() : '') ||
+    (!isPlaceholderLocation(gbpCity) ? gbpCity!.trim() : '') ||
+    (!isPlaceholderLocation(cityFromAddress) ? cityFromAddress!.trim() : '') ||
+    (!isPlaceholderLocation(tenant?.city) ? tenant!.city!.trim() : '') ||
+    (!isPlaceholderLocation(brandProfile?.location) ? brandProfile!.location!.trim() : '') ||
+    serviceAreaCity ||
     '';
 
-  let regionCode = 'IN';
-  if (verifiedAddress && /(usa|united states|texas|tx|ca|ny|california)/i.test(verifiedAddress)) {
-    regionCode = 'US';
-  } else if (tenant?.country) {
-    regionCode = tenant.country.toUpperCase();
+  let regionCode = gbpRegionCode || 'IN';
+  if (!gbpRegionCode) {
+    if (verifiedAddress && /(usa|united states|texas|tx|ca|ny|california)/i.test(verifiedAddress)) {
+      regionCode = 'US';
+    } else if (tenant?.country) {
+      const c = tenant.country.trim().toUpperCase();
+      regionCode = c === 'INDIA' ? 'IN' : c === 'UNITED STATES' || c === 'USA' ? 'US' : c.slice(0, 2);
+    }
   }
 
   const searchSubject = opts?.keyword?.trim() || industry;
-  const query = queryCity ? `${searchSubject} in ${queryCity}`.trim() : `${searchSubject} near me`.trim();
-  const locationUsed = queryCity || 'Nearby';
+  const countrySuffix = regionCode === 'IN' && queryCity && !/india/i.test(queryCity) ? ', India' : '';
+  const query = queryCity ? `${searchSubject} in ${queryCity}${countrySuffix}`.trim() : `${searchSubject}`.trim();
+  const locationUsed = queryCity || 'Local Area';
 
   try {
     const payload: any = {
@@ -264,6 +286,19 @@ export async function fetchPlacesCompetitors(
       const p = rawPlaces[idx];
       const name = p.displayName?.text;
       if (!name) continue;
+      const addrLower = String(p.formattedAddress || '').toLowerCase();
+      if (
+        regionCode === 'IN' &&
+        addrLower &&
+        /\b(lithuania|jonava|kaunas|vilnius|united states|usa|united kingdom|germany|poland|france|canada|australia)\b/i.test(
+          addrLower,
+        )
+      ) {
+        continue;
+      }
+      if (regionCode === 'US' && addrLower && /\b(india|lithuania|jonava|kaunas|united kingdom)\b/i.test(addrLower)) {
+        continue;
+      }
       const isOwnListing =
         (gbpPlaceId && p.id === gbpPlaceId) ||
         (selfName && name.toLowerCase().includes(selfName));

@@ -242,7 +242,7 @@ export function SeoAuditTab({
               No website linked — AI assistants cannot cite your services yet
             </Text>
             <Text style={{ fontSize: 11, color: '#78350F', lineHeight: 16 }}>
-              Activate your free SEO mini-site ({presence?.hostedCanonicalUrl || 'fieseros.com'}) in 1 tap with LocalBusiness JSON-LD &amp; FAQs, then auto-sync to Google Business Profile.
+              Activate your free SEO mini-site ({presence?.hostedCanonicalUrl || 'bgos.site'}) in 1 tap with LocalBusiness JSON-LD &amp; FAQs, then auto-sync to Google Business Profile.
             </Text>
             <Pressable
               disabled={Boolean(fixingKey)}

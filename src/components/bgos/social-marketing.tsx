@@ -2784,7 +2784,7 @@ export function SocialMediaView({
     const ctaText =
       type === 'call'
         ? `\n\n📞 Call or WhatsApp us: 8505945123`
-        : `\n\n🌐 Visit our website: https://fieseros.com`;
+        : `\n\n🌐 Visit our website: https://bgos.site`;
     const updated = (text + ctaText).trim();
     if (generatedCaption) setGeneratedCaption(updated);
     else setStudioPrompt(updated);
@@ -5459,7 +5459,7 @@ export function SocialMediaView({
                       <PhoneCall className="size-3 text-white" /> 8505945123
                     </span>
                     <span className="flex items-center gap-1">
-                      <Globe className="size-3 text-white" /> fieseros.com
+                      <Globe className="size-3 text-white" /> bgos.site
                     </span>
                   </div>
                 </div>

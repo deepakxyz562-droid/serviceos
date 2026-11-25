@@ -5,6 +5,14 @@ import { GET as getSuggestions } from '@/app/api/social/designs/business-images/
 import { getMultiSourceCategoryVisuals } from '@/lib/designs/multi-source-creative-engine';
 import { getCategoryVisualPool } from '@/lib/designs/dynamic-visual-resolver';
 
+const { callAIMock } = vi.hoisted(() => ({
+  callAIMock: vi.fn(),
+}));
+
+vi.mock('@/lib/ai-client', () => ({
+  callAI: callAIMock,
+}));
+
 vi.mock('@/lib/auth', () => ({
   getAuthUser: vi.fn().mockResolvedValue({
     id: 'user_fieseros',
@@ -23,6 +31,7 @@ vi.mock('@/lib/db', () => ({
         industry: 'Software & Technology',
         city: 'Indore',
       }),
+      update: vi.fn().mockResolvedValue({ id: 'tenant_fieseros_saas' }),
     },
     brandProfile: {
       findUnique: vi.fn().mockImplementation((args: any) => {
@@ -57,6 +66,49 @@ vi.mock('@/lib/db', () => ({
 describe('Business Image Generation & Visual Pool Resilience', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    callAIMock.mockResolvedValue({
+      content: JSON.stringify({
+        brandVisualDirection: 'Minimalist sunlit tech studio with crisp cobalt and emerald displays.',
+        scenes: [
+          {
+            id: 'tech-1',
+            title: 'SaaS Cloud Telemetry Workstation',
+            icon: '💻',
+            badge: 'CLOUD SAAS',
+            category: 'software_product_showcase',
+            sceneDescription: 'Modern software workstation displaying live operational cloud analytics.',
+            promptBlueprint: 'Clean commercial studio photo of dual monitors displaying sleek cloud SaaS dashboards in an Indore engineering office. NO TEXT, no words, no letters.',
+          },
+          {
+            id: 'tech-2',
+            title: 'Mobile Field Architecture Preview',
+            icon: '📱',
+            badge: 'MOBILE ARCHITECTURE',
+            category: 'mobile_app_interface',
+            sceneDescription: 'Contemporary smartphone showcasing field app deployment flows.',
+            promptBlueprint: 'Studio product photography of a sleek floating smartphone showing clean mobile dispatch UI cards. NO TEXT, no words, no letters.',
+          },
+          {
+            id: 'tech-3',
+            title: 'Engineering Collaboration Sprint Hub',
+            icon: '🏢',
+            badge: 'ENGINEERING STUDIO',
+            category: 'collaborative_workspace',
+            sceneDescription: 'Glass-walled tech office with engineers planning sprint milestones.',
+            promptBlueprint: 'Commercial photography inside a sunlit contemporary engineering workspace with modern collaborative desks. NO TEXT, no words, no letters.',
+          },
+          {
+            id: 'tech-4',
+            title: 'Enterprise Client Architecture Review',
+            icon: '🤝',
+            badge: 'CLIENT STRATEGY',
+            category: 'enterprise_consultation',
+            sceneDescription: 'Tech architect presenting cloud architecture to an enterprise partner.',
+            promptBlueprint: 'Documentary style corporate photography of a software lead reviewing scalable deployment on a glass board with a client. NO TEXT, no words, no letters.',
+          },
+        ],
+      }),
+    });
   });
 
   it('queries brandProfile by tenantId and returns curated commercial photography when AI generation is invoked', async () => {
@@ -150,8 +202,8 @@ describe('Business Image Generation & Visual Pool Resilience', () => {
       expect(data.success).toBe(false);
       expect(data.error).toBeTruthy();
       expect(data.message).toBeTruthy();
-      expect(data.supportEmail).toBe('support@fieseros.com');
-      expect(data.supportMailto).toContain('mailto:support@fieseros.com');
+      expect(data.supportEmail).toBe('support@bgos.site');
+      expect(data.supportMailto).toContain('mailto:support@bgos.site');
     } finally {
       process.env.VITEST = originalVitest;
       process.env.NODE_ENV = originalNodeEnv;

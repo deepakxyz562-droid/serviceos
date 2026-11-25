@@ -26,7 +26,7 @@
  * Enter to add).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Brain,
   Sparkles,
@@ -44,6 +44,10 @@ import {
   MessageSquare,
   Package,
   Trophy,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+  Palette,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -510,6 +514,14 @@ export function BrandBrainView() {
   const [saving, setSaving] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
 
+  // Visual Identity & Logo state synced with Tenant.logo + brandDetails
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [brandColor, setBrandColor] = useState<string>('#059669');
+  const [secondaryColor, setSecondaryColor] = useState<string>('#0F172A');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   // ── Load existing BrandProfile on mount ────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -528,6 +540,12 @@ export function BrandBrainView() {
         const data = await res.json();
         const profile = data?.profile;
         if (!cancelled) {
+          if (data?.tenantId) setTenantId(data.tenantId);
+          const resolvedLogo = data?.brandDetails?.logoUrl || data?.logo || null;
+          setLogoUrl(resolvedLogo);
+          if (data?.brandDetails?.brandColor) setBrandColor(data.brandDetails.brandColor);
+          if (data?.brandDetails?.secondaryColor) setSecondaryColor(data.brandDetails.secondaryColor);
+
           if (profile) {
             const formState = recordToForm(profile);
             setForm(formState);
@@ -559,6 +577,73 @@ export function BrandBrainView() {
     [],
   );
 
+  // ── Logo upload / remove handlers ──────────────────────────────────────
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo file must be under 10 MB.');
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      let uploadedUrl: string | null = null;
+
+      if (tenantId) {
+        const res = await fetch(`/api/tenants/${tenantId}/logo`, {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.logoUrl) {
+          throw new Error(data.error || 'Failed to upload logo');
+        }
+        uploadedUrl = data.logoUrl;
+      } else {
+        fd.append('folder', 'brand-logos');
+        fd.append('visibility', 'public');
+        const res = await fetch('/api/omnichannel/upload', {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.url) {
+          throw new Error(data.error || 'Failed to upload logo');
+        }
+        uploadedUrl = data.url;
+      }
+
+      setLogoUrl(uploadedUrl);
+      toast.success('Brand logo uploaded and synchronized everywhere.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Logo upload failed');
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!tenantId) {
+      setLogoUrl(null);
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/logo`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove logo');
+      setLogoUrl(null);
+      toast.success('Brand logo removed.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   // ── Save handler ───────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!form.businessName.trim()) {
@@ -574,7 +659,14 @@ export function BrandBrainView() {
       const res = await fetch('/api/brand-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          brandDetails: {
+            logoUrl,
+            brandColor,
+            secondaryColor,
+          },
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -676,6 +768,103 @@ export function BrandBrainView() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
             {/* ── LEFT: form ──────────────────────────────────────────── */}
             <div className="flex flex-col gap-4">
+              {/* Visual Identity & Logo */}
+              <Card>
+                <CardHeader>
+                  <SectionHeader
+                    icon={Palette}
+                    title="Logo & Visual Identity"
+                    description="Your company logo and brand colors — synced across Marketing Studio, QR Standees, Invoices, and Mobile."
+                  />
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted/40">
+                      {logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={logoUrl} alt="Company Logo" className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <ImageIcon className="size-7 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        onChange={handleLogoFileChange}
+                        className="hidden"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={uploadingLogo}
+                          className="gap-1.5"
+                        >
+                          {uploadingLogo ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="size-3.5" />
+                          )}
+                          {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                        </Button>
+                        {logoUrl && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemoveLogo}
+                            disabled={uploadingLogo}
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        PNG, JPG, WebP, or SVG up to 10 MB.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="bb-primary-color" className="text-xs text-muted-foreground">
+                        Primary Color
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id="bb-primary-color"
+                          type="color"
+                          value={brandColor}
+                          onChange={(e) => setBrandColor(e.target.value)}
+                          className="h-8 w-8 cursor-pointer rounded border p-0.5"
+                        />
+                        <span className="font-mono text-xs text-muted-foreground">{brandColor}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="bb-secondary-color" className="text-xs text-muted-foreground">
+                        Secondary
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id="bb-secondary-color"
+                          type="color"
+                          value={secondaryColor}
+                          onChange={(e) => setSecondaryColor(e.target.value)}
+                          className="h-8 w-8 cursor-pointer rounded border p-0.5"
+                        />
+                        <span className="font-mono text-xs text-muted-foreground">{secondaryColor}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Identity */}
               <Card>
                 <CardHeader>

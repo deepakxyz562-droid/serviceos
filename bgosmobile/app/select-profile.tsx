@@ -1065,7 +1065,7 @@ export default function SelectProfileScreen() {
                 <TextInput
                   value={editName}
                   onChangeText={setEditName}
-                  placeholder="e.g. FieserOS, Apex Care"
+                  placeholder="e.g. ShieldHire Security, Apex Care"
                   placeholderTextColor="#94A3B8"
                   style={{
                     borderWidth: 1,

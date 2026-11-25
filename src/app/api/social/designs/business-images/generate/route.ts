@@ -5,7 +5,7 @@ import { generateDesignImage, resolveCuratedImageFallback, type ImageProvider } 
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
 import {
-  generateBusinessSceneSuggestions,
+  getOrGenerateCachedSceneSuggestions,
   generateSeoMetadataForScene,
   type GeneratedSeoMetadata,
 } from '@/lib/designs/business-image-suggestions';
@@ -119,21 +119,25 @@ export async function POST(request: NextRequest) {
 
     let gbpCategory = '';
     let gbpTitle = '';
+    let gbpCity = '';
     if (gbpAccount?.metadata) {
       try {
         const meta = typeof gbpAccount.metadata === 'string' ? JSON.parse(gbpAccount.metadata) : gbpAccount.metadata;
         gbpCategory = meta.primaryCategory || meta.category || '';
         gbpTitle = meta.locationTitle || meta.businessName || '';
+        gbpCity = meta.city || '';
       } catch {
         // ignore
       }
     }
 
-    if (!gbpCategory && tenant?.settingsJson) {
+    let settingsCity = '';
+    if (tenant?.settingsJson) {
       try {
         const s = JSON.parse(tenant.settingsJson);
-        gbpCategory = s.activeGbpCategory || '';
+        if (!gbpCategory) gbpCategory = s.activeGbpCategory || '';
         if (!gbpTitle) gbpTitle = s.activeGbpTitle || '';
+        settingsCity = s.activeGbpCity || '';
       } catch {
         // ignore
       }
@@ -152,7 +156,17 @@ export async function POST(request: NextRequest) {
       tenant?.industry ||
       'Services';
 
-    const city = brandProfile?.location || tenant?.city || 'Patna';
+    const cleanLoc = (v?: string | null) => {
+      const s = (v || '').trim();
+      return !s || /^(not specified|n\/a|none|unknown|your city)$/i.test(s) ? '' : s;
+    };
+    const city =
+      cleanLoc(gbpCity) ||
+      cleanLoc(settingsCity) ||
+      cleanLoc(tenant?.city) ||
+      cleanLoc(brandProfile?.location) ||
+      cleanLoc(brandProfile?.serviceArea?.split(',')[0]) ||
+      '';
     const services = merchantServices.map((s) => s.name).filter(Boolean);
     const folder = getCategoryStorageFolder(category);
 
@@ -163,12 +177,22 @@ export async function POST(request: NextRequest) {
     if (body.promptBlueprint?.trim()) {
       scenesToGenerate.push(body.promptBlueprint.trim());
     } else {
-      const suggestions = await generateBusinessSceneSuggestions({
-        businessName,
-        category,
-        services,
-        city,
+      const suggestionResult = await getOrGenerateCachedSceneSuggestions({
+        tenantId: user.tenantId,
+        existingSettingsJson: tenant?.settingsJson,
+        context: {
+          tenantId: user.tenantId,
+          businessName,
+          category,
+          services,
+          city,
+          usps: brandProfile?.usps || null,
+          targetCustomer: brandProfile?.targetCustomer || null,
+          tone: brandProfile?.tone || null,
+          voiceDescription: brandProfile?.voiceDescription || null,
+        },
       });
+      const suggestions = suggestionResult.suggestions;
 
       if (body.suggestionId) {
         const target = suggestions.find((s) => s.id === body.suggestionId);
@@ -181,8 +205,10 @@ export async function POST(request: NextRequest) {
       if (scenesToGenerate.length === 0) {
         const count = body.generateAll ? suggestions.length : 1;
         for (let i = 0; i < count; i++) {
-          scenesToGenerate.push(suggestions[i].promptBlueprint);
-          if (i === 0 && !activeSceneTitle) activeSceneTitle = suggestions[i].title;
+          if (suggestions[i]?.promptBlueprint) {
+            scenesToGenerate.push(suggestions[i].promptBlueprint);
+            if (i === 0 && !activeSceneTitle) activeSceneTitle = suggestions[i].title;
+          }
         }
       }
     }
@@ -228,7 +254,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < scenesToGenerate.length; i++) {
       const prompt = scenesToGenerate[i];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 75000);
+      const timeout = setTimeout(() => controller.abort(), 16000);
 
       let imageBytes: Buffer | null = null;
 
@@ -353,7 +379,7 @@ export async function POST(request: NextRequest) {
         userMessage = `AI diffusion rendering timed out. Please try another scene or retry.`;
       }
 
-      const supportEmail = 'support@fieseros.com';
+      const supportEmail = 'support@bgos.site';
       const subject = encodeURIComponent(`AI Image Generation Issue: ${businessName}`);
       const body = encodeURIComponent(`Business: ${businessName}\nCategory: ${category}\nError: ${rawError}`);
       const supportMailto = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
