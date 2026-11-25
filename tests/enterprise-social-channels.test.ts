@@ -67,7 +67,7 @@ vi.mock('@/lib/social/adapters/googlebusiness', () => ({
 
 import { POST as postPhotos } from '@/app/api/social/photos/route';
 import { GET as linkedinOAuth } from '@/app/api/oauth/linkedin/route';
-import { isProviderKeyRowQuotaExhausted } from '@/lib/designs/image-provider';
+import { isProviderKeyRowQuotaExhausted, parseMultiEnvKeys } from '@/lib/designs/image-provider';
 import { resolveDeduplicatedCampaignTargets } from '@/lib/social/batch-campaign-runner';
 import {
   dedupePublishTargets,
@@ -246,5 +246,14 @@ describe('Enterprise Social Channels & Campaign Scoping', () => {
     ).toBe(false);
 
     expect(isProviderKeyRowQuotaExhausted({ lastError: null, lastErrorAt: null })).toBe(false);
+  });
+
+  it('parses and deduplicates multi-key OpenRouter env configuration', () => {
+    const keys = parseMultiEnvKeys([
+      'sk-or-v1-keyA, sk-or-v1-keyB\nsk-or-v1-keyA',
+      'sk-or-v1-keyC',
+      undefined,
+    ]);
+    expect(keys).toEqual(['sk-or-v1-keyA', 'sk-or-v1-keyB', 'sk-or-v1-keyC']);
   });
 });

@@ -57,14 +57,47 @@ interface CachedCloudflareConfig {
 
 let warmKeyCacheExpiresAt = 0;
 const providerCredCache = new Map<string, ResolvedCredential | null>();
+const providerCredPoolCache = new Map<string, ResolvedCredential[]>();
+const secretCooldowns = new Map<string, number>();
 let cloudflareCredCache: CachedCloudflareConfig | null | undefined;
 const providerCooldowns = new Map<ImageProvider, { until: number; reason: string }>();
 
 export function invalidateImageProviderCache(): void {
   warmKeyCacheExpiresAt = 0;
   providerCredCache.clear();
+  providerCredPoolCache.clear();
+  secretCooldowns.clear();
   cloudflareCredCache = undefined;
   providerCooldowns.clear();
+}
+
+function isSecretInCooldown(secret: string): boolean {
+  if (IS_TEST_ENV) return false;
+  const until = secretCooldowns.get(secret);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    secretCooldowns.delete(secret);
+    return false;
+  }
+  return true;
+}
+
+function recordSecretFailureCooldown(secret: string, status: number, keyRowId: string | null, errText: string): void {
+  if (IS_TEST_ENV) return;
+  if (status === 401 || status === 402 || status === 403 || status === 429) {
+    secretCooldowns.set(secret, Date.now() + QUOTA_COOLDOWN_MS);
+    if (keyRowId) {
+      void (db.aiProviderKey as unknown as { update?: (args: any) => Promise<any> })
+        ?.update?.({
+          where: { id: keyRowId },
+          data: {
+            lastError: `HTTP ${status}: ${errText.slice(0, 300)}`,
+            lastErrorAt: new Date(),
+          },
+        })
+        ?.catch?.(() => {});
+    }
+  }
 }
 
 if (!IS_TEST_ENV) {
@@ -137,18 +170,49 @@ function parseCredentialValue(decrypted: string): {
   return { secret, baseUrl, modelOverride };
 }
 
-function envSecretForProvider(provider: ApiKeyProvider): string | undefined {
-  const raw =
+export function parseMultiEnvKeys(rawValues: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of rawValues) {
+    if (!raw || typeof raw !== 'string') continue;
+    for (const part of raw.split(/[\n,;]+/)) {
+      const cleaned = part.trim();
+      if (cleaned && !seen.has(cleaned)) {
+        seen.add(cleaned);
+        out.push(cleaned);
+      }
+    }
+  }
+  return out;
+}
+
+function envSecretsForProvider(provider: ApiKeyProvider): string[] {
+  const prefix =
     provider === 'gemini'
-      ? process.env.GEMINI_API_KEY
+      ? 'GEMINI'
       : provider === 'openrouter'
-        ? process.env.OPENROUTER_API_KEY
+        ? 'OPENROUTER'
         : provider === 'siliconflow'
-          ? process.env.SILICONFLOW_API_KEY
+          ? 'SILICONFLOW'
           : provider === 'kie'
-            ? process.env.KIE_API_KEY
-            : process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY;
-  return raw && raw.trim() ? raw.trim() : undefined;
+            ? 'KIE'
+            : 'NVIDIA';
+
+  const candidates: Array<string | undefined> = [
+    process.env[`${prefix}_API_KEYS`],
+    process.env[`${prefix}_API_KEY`],
+  ];
+  if (provider === 'nvidia') {
+    candidates.push(process.env.NVAPI_KEY);
+  }
+  for (let i = 2; i <= 10; i++) {
+    candidates.push(process.env[`${prefix}_API_KEY_${i}`]);
+  }
+  return parseMultiEnvKeys(candidates);
+}
+
+function envSecretForProvider(provider: ApiKeyProvider): string | undefined {
+  return envSecretsForProvider(provider)[0];
 }
 
 async function warmImageKeyCache(): Promise<void> {
@@ -165,33 +229,43 @@ async function warmImageKeyCache(): Promise<void> {
       orderBy: { priority: 'asc' },
     });
     providerCredCache.clear();
+    providerCredPoolCache.clear();
     let cfRow: any | null = null;
     for (const prov of ['gemini', 'openrouter', 'siliconflow', 'nvidia', 'kie'] as ApiKeyProvider[]) {
       const providerRows = (rows || []).filter((r: any) => r?.provider === prov && r?.encryptedKey);
-      const healthyMatch = providerRows.find((r: any) => !isProviderKeyRowQuotaExhausted(r));
-      if (healthyMatch?.encryptedKey) {
-        const parsed = parseCredentialValue(decryptKey(healthyMatch.encryptedKey));
-        providerCredCache.set(
-          prov,
-          parsed.secret
-            ? {
-                secret: parsed.secret,
-                keyRowId: healthyMatch.id,
-                baseUrl: parsed.baseUrl,
-                modelOverride: parsed.modelOverride,
-              }
-            : null,
-        );
-      } else {
-        const envSecret = envSecretForProvider(prov);
-        const exhaustedRow = providerRows.find((r: any) => isProviderKeyRowQuotaExhausted(r));
-        if (exhaustedRow && !envSecret) {
-          providerCooldowns.set(prov, {
-            until: Date.now() + QUOTA_COOLDOWN_MS,
-            reason: `${prov} key recently reported quota exhaustion`,
-          });
+      const pool: ResolvedCredential[] = [];
+      const seenSecrets = new Set<string>();
+
+      for (const row of providerRows) {
+        if (isProviderKeyRowQuotaExhausted(row)) continue;
+        try {
+          const parsed = parseCredentialValue(decryptKey(row.encryptedKey));
+          if (parsed.secret && !seenSecrets.has(parsed.secret)) {
+            seenSecrets.add(parsed.secret);
+            pool.push({
+              secret: parsed.secret,
+              keyRowId: row.id,
+              baseUrl: parsed.baseUrl,
+              modelOverride: parsed.modelOverride,
+            });
+          }
+        } catch {}
+      }
+
+      for (const envSecret of envSecretsForProvider(prov)) {
+        if (!seenSecrets.has(envSecret)) {
+          seenSecrets.add(envSecret);
+          pool.push({ secret: envSecret, keyRowId: null });
         }
-        providerCredCache.set(prov, envSecret ? { secret: envSecret, keyRowId: null } : null);
+      }
+
+      providerCredPoolCache.set(prov, pool);
+      providerCredCache.set(prov, pool[0] ?? null);
+      if (pool.length === 0 && providerRows.some((r: any) => isProviderKeyRowQuotaExhausted(r))) {
+        providerCooldowns.set(prov, {
+          until: Date.now() + QUOTA_COOLDOWN_MS,
+          reason: `${prov} key recently reported quota exhaustion`,
+        });
       }
     }
     cfRow = (rows || []).find((r: any) => r?.provider === 'cloudflare' && r?.encryptedKey) || null;
@@ -1167,34 +1241,70 @@ Rules:
   return buildHighQualityImagePrompt(rawPrompt, isPosterMode, context);
 }
 
-async function resolveProviderCredential(provider: ApiKeyProvider): Promise<ResolvedCredential | null> {
+async function resolveProviderCredentials(provider: ApiKeyProvider): Promise<ResolvedCredential[]> {
   await warmImageKeyCache();
-  if (!IS_TEST_ENV && Date.now() < warmKeyCacheExpiresAt && providerCredCache.has(provider)) {
-    return providerCredCache.get(provider) ?? null;
+  if (!IS_TEST_ENV && Date.now() < warmKeyCacheExpiresAt && providerCredPoolCache.has(provider)) {
+    return (providerCredPoolCache.get(provider) || []).filter((c) => !isSecretInCooldown(c.secret));
   }
 
-  const key = await db.aiProviderKey.findFirst({
-    where: { provider, isActive: true },
-    orderBy: { priority: 'asc' },
-  }).catch(() => null);
-
-  if (key?.encryptedKey) {
-    const parsed = parseCredentialValue(decryptKey(key.encryptedKey));
-    if (parsed.secret) {
-      return {
-        secret: parsed.secret,
-        keyRowId: key.id,
-        baseUrl: parsed.baseUrl,
-        modelOverride: parsed.modelOverride,
-      };
+  const pool: ResolvedCredential[] = [];
+  const seen = new Set<string>();
+  const findMany = (db.aiProviderKey as unknown as { findMany?: (args: any) => Promise<any[]> })?.findMany;
+  if (typeof findMany === 'function') {
+    const rows = await findMany({
+      where: { provider, isActive: true },
+      orderBy: { priority: 'asc' },
+    }).catch(() => []);
+    for (const row of rows || []) {
+      if (!row?.encryptedKey || isProviderKeyRowQuotaExhausted(row)) continue;
+      try {
+        const parsed = parseCredentialValue(decryptKey(row.encryptedKey));
+        if (parsed.secret && !seen.has(parsed.secret) && !isSecretInCooldown(parsed.secret)) {
+          seen.add(parsed.secret);
+          pool.push({
+            secret: parsed.secret,
+            keyRowId: row.id,
+            baseUrl: parsed.baseUrl,
+            modelOverride: parsed.modelOverride,
+          });
+        }
+      } catch {}
+    }
+  } else {
+    const key = await db.aiProviderKey
+      .findFirst({
+        where: { provider, isActive: true },
+        orderBy: { priority: 'asc' },
+      })
+      .catch(() => null);
+    if (key?.encryptedKey) {
+      try {
+        const parsed = parseCredentialValue(decryptKey(key.encryptedKey));
+        if (parsed.secret && !seen.has(parsed.secret) && !isSecretInCooldown(parsed.secret)) {
+          seen.add(parsed.secret);
+          pool.push({
+            secret: parsed.secret,
+            keyRowId: key.id,
+            baseUrl: parsed.baseUrl,
+            modelOverride: parsed.modelOverride,
+          });
+        }
+      } catch {}
     }
   }
 
-  const envSecret = envSecretForProvider(provider);
-  if (envSecret) {
-    return { secret: envSecret, keyRowId: null };
+  for (const envSecret of envSecretsForProvider(provider)) {
+    if (!seen.has(envSecret) && !isSecretInCooldown(envSecret)) {
+      seen.add(envSecret);
+      pool.push({ secret: envSecret, keyRowId: null });
+    }
   }
-  return null;
+  return pool;
+}
+
+async function resolveProviderCredential(provider: ApiKeyProvider): Promise<ResolvedCredential | null> {
+  const pool = await resolveProviderCredentials(provider);
+  return pool[0] ?? null;
 }
 
 function parseProviderImageResponse(
@@ -1241,104 +1351,99 @@ async function callOpenRouterImage(params: {
   dims?: ImageDimensions;
   signal: AbortSignal;
 }): Promise<GeneratedImageResult> {
-  const cred = await resolveProviderCredential('openrouter');
-  if (!cred) {
+  const creds = await resolveProviderCredentials('openrouter');
+  if (creds.length === 0) {
     throw new Error('Configure an active openrouter key in Superadmin or OPENROUTER_API_KEY in .env');
   }
 
-  const configuredModel =
-    cred.modelOverride ||
-    process.env.BGOS_OPENROUTER_IMAGE_MODEL?.trim() ||
-    'recraft/recraft-v4.1-flash-v2:free';
+  let lastErr: Error | null = null;
+  for (let idx = 0; idx < creds.length; idx++) {
+    if (params.signal.aborted) break;
+    const cred = creds[idx];
+    const configuredModel =
+      cred.modelOverride ||
+      process.env.BGOS_OPENROUTER_IMAGE_MODEL?.trim() ||
+      'recraft/recraft-v4.1-flash-v2:free';
 
-  const isDedicatedImagesEndpoint =
-    !configuredModel.includes('chat') && !configuredModel.includes('completions');
+    const isDedicatedImagesEndpoint =
+      !configuredModel.includes('chat') && !configuredModel.includes('completions');
 
-  const requestUrl = isDedicatedImagesEndpoint
-    ? 'https://openrouter.ai/api/v1/images'
-    : 'https://openrouter.ai/api/v1/chat/completions';
+    const requestUrl = isDedicatedImagesEndpoint
+      ? 'https://openrouter.ai/api/v1/images'
+      : 'https://openrouter.ai/api/v1/chat/completions';
 
-  const requestBody: Record<string, any> = isDedicatedImagesEndpoint
-    ? {
-        model: configuredModel,
-        prompt: params.promptText,
-      }
-    : {
-        model: configuredModel,
-        messages: [{ role: 'user', content: params.promptText }],
-        modalities: ['image', 'text'],
-      };
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${cred.secret}`,
-    'HTTP-Referer': 'https://bgos.site',
-    'X-Title': 'BGOS Marketing',
-  };
-
-  let response: Response;
-  try {
-    response = await fetch(requestUrl, {
-      method: 'POST',
-      signal: combineSignals(params.signal, 10_000),
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-  } catch (err) {
-    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
-      throw new ProviderRequestError('openrouter image generation failed (504)', 504);
-    }
-    throw err;
-  }
-
-  if (!response.ok) {
-    const envSecret = envSecretForProvider('openrouter');
-    if (cred.keyRowId && envSecret && envSecret !== cred.secret && (response.status === 429 || response.status === 401 || response.status === 403)) {
-      console.warn(`[image-provider] DB key for openrouter returned ${response.status}, retrying with environment secret`);
-      try {
-        const retryRes = await fetch(requestUrl, {
-          method: 'POST',
-          signal: combineSignals(params.signal, 10_000),
-          headers: {
-            ...headers,
-            Authorization: `Bearer ${envSecret}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-        if (retryRes.ok) {
-          response = retryRes;
+    const requestBody: Record<string, any> = isDedicatedImagesEndpoint
+      ? {
+          model: configuredModel,
+          prompt: params.promptText,
         }
-      } catch {}
+      : {
+          model: configuredModel,
+          messages: [{ role: 'user', content: params.promptText }],
+          modalities: ['image', 'text'],
+        };
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cred.secret}`,
+      'HTTP-Referer': 'https://bgos.site',
+      'X-Title': 'BGOS Marketing',
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(requestUrl, {
+        method: 'POST',
+        signal: combineSignals(params.signal, 10_000),
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+    } catch (err) {
+      if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+        lastErr = new ProviderRequestError('openrouter image generation failed (504)', 504);
+        continue;
+      }
+      throw err;
     }
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      const accountQuotaExhausted =
+        response.status === 401 ||
+        response.status === 402 ||
+        response.status === 403 ||
+        (response.status === 429 && /quota|exceeded|credit|balance|limit|rate/i.test(errText));
+      if (accountQuotaExhausted) {
+        recordSecretFailureCooldown(cred.secret, response.status, cred.keyRowId, errText);
+      }
+      lastErr = new ProviderRequestError(
+        `openrouter image generation failed (${response.status})`,
+        response.status,
+        accountQuotaExhausted,
+      );
+      if (idx < creds.length - 1 && [401, 402, 403, 429].includes(response.status)) {
+        console.warn(`[image-provider] openrouter key #${idx + 1} returned ${response.status}; rotating to next key`);
+        continue;
+      }
+      throw lastErr;
+    }
+
+    const data = await response.json();
+    const encoded = parseProviderImageResponse('openrouter', data);
+    if (!encoded) {
+      throw new UnsupportedImagePayloadError('The provider did not return a supported image');
+    }
+
+    await recordProviderKeyUsage(cred.keyRowId);
+
+    return {
+      bytes: Buffer.from(encoded, 'base64'),
+      model: configuredModel,
+      cost: typeof data.usage?.cost === 'number' ? data.usage.cost : 0,
+    };
   }
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    const accountQuotaExhausted =
-      response.status === 401 ||
-      response.status === 402 ||
-      response.status === 403 ||
-      (response.status === 429 && /quota|exceeded|credit|balance|limit|rate/i.test(errText));
-    throw new ProviderRequestError(
-      `openrouter image generation failed (${response.status})`,
-      response.status,
-      accountQuotaExhausted,
-    );
-  }
-
-  const data = await response.json();
-  const encoded = parseProviderImageResponse('openrouter', data);
-  if (!encoded) {
-    throw new UnsupportedImagePayloadError('The provider did not return a supported image');
-  }
-
-  await recordProviderKeyUsage(cred.keyRowId);
-
-  return {
-    bytes: Buffer.from(encoded, 'base64'),
-    model: configuredModel,
-    cost: typeof data.usage?.cost === 'number' ? data.usage.cost : 0,
-  };
+  throw lastErr || new ProviderRequestError('openrouter image generation failed (429)', 429, true);
 }
 
 async function callGeminiOrOpenRouterImage(params: {

@@ -388,8 +388,8 @@ export async function POST(request: NextRequest) {
 
       let imageBytes: Buffer | null = null;
 
-      // Priority #1: NVIDIA FLUX.1 Schnell (~4s) -> immediate healthy fallback to Cloudflare Workers AI (~13s).
-      const preferredProvider: ImageProvider = 'nvidia';
+      // Priority #1: OpenRouter Recraft V4.1 Flash V2 (multi-key pool) -> immediate fallback to NVIDIA FLUX.1 Schnell -> Cloudflare.
+      const preferredProvider: ImageProvider = 'openrouter';
 
       try {
         const result = await generateDesignImage(

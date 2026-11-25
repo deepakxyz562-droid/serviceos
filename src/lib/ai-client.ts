@@ -193,12 +193,55 @@ const KEY_CHAIN_CACHE_MS = 60_000
  * DB read errors are caught + logged — the function still returns whatever
  * env-var fallback keys are available, so a DB outage never crashes the AI call.
  */
+function collectEnvKeysForProvider(provider: ProviderName): string[] {
+  const baseEnv = ENV_VAR_FOR_PROVIDER[provider]
+  const rawList: Array<string | undefined> = [
+    process.env[`${baseEnv}S`],
+    process.env[baseEnv],
+  ]
+  for (let i = 2; i <= 10; i++) {
+    rawList.push(process.env[`${baseEnv}_${i}`])
+  }
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of rawList) {
+    if (!raw || typeof raw !== 'string') continue
+    for (const part of raw.split(/[\n,;]+/)) {
+      const cleaned = part.trim()
+      if (cleaned && !seen.has(cleaned)) {
+        seen.add(cleaned)
+        out.push(cleaned)
+      }
+    }
+  }
+  return out
+}
+
+function isDbKeyRecentlyExhausted(row: { lastError?: string | null; lastErrorAt?: Date | string | null }): boolean {
+  if (!row?.lastError) return false
+  const isQuota = /\b402\b|prepayment credits|credits are depleted|insufficient.*balance|free-models-per-day|daily.*limit/i.test(
+    row.lastError,
+  )
+  if (!isQuota) return false
+  if (!row.lastErrorAt) return true
+  const ts = Date.parse(String(row.lastErrorAt))
+  if (!Number.isFinite(ts)) return true
+  return Date.now() - ts < 6 * 60 * 60 * 1000
+}
+
 export async function loadAiKeyChain(): Promise<KeyChain> {
   if (keyChainCache && keyChainCache.expiresAt > Date.now()) {
     return keyChainCache.data
   }
 
   const chain: KeyChain = {
+    nvidia: [],
+    openrouter: [],
+    openai: [],
+    anthropic: [],
+    gemini: [],
+  }
+  const exhaustedKeys: KeyChain = {
     nvidia: [],
     openrouter: [],
     openai: [],
@@ -229,13 +272,18 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
         )
         continue
       }
-      chain[row.provider].push({
+      const loaded: LoadedKey = {
         id: row.id,
         provider: row.provider,
         plaintext,
         priority: row.priority,
         source: 'db',
-      })
+      }
+      if (isDbKeyRecentlyExhausted(row)) {
+        exhaustedKeys[row.provider].push(loaded)
+      } else {
+        chain[row.provider].push(loaded)
+      }
     }
   } catch (err) {
     // DB unreachable / table missing / connection refused — fall back to env.
@@ -245,18 +293,27 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
     )
   }
 
-  // Env-var fallback per provider (only if DB has zero keys for it).
+  // Merge unique env keys per provider (supporting OPENROUTER_API_KEYS + OPENROUTER_API_KEY_2..10),
+  // appending any recently quota-exhausted DB keys at the tail of the rotation pool.
   for (const provider of PROVIDER_ORDER) {
-    if (chain[provider].length > 0) continue
-    const envVal = process.env[ENV_VAR_FOR_PROVIDER[provider]]
-    if (envVal) {
+    const seenPlaintext = new Set(chain[provider].map((k) => k.plaintext))
+    const envKeys = collectEnvKeysForProvider(provider)
+    envKeys.forEach((envVal, idx) => {
+      if (seenPlaintext.has(envVal)) return
+      seenPlaintext.add(envVal)
       chain[provider].push({
-        id: `env:${provider}`,
+        id: idx === 0 && chain[provider].length === 0 ? `env:${provider}` : `env:${provider}:${idx + 1}`,
         provider,
         plaintext: envVal,
-        priority: 0,
+        priority: 100 + idx,
         source: 'env',
       })
+    })
+    for (const ex of exhaustedKeys[provider]) {
+      if (!seenPlaintext.has(ex.plaintext)) {
+        seenPlaintext.add(ex.plaintext)
+        chain[provider].push(ex)
+      }
     }
   }
 
