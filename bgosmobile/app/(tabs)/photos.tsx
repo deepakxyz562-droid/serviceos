@@ -260,6 +260,11 @@ export default function PhotosScreen() {
           phone={gbpPlace.data?.place?.phone || gbpPlace.data?.tenantFallback?.phone || undefined}
           logoUrl={gbpPlace.data?.googlePicture || undefined}
           onSelectTemplate={handleSelectTemplate}
+          onPublished={async (msg) => {
+            setStatusBanner(msg);
+            await photosRes.refresh();
+            setViewMode('media');
+          }}
           onBack={() => setViewMode('media')}
         />
 

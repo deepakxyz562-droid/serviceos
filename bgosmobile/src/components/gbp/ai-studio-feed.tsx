@@ -20,6 +20,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
 import { BGOS_SUPPORT_EMAIL } from '../../lib/constants';
 import { resolveTemplateSource } from '../design/professional-assets';
+import {
+  ChannelSelectorSection,
+  useConnectedSocialChannels,
+} from '../social/channel-selector';
+import { getPlatformMeta, stripRawCtaLines } from '../social/platform-meta';
 
 export interface AiStudioQuota {
   used: number;
@@ -45,6 +50,7 @@ export interface StudioTemplateItem {
   targetKeywords?: Array<{ keyword: string; volume: number }>;
   estimatedViews?: number;
   defaultCaption?: string;
+  platforms?: string[];
 }
 
 interface AiStudioFeedProps {
@@ -54,6 +60,7 @@ interface AiStudioFeedProps {
   phone?: string;
   logoUrl?: string | null;
   onSelectTemplate: (template: StudioTemplateItem) => void;
+  onPublished?: (message: string) => void | Promise<void>;
   onBack: () => void;
 }
 
@@ -72,6 +79,7 @@ export function AiStudioFeed({
   phone,
   logoUrl,
   onSelectTemplate,
+  onPublished,
   onBack,
 }: AiStudioFeedProps) {
   const insets = useSafeAreaInsets();
@@ -108,6 +116,30 @@ export function AiStudioFeed({
   } | null>(null);
   const [activeGeneratingStep, setActiveGeneratingStep] = useState<string>('');
   const [refreshingSuggestions, setRefreshingSuggestions] = useState(false);
+  const { accounts: connectedChannels, reload: reloadChannels } =
+    useConnectedSocialChannels(createModalVisible);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['googlebusiness']);
+  const [publishingPhoto, setPublishingPhoto] = useState(false);
+
+  useEffect(() => {
+    if (!createModalVisible || connectedChannels.length === 0) return;
+    const available = Array.from(
+      new Set(
+        connectedChannels
+          .map((c) => (c.platform || '').trim().toLowerCase())
+          .filter((p) => ['googlebusiness', 'facebook', 'instagram', 'linkedin'].includes(p)),
+      ),
+    );
+    if (available.length > 0) {
+      setSelectedPlatforms((prev) => {
+        const valid = prev.filter((p) => available.includes(p));
+        if (valid.length > 1 || (valid.length === 1 && valid[0] !== 'googlebusiness')) {
+          return valid;
+        }
+        return available;
+      });
+    }
+  }, [createModalVisible, connectedChannels]);
 
   // ── AI Business Image Suggestions State (server-backed, context-cached) ──
   const [businessSuggestions, setBusinessSuggestions] = useState<
@@ -427,8 +459,58 @@ export function AiStudioFeed({
     }
   };
 
-  // Publish / Dispatch generated post to Google Business Profile & social publisher
-  const handlePublishGeneratedPost = () => {
+  // Direct 1-tap Publish Photo across checked social platforms
+  const handlePublishPhotoDirect = async () => {
+    if (!generatedPhotoUrl || publishingPhoto) return;
+    if (selectedPlatforms.length === 0) {
+      Alert.alert('Select a Channel', 'Please select at least one social platform before publishing.');
+      return;
+    }
+
+    setPublishingPhoto(true);
+    try {
+      const cleanDescription = stripRawCtaLines(generatedSeo?.description || '');
+      const hasSocialExtras = selectedPlatforms.some((p) => p !== 'googlebusiness');
+      const res = await apiRequest<{ success?: boolean; message?: string; error?: string }>(
+        '/api/social/photos',
+        {
+          method: 'POST',
+          body: {
+            postType: hasSocialExtras || cleanDescription ? 'whats_new' : 'photo_media',
+            platforms: selectedPlatforms,
+            title: generatedSeo?.title?.trim() || `${businessName} Commercial Photo`,
+            description: cleanDescription,
+            tags: generatedSeo?.tags || [],
+            category: 'ADDITIONAL',
+            mediaUrls: [generatedPhotoUrl],
+            photos: [generatedPhotoUrl],
+            photoUrl: generatedPhotoUrl,
+            scheduleMode: 'instant',
+          },
+        },
+      );
+
+      if (res?.error) {
+        throw new Error(res.error);
+      }
+
+      const channelNames = selectedPlatforms.map((p) => getPlatformMeta(p).shortLabel).join(', ');
+      const successMsg = res?.message || `Photo published live to ${channelNames}.`;
+      setCreateModalVisible(false);
+      await onPublished?.(successMsg);
+      Alert.alert('Photo Published', successMsg);
+    } catch (err: unknown) {
+      Alert.alert(
+        'Publish Failed',
+        err instanceof Error ? err.message : 'Could not publish photo to selected channels.',
+      );
+    } finally {
+      setPublishingPhoto(false);
+    }
+  };
+
+  // Forward to Ready to Post (branding overlay / daily schedule customization) with checked platforms
+  const handleCustomizeAndSchedule = () => {
     if (!generatedPhotoUrl) return;
     setCreateModalVisible(false);
     onSelectTemplate({
@@ -441,6 +523,7 @@ export function AiStudioFeed({
       tab: 'for_business',
       aspectRatio: selectedAspectRatio,
       photoUrl: generatedPhotoUrl,
+      platforms: selectedPlatforms,
     });
   };
 
@@ -970,17 +1053,57 @@ export function AiStudioFeed({
                 </View>
               </View>
             )}
+
+            {/* Channel Selector for Direct Publish (Google, Facebook, Instagram, LinkedIn) */}
+            {generatedPhotoUrl && (
+              <ChannelSelectorSection
+                selectedPlatforms={selectedPlatforms}
+                onChange={setSelectedPlatforms}
+                accounts={connectedChannels}
+                onAccountsChanged={reloadChannels}
+                title="Publishing Channels"
+                subtitle="Choose where this AI photo will be published"
+              />
+            )}
           </ScrollView>
 
-          {/* Action Footer: Publish Button */}
+          {/* Action Footer: Secondary Schedule/Branding + Primary Publish Photo */}
           {generatedPhotoUrl && (
-            <View style={styles.modalFooterBar}>
+            <View style={[styles.modalFooterBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
               <Pressable
-                onPress={handlePublishGeneratedPost}
-                style={styles.publishMainBtn}
+                onPress={handleCustomizeAndSchedule}
+                disabled={publishingPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Schedule or add branding"
+                style={styles.secondaryStudioBtn}
               >
-                <MaterialIcons name="send" size={18} color="#FFFFFF" />
-                <Text style={styles.publishMainBtnText}>🚀 Publish Post</Text>
+                <MaterialIcons name="tune" size={17} color="#0F172A" />
+                <Text style={styles.secondaryStudioBtnText}>Schedule</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => void handlePublishPhotoDirect()}
+                disabled={publishingPhoto || selectedPlatforms.length === 0}
+                accessibilityRole="button"
+                accessibilityLabel="Publish Photo"
+                style={[
+                  styles.publishMainBtn,
+                  { flex: 1 },
+                  (publishingPhoto || selectedPlatforms.length === 0) && { opacity: 0.65 },
+                ]}
+              >
+                {publishingPhoto ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="send" size={18} color="#FFFFFF" />
+                    <Text style={styles.publishMainBtnText}>
+                      {selectedPlatforms.length > 1
+                        ? `Publish Photo (${selectedPlatforms.length})`
+                        : 'Publish Photo'}
+                    </Text>
+                  </>
+                )}
               </Pressable>
             </View>
           )}
@@ -1465,10 +1588,30 @@ const styles = StyleSheet.create({
     color: '#009F50',
   },
   modalFooterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     padding: 14,
+  },
+  secondaryStudioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  secondaryStudioBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   publishMainBtn: {
     flexDirection: 'row',

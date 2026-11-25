@@ -234,6 +234,9 @@ export function MediaMetadataSheet({
       if (Array.isArray(editingItem.tags)) setTags(editingItem.tags);
     } else if (selectedTemplate) {
       applyTemplate(selectedTemplate);
+      if (Array.isArray(selectedTemplate.platforms) && selectedTemplate.platforms.length > 0) {
+        setSelectedPlatforms(selectedTemplate.platforms);
+      }
     } else if (pendingAssets.length > 0) {
       const first = pendingAssets[0];
       setActiveUploadItem(first);
@@ -247,6 +250,9 @@ export function MediaMetadataSheet({
 
   useEffect(() => {
     if (!visible || connectedChannels.length === 0) return;
+    if (Array.isArray(selectedTemplate?.platforms) && selectedTemplate.platforms.length > 0) {
+      return;
+    }
     const available = Array.from(
       new Set(
         connectedChannels
