@@ -343,14 +343,18 @@ function classifyHttpError(
     }
   }
   if (status === 429) {
-    // Model-specific upstream rate limits (common on free/preview pools)
-    // should try the next model with the same key before rotating keys.
+    const lowerBody = body.toLowerCase()
+    const isAccountQuotaLimit =
+      /free-models-per-day|rate limit exceeded|quota|credit|balance|daily|exceeded/i.test(lowerBody)
+    // Account-wide quota/daily limits cannot be solved by trying another model on the same key:
+    // rotate immediately to another key or fall through to the next healthy provider.
     const isModelSpecific =
-      provider === 'openrouter' ||
-      provider === 'nvidia' ||
-      body.toLowerCase().includes('model') ||
-      body.toLowerCase().includes('upstream') ||
-      body.toLowerCase().includes('provider returned error');
+      !isAccountQuotaLimit &&
+      (provider === 'openrouter' ||
+        provider === 'nvidia' ||
+        lowerBody.includes('model') ||
+        lowerBody.includes('upstream') ||
+        lowerBody.includes('provider returned error'))
     return {
       ok: false,
       status,
@@ -1015,7 +1019,10 @@ export async function callAI(
         // Failure — record + decide what to do next.
         lastErrorMsg = result.error
         recordKeyError(key, result.error)
-        recordTextProviderCooldown(provider, result.status, result.error)
+        const keysLeftOnProvider = keys.indexOf(key) < keys.length - 1
+        if (!keysLeftOnProvider || result.status !== 429) {
+          recordTextProviderCooldown(provider, result.status, result.error)
+        }
 
         if (result.shouldSwitchProvider) {
           console.warn(

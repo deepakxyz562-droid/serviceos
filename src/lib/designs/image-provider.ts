@@ -1111,7 +1111,7 @@ Rules:
         { role: 'user', content: userPayload },
       ],
       temperature: 0.3,
-      timeoutMs: 3_500,
+      timeoutMs: 2_500,
     });
 
     let synthesized = (aiRes.content || '').trim().replace(/^["']|["']$/g, '');

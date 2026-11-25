@@ -149,7 +149,7 @@ export function AiStudioFeed({
           promptBlueprint: string;
         }>;
       }>(`/api/social/designs/business-images/suggestions?${queryParams.toString()}`, {
-        timeoutMs: 25000,
+        timeoutMs: 42000,
       });
       if (res?.success && Array.isArray(res?.suggestions) && res.suggestions.length > 0) {
         setBusinessSuggestions(res.suggestions);

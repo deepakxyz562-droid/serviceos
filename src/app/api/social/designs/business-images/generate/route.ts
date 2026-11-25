@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { generateDesignImage, resolveCuratedImageFallback, type ImageProvider } from '@/lib/designs/image-provider';
+import { generateDesignImage, type ImageProvider } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
 import { evaluateBgosEntitlement, pickBestSubscriptionRow } from '@/lib/bgos-entitlement';
@@ -384,13 +384,11 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < scenesToGenerate.length; i++) {
       const prompt = scenesToGenerate[i];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 16000);
+      const timeout = setTimeout(() => controller.abort(), 35000);
 
       let imageBytes: Buffer | null = null;
 
-      // Smart initial provider selection:
-      // Prefer fast zero-cost OpenRouter Recraft (2s) or Gemini, avoiding rate-limited Cloudflare and timed-out NVIDIA.
-      // The automatic fallback cascade will try: OpenRouter -> Gemini -> Cloudflare -> KIE -> SiliconFlow -> NVIDIA.
+      // Priority #1: OpenRouter Recraft V4.1 Flash V2 -> immediate healthy fallback to NVIDIA FLUX.1 Schnell.
       const preferredProvider: ImageProvider = 'openrouter';
 
       try {
@@ -419,25 +417,6 @@ export async function POST(request: NextRequest) {
         generationErrors.push(msg);
       } finally {
         clearTimeout(timeout);
-      }
-
-      // Zero-failure fallback: If all cloud diffusion providers were busy/limited,
-      // gracefully resolve a high-resolution verified category visual
-      if (!imageBytes) {
-        try {
-          console.log(`[business-images/generate] AI providers exhausted for scene ${i + 1}, using curated stock fallback`);
-          const fallbackRes = await resolveCuratedImageFallback(prompt, {
-            category,
-            businessName,
-            city,
-            services,
-          });
-          if (fallbackRes.bytes && fallbackRes.bytes.length > 0) {
-            imageBytes = fallbackRes.bytes;
-          }
-        } catch (fbErr) {
-          console.warn(`[business-images/generate] Curated fallback error:`, fbErr);
-        }
       }
 
       if (!imageBytes) {

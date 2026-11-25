@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
     const services = servicesDetailed.map((s) => s.name);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 22_000);
+    const timeout = setTimeout(() => controller.abort(), 38_000);
 
     try {
       const result = await getOrGenerateCachedSceneSuggestions({

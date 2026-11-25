@@ -455,7 +455,7 @@ STRICT REQUIREMENTS:
         json: true,
         responseSchema: SCENE_IDEAS_RESPONSE_SCHEMA,
         temperature: attempt === 1 ? (ctx.isRefresh ? 0.85 : 0.65) : 0.75,
-        timeoutMs: 12_000,
+        timeoutMs: 24_000,
         ...(ctx.tenantId
           ? { usageContext: { tenantId: ctx.tenantId, feature: 'business_scene_suggestions' } }
           : {}),
