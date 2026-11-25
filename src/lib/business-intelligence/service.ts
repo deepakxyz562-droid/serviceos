@@ -117,18 +117,26 @@ export async function getBusinessIntelligence(
       } catch {}
     }
 
+    const tenantWithIndustry = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { industry: true, settingsJson: true, brandProfile: { select: { id: true, industry: true, services: true } } },
+    });
+    const isPlaceholderCat = (val?: string | null) =>
+      !val || /^(business|local business|local service pro|professional services|general|services)$/i.test(val.trim());
+
     currentSettings.businessIntelligence = intelligence;
     currentSettings.locationCategory = intelligence.businessCategory.value;
 
+    const shouldUpdateTenantIndustry = isPlaceholderCat(tenantWithIndustry?.industry);
     await db.tenant.update({
       where: { id: tenantId },
       data: {
-        industry: intelligence.businessCategory.value,
+        ...(shouldUpdateTenantIndustry ? { industry: intelligence.businessCategory.value } : {}),
         settingsJson: JSON.stringify(currentSettings),
       },
     });
 
-    // 5. Synchronize BrandProfile table to heal placeholder data (Requirement 7)
+    // 5. Synchronize BrandProfile table ONLY to heal missing/placeholder data — preserve established workspace identity
     const verifiedServiceNames = intelligence.verifiedServices.map((s) => s.name);
     const summaryText = `${intelligence.businessName.value} is a leading ${intelligence.businessCategory.value} in ${
       intelligence.location.value?.formattedAddress || intelligence.location.value?.city || 'the local market'
@@ -139,16 +147,19 @@ export async function getBusinessIntelligence(
     });
 
     if (existingBrandProfile) {
+      const bpHasRealIndustry = !isPlaceholderCat(existingBrandProfile.industry);
+      const bpHasServices =
+        typeof existingBrandProfile.services === 'string' &&
+        existingBrandProfile.services.trim() !== '' &&
+        existingBrandProfile.services.trim() !== '[]';
       await db.brandProfile.update({
         where: { id: existingBrandProfile.id },
         data: {
-          businessName: intelligence.businessName.value,
-          industry: intelligence.businessCategory.value,
-          location:
-            intelligence.location.value?.formattedAddress || intelligence.location.value?.city || undefined,
-          services: JSON.stringify(verifiedServiceNames),
+          ...(bpHasRealIndustry ? {} : { businessName: intelligence.businessName.value, industry: intelligence.businessCategory.value }),
+          ...(existingBrandProfile.location ? {} : { location: intelligence.location.value?.formattedAddress || intelligence.location.value?.city || undefined }),
+          ...(bpHasServices ? {} : { services: JSON.stringify(verifiedServiceNames) }),
           aiGeneratedSummary: summaryText,
-          tone: intelligence.brandTone.value,
+          ...(existingBrandProfile.tone ? {} : { tone: intelligence.brandTone.value }),
         },
       });
     } else {

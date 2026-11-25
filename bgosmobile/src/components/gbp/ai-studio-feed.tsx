@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -173,6 +173,79 @@ export function AiStudioFeed({
   useEffect(() => {
     void fetchBusinessSuggestions(false);
   }, [businessName, industry]);
+
+  const starterAttemptedRef = useRef(false);
+
+  // Paid-subscriber auto-first-version starter image (atomic server-side idempotency & entitlement guarded)
+  useEffect(() => {
+    if (
+      !createModalVisible ||
+      starterAttemptedRef.current ||
+      loadingSuggestions ||
+      generatingImages ||
+      generatedPhotoUrl ||
+      businessSuggestions.length === 0 ||
+      quota?.tier !== 'active' ||
+      quota?.limitReached
+    ) {
+      return;
+    }
+
+    const existingAiCount = templates.filter(
+      (t) => (t as any).badge === 'AI PHOTO' || (t as any).source === 'ai',
+    ).length;
+    if (existingAiCount > 0) return;
+
+    starterAttemptedRef.current = true;
+    const firstScene = businessSuggestions[0];
+
+    void (async () => {
+      try {
+        setGeneratingImages(true);
+        setActiveGeneratingStep('Creating your first AI commercial visual...');
+        const res = await apiRequest<{
+          success?: boolean;
+          skipped?: boolean;
+          url?: string;
+          urls?: string[];
+          seo?: { title: string; description: string; tags: string[]; category?: string };
+          quota?: AiStudioQuota;
+        }>('/api/social/designs/business-images/generate', {
+          method: 'POST',
+          timeoutMs: 45000,
+          body: JSON.stringify({
+            autoStarter: true,
+            suggestionId: firstScene.id,
+            sceneTitle: firstScene.title,
+            promptBlueprint: firstScene.promptBlueprint,
+            category: industry,
+            businessName,
+            aspectRatio: selectedAspectRatio,
+          }),
+        });
+        if (res?.quota) setQuota(res.quota);
+        const starterUrl = res?.url || res?.urls?.[0];
+        if (res?.success && starterUrl) {
+          setGeneratedPhotoUrl(starterUrl);
+          if (res.seo) setGeneratedSeo(res.seo);
+          void fetchTemplates();
+        }
+      } catch {
+        // Silent for optional auto-starter; user can trigger manually
+      } finally {
+        setGeneratingImages(false);
+        setActiveGeneratingStep('');
+      }
+    })();
+  }, [
+    createModalVisible,
+    loadingSuggestions,
+    generatingImages,
+    generatedPhotoUrl,
+    businessSuggestions,
+    quota?.tier,
+    quota?.limitReached,
+  ]);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -701,15 +774,17 @@ export function AiStudioFeed({
                 <Pressable
                   onPress={() => fetchBusinessSuggestions(true)}
                   disabled={loadingSuggestions || refreshingSuggestions || generatingImages}
-                  style={styles.refreshIdeasBtn}
+                  accessibilityLabel="Refresh scene ideas"
+                  hitSlop={8}
+                  style={[
+                    styles.refreshIdeasBtn,
+                    { width: 34, height: 34, borderRadius: 17, paddingHorizontal: 0, justifyContent: 'center' },
+                  ]}
                 >
                   {refreshingSuggestions ? (
                     <ActivityIndicator size="small" color="#009F50" />
                   ) : (
-                    <>
-                      <MaterialIcons name="refresh" size={15} color="#009F50" />
-                      <Text style={styles.refreshIdeasBtnText}>Refresh Ideas</Text>
-                    </>
+                    <MaterialIcons name="refresh" size={18} color="#009F50" />
                   )}
                 </Pressable>
               </View>

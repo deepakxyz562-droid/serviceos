@@ -450,7 +450,7 @@ export async function GET(request: NextRequest) {
       tenantSeed: user.tenantId,
     }),
     ...uniqueOccasions.map((occasion) =>
-      getFestivalVisuals(occasion.id, 40, user.tenantId).catch(() => [] as MultiSourceCreativeVisual[]),
+      getFestivalVisuals(occasion.id, 30, user.tenantId).catch(() => [] as MultiSourceCreativeVisual[]),
     ),
   ]);
   const festivalVisualsByOccasion = new Map<string, MultiSourceCreativeVisual[]>();
@@ -462,29 +462,18 @@ export async function GET(request: NextRequest) {
   });
   const festivalCursor = new Map<string, number>();
 
-  // Trade Isolation & Cloudflare AI S3 Category Library (Minimum 50 images, scaling to 200)
+  // Reuse visuals resolved in multiSourceVisuals (no duplicate synchronous S3 crawl or blocking pack build)
   const categoryFolder = getCategoryStorageFolder(effectiveCategoryText);
-  let s3CategoryVisuals = await getCategoryImagesFromS3(effectiveCategoryText, 200);
+  const s3CategoryVisuals = multiSourceVisuals.map((v) => v.url).filter(Boolean);
   const isTest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-  if (s3CategoryVisuals.length < 50) {
-    if (isTest) {
-      s3CategoryVisuals = await ensureOnboardingCategoryPack({
-        category: effectiveCategoryText,
-        businessName,
-        city,
-        services: realServiceNames,
-        targetCount: 50,
-      });
-    } else {
-      // Non-blocking background worker: prewarm S3 category library asynchronously without blocking GET request
-      void ensureOnboardingCategoryPack({
-        category: effectiveCategoryText,
-        businessName,
-        city,
-        services: realServiceNames,
-        targetCount: 50,
-      }).catch((err) => console.warn('[templates/route] Background category pack error:', err));
-    }
+  if (s3CategoryVisuals.length < 10 && !isTest) {
+    void ensureOnboardingCategoryPack({
+      category: effectiveCategoryText,
+      businessName,
+      city,
+      services: realServiceNames,
+      targetCount: 25,
+    }).catch((err) => console.warn('[templates/route] Background category pack error:', err));
   }
   const visuals = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : getCategoryVisualPool(effectiveCategoryText);
 

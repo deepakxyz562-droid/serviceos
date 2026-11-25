@@ -45,6 +45,8 @@ export default function CampaignPlannerScreen() {
   const [posts, setPosts] = useState<CampaignPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [campaignStageText, setCampaignStageText] = useState('Analyzing Your Business');
+  const [campaignProgressPct, setCampaignProgressPct] = useState(10);
 
   // Modals
   const [selectedPost, setSelectedPost] = useState<CampaignPost | null>(null);
@@ -112,37 +114,89 @@ export default function CampaignPlannerScreen() {
     }
   }, []);
 
-  // 3. 1-Tap Autonomous Generation (No prompt required!)
+  // 3. 1-Tap Autonomous Async Generation (with instant job ack + status polling)
   const handleGenerateCampaign = async () => {
     try {
       setIsGenerating(true);
+      setCampaignStageText('Analyzing Your Business');
+      setCampaignProgressPct(10);
+
+      const idempotencyKey = `mobile_camp_${Date.now()}`;
       const res = await apiRequest<{
-        success: boolean;
-        count: number;
-        posts: CampaignPost[];
+        success?: boolean;
+        async?: boolean;
+        jobId?: string;
+        status?: string;
+        stage?: string;
+        progressPct?: number;
+        count?: number;
+        posts?: CampaignPost[];
+        error?: string;
       }>('/api/social/ai-batch-campaign', {
         method: 'POST',
-        body: JSON.stringify({ daysCount: 30 }),
-        timeoutMs: 120000,
+        body: JSON.stringify({ daysCount: 30, idempotencyKey }),
+        timeoutMs: 30000,
       });
 
-      if (res?.success) {
-        Alert.alert(
-          '30-Day Campaign Ready! 🎉',
-          `Generated ${res.count || 30} high-converting posts for ${businessName}. Taking you to Pending Review...`,
-          [
-            {
-              text: 'View Pending Posts',
-              onPress: () => {
-                router.replace('/(tabs)/marketing?mode=posts&pill=pending');
-              },
-            },
-          ],
-        );
-        setTimeout(() => {
-          router.replace('/(tabs)/marketing?mode=posts&pill=pending');
-        }, 1200);
+      let finalCount = res?.count || 0;
+
+      if (res?.async && res?.jobId) {
+        const stageLabels: Record<string, string> = {
+          analyzing: 'Analyzing Your Business Profile',
+          resolving_photos: 'Selecting Google Business Photos',
+          generating_copy: 'Crafting 30 Tailored Posts',
+          saving: 'Saving 30-Day Schedule',
+          completed: 'Campaign Ready',
+        };
+        const deadline = Date.now() + 90_000;
+        let done = false;
+        while (!done && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 1500));
+          const st = await apiRequest<{
+            success?: boolean;
+            status: string;
+            stage?: string;
+            progressPct?: number;
+            count?: number;
+            error?: string;
+          }>(`/api/social/ai-batch-campaign/status?jobId=${encodeURIComponent(res.jobId)}`, {
+            timeoutMs: 15000,
+          });
+          if (st.stage && stageLabels[st.stage]) {
+            setCampaignStageText(stageLabels[st.stage]);
+          }
+          if (typeof st.progressPct === 'number') {
+            setCampaignProgressPct(st.progressPct);
+          }
+          if (st.status === 'completed') {
+            finalCount = st.count || 30;
+            done = true;
+            break;
+          }
+          if (st.status === 'failed') {
+            throw new Error(st.error || 'Could not generate 30-day campaign.');
+          }
+        }
+        if (!done) {
+          throw new Error('Campaign generation is taking longer than expected. Check Pending Review shortly.');
+        }
       }
+
+      Alert.alert(
+        '30-Day Campaign Ready! 🎉',
+        `Generated ${finalCount || 30} high-converting posts for ${businessName}. Taking you to Pending Review...`,
+        [
+          {
+            text: 'View Pending Posts',
+            onPress: () => {
+              router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+            },
+          },
+        ],
+      );
+      setTimeout(() => {
+        router.replace('/(tabs)/marketing?mode=posts&pill=pending');
+      }, 1200);
     } catch (err: unknown) {
       Alert.alert('Campaign Creation Failed', err instanceof Error ? err.message : 'Could not generate campaign.');
     } finally {
@@ -346,9 +400,9 @@ export default function CampaignPlannerScreen() {
         ) : isGenerating ? (
           <View style={styles.generatingCard}>
             <ActivityIndicator color="#009F50" size="large" />
-            <Text style={styles.generatingTitle}>Analyzing Your Business</Text>
+            <Text style={styles.generatingTitle}>{campaignStageText} ({campaignProgressPct}%)</Text>
             <Text style={styles.generatingSubtitle}>
-              BGOS is crafting 30 high-converting posts for {businessName} based on your Google reviews, services, and location...
+              BGOS is crafting 30 posts for {businessName} using your Google Business Profile photos, reviews, services, and location...
             </Text>
           </View>
         ) : posts.length === 0 ? (
@@ -388,7 +442,7 @@ export default function CampaignPlannerScreen() {
               const mediaUrl =
                 post.mediaUrls && post.mediaUrls.length > 0
                   ? post.mediaUrls[0]
-                  : 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
+                  : googlePhotos[index % Math.max(1, googlePhotos.length)]?.url || '';
 
               const dateDisplay = post.scheduledAt
                 ? new Date(post.scheduledAt).toLocaleDateString('en-US', {
@@ -428,7 +482,17 @@ export default function CampaignPlannerScreen() {
 
                   {/* Photo Preview */}
                   <View style={styles.photoContainer}>
-                    <Image source={{ uri: mediaUrl }} style={styles.postPhoto} resizeMode="cover" />
+                    {mediaUrl ? (
+                      <Image source={{ uri: mediaUrl }} style={styles.postPhoto} resizeMode="cover" />
+                    ) : (
+                      <Pressable
+                        onPress={() => openPhotoSwitcher(post)}
+                        style={[styles.postPhoto, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}
+                      >
+                        <MaterialIcons name="add-photo-alternate" size={28} color="#64748B" />
+                        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>Choose GBP or AI Photo</Text>
+                      </Pressable>
+                    )}
                   </View>
 
                   {/* Caption */}

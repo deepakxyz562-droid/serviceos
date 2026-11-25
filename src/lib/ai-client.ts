@@ -119,10 +119,10 @@ function isProviderName(s: string): s is ProviderName {
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   nvidia: [
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
     'nvidia/nemotron-3-ultra-550b-a55b',
     'minimaxai/minimax-m3.1-flash',
     'mistralai/mistral-large-4-1t-a52b',
-    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
   ],
   openrouter: OPENROUTER_MODELS,
   openai: ['gpt-4o-mini'],
@@ -133,6 +133,32 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
     'gemini-1.5-flash',
     'gemini-3.1-flash-lite',
   ],
+}
+
+const textProviderCooldowns = new Map<string, number>();
+const TEXT_COOLDOWN_MS = 120_000;
+
+function isTextProviderInCooldown(provider: ProviderName): boolean {
+  if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') return false;
+  const until = textProviderCooldowns.get(provider);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    textProviderCooldowns.delete(provider);
+    return false;
+  }
+  return true;
+}
+
+function recordTextProviderCooldown(provider: ProviderName, status: number, errMsg: string): void {
+  if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') return;
+  if (
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    (status === 429 && /quota|daily|limit|credit|exceeded/i.test(errMsg))
+  ) {
+    textProviderCooldowns.set(provider, Date.now() + TEXT_COOLDOWN_MS);
+  }
 }
 
 const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
@@ -417,7 +443,10 @@ const openRouterAdapter: AiProviderAdapter = {
       }
 
       const msg = data.choices?.[0]?.message
-      const content = msg?.content || msg?.reasoning_content || ''
+      const content =
+        msg?.content ||
+        (msg as { reasoning_content?: string } | undefined)?.reasoning_content ||
+        ''
       if (!content || content.trim().length < 1) {
         const fr = data.choices?.[0]?.finish_reason
         return {
@@ -493,7 +522,10 @@ const openAiAdapter: AiProviderAdapter = {
       }
 
       const msg = data.choices?.[0]?.message
-      const content = msg?.content || msg?.reasoning_content || ''
+      const content =
+        msg?.content ||
+        (msg as { reasoning_content?: string } | undefined)?.reasoning_content ||
+        ''
       if (!content || content.trim().length < 1) {
         const fr = data.choices?.[0]?.finish_reason
         return {
@@ -754,7 +786,10 @@ const nvidiaAdapter: AiProviderAdapter = {
       }
 
       const msg = data.choices?.[0]?.message
-      const content = msg?.content || msg?.reasoning_content || ''
+      const content =
+        msg?.content ||
+        (msg as { reasoning_content?: string } | undefined)?.reasoning_content ||
+        ''
       if (!content || content.trim().length < 1) {
         const fr = data.choices?.[0]?.finish_reason
         return {
@@ -905,6 +940,7 @@ export async function callAI(
 
   for (const provider of activeProviders) {
     if (Date.now() >= deadline) break
+    if (isTextProviderInCooldown(provider)) continue
     const keys = chain[provider].slice().sort((a, b) => a.priority - b.priority);
     if (keys.length === 0) continue;
     const adapter = ADAPTERS[provider];
@@ -979,6 +1015,7 @@ export async function callAI(
         // Failure — record + decide what to do next.
         lastErrorMsg = result.error
         recordKeyError(key, result.error)
+        recordTextProviderCooldown(provider, result.status, result.error)
 
         if (result.shouldSwitchProvider) {
           console.warn(

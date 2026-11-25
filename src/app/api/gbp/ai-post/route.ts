@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { generateIndustryAwarePost } from '@/lib/business-intelligence/post-generator';
 import { getBusinessIntelligence } from '@/lib/business-intelligence/service';
 import { validateBrandSafety } from '@/lib/brand-safety-gate';
-import { resolveBusinessPostVisual } from '@/lib/designs/dynamic-visual-resolver';
+import { pickPostVisualUrl } from '@/lib/designs/ai-visual-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,14 +46,17 @@ export async function POST(request: NextRequest) {
     const industry = intelligence.businessCategory.value;
     const location = intelligence.location.value?.formattedAddress || intelligence.location.value?.city || 'Local Area';
 
-    // Layer 1: Resolve high-quality matched visual photo
-    const visualImageUrl = await resolveBusinessPostVisual({
+    // Layer 1: Resolve high-quality matched visual photo (GBP Photos First)
+    const selectedVisual = await pickPostVisualUrl({
       tenantId: user.tenantId,
       industry,
+      businessName,
+      city: location,
       topic: topic || generated.contentPillar,
-      imageKeyword: generated.contentPillar,
-      imagePrompt: generated.visualScenePrompt,
+      allowAiGeneration: false,
+      aiPrompt: generated.visualScenePrompt,
     });
+    const visualImageUrl = selectedVisual?.url || '';
 
     // Layer 2: Deterministic Brand Safety Gate validation
     const tenant = await db.tenant.findUnique({

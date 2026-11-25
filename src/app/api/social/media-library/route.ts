@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // 1. Google Business Media
     let googlePhotos: Array<{ url: string; title: string }> = [];
-    let googleAccount = null;
+    let googleAccount: Awaited<ReturnType<typeof prepareGoogleAccount>> = null;
     try {
       googleAccount = await prepareGoogleAccount(tenantId);
     } catch (gErr) {
@@ -80,10 +80,10 @@ export async function GET(request: NextRequest) {
     let categoryPhotos: Array<{ url: string; title: string }> = [];
     try {
       const s3Folder = getCategoryStorageFolder(industry);
-      const s3Res = await getCategoryImagesFromS3(s3Folder, { targetCount: 20 });
-      categoryPhotos = s3Res.images.map((img) => ({
-        url: img.url,
-        title: img.sceneTitle || `${industry} Photography`,
+      const s3Urls = await getCategoryImagesFromS3(s3Folder, 20);
+      categoryPhotos = (Array.isArray(s3Urls) ? s3Urls : []).map((url, idx) => ({
+        url,
+        title: `${industry} Photography ${idx + 1}`,
       }));
     } catch {}
 
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const isPaidSubscriber = tenant.subscriptionStatus === 'active' || tenant.plan !== 'free';
+    const isPaidSubscriber = tenant.planStatus === 'active' && tenant.plan !== 'free';
     const isTrial = !isPaidSubscriber;
 
     let usedImageCount = 0;
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const isPaidSubscriber = tenant.subscriptionStatus === 'active' || tenant.plan !== 'free';
+    const isPaidSubscriber = tenant.planStatus === 'active' && tenant.plan !== 'free';
     const isTrial = !isPaidSubscriber;
 
     let usedImageCount = 0;
@@ -190,12 +190,17 @@ export async function POST(request: NextRequest) {
     const userPrompt = (body.prompt || body.title || '').trim();
     const imagePrompt = `High quality commercial advertising photography for ${businessName} (${industry} in ${city}): ${userPrompt || 'Signature premium service and customer excellence'}. Clean composition, authentic natural lighting, ultra sharp focus.`;
 
-    // 4-Provider Failover generation
+    // Priority 1: Recraft V4.1 Flash V2 (OpenRouter) -> Priority 2: NVIDIA FLUX.1 Schnell -> fallbacks
     const generated = await generateDesignImage(
       imagePrompt,
-      'cloudflare',
+      'openrouter',
       AbortSignal.timeout(45000),
       false,
+      {
+        businessName,
+        category: industry,
+        city,
+      },
     );
 
     if (!generated?.bytes) {

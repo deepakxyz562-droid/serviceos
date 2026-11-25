@@ -77,7 +77,13 @@ function getActiveProviderCooldown(provider: ImageProvider): string | null {
 
 function recordProviderFailureCooldown(provider: ImageProvider, err: unknown): void {
   if (IS_TEST_ENV) return;
-  if (err instanceof ProviderRequestError && (err.status === 402 || (err.status === 429 && err.accountQuotaExhausted))) {
+  if (
+    err instanceof ProviderRequestError &&
+    (err.status === 401 ||
+      err.status === 402 ||
+      err.status === 403 ||
+      (err.status === 429 && err.accountQuotaExhausted))
+  ) {
     providerCooldowns.set(provider, {
       until: Date.now() + QUOTA_COOLDOWN_MS,
       reason: err.message,
@@ -1614,38 +1620,38 @@ async function callNvidiaImage(params: {
     .replace(/\/+$/, '');
   await assertSafeRemoteUrl(baseUrl);
 
-  const model =
+  const configuredModel =
     cred.modelOverride ||
     process.env.BGOS_NVIDIA_IMAGE_MODEL?.trim() ||
-    'black-forest-labs/flux.1-dev';
-  const modelPath = model
-    .split('/')
-    .filter(Boolean)
-    .map((seg) => encodeURIComponent(seg))
-    .join('/');
+    'black-forest-labs/flux.1-schnell';
 
-  const isSchnell = /schnell/i.test(model);
-  const requestBody = isSchnell
-    ? {
-        prompt: params.promptText,
-        width: params.dims.nvidiaWidth,
-        height: params.dims.nvidiaHeight,
-        steps: 4,
-      }
-    : {
-        prompt: params.promptText,
-        width: params.dims.nvidiaWidth,
-        height: params.dims.nvidiaHeight,
-        steps: 25,
-        cfg_scale: 3.5,
-        mode: 'base',
-      };
+  const invokeNvidiaModel = async (targetModel: string): Promise<Response> => {
+    const modelPath = targetModel
+      .split('/')
+      .filter(Boolean)
+      .map((seg) => encodeURIComponent(seg))
+      .join('/');
 
-  let response: Response;
-  try {
-    response = await fetch(`${baseUrl}/${modelPath}`, {
+    const isSchnell = /schnell/i.test(targetModel);
+    const requestBody = isSchnell
+      ? {
+          prompt: params.promptText,
+          width: params.dims.nvidiaWidth,
+          height: params.dims.nvidiaHeight,
+          steps: 4,
+        }
+      : {
+          prompt: params.promptText,
+          width: params.dims.nvidiaWidth,
+          height: params.dims.nvidiaHeight,
+          steps: 25,
+          cfg_scale: 3.5,
+          mode: 'base',
+        };
+
+    return fetch(`${baseUrl}/${modelPath}`, {
       method: 'POST',
-      signal: combineSignals(params.signal, 10_000),
+      signal: combineSignals(params.signal, isSchnell ? 10_000 : 8_000),
       headers: {
         Authorization: `Bearer ${cred.secret}`,
         Accept: 'application/json',
@@ -1653,11 +1659,29 @@ async function callNvidiaImage(params: {
       },
       body: JSON.stringify(requestBody),
     });
+  };
+
+  let model = configuredModel;
+  let response: Response;
+  try {
+    response = await invokeNvidiaModel(model);
   } catch (err) {
-    if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
-      throw new ProviderRequestError('nvidia image generation failed (504)', 504);
+    if (!params.signal.aborted && !/schnell/i.test(model)) {
+      model = 'black-forest-labs/flux.1-schnell';
+      try {
+        response = await invokeNvidiaModel(model);
+      } catch (retryErr) {
+        if (!params.signal.aborted && retryErr instanceof Error && /timeout|aborted/i.test(retryErr.name + ' ' + retryErr.message)) {
+          throw new ProviderRequestError('nvidia image generation failed (504)', 504);
+        }
+        throw retryErr;
+      }
+    } else {
+      if (!params.signal.aborted && err instanceof Error && /timeout|aborted/i.test(err.name + ' ' + err.message)) {
+        throw new ProviderRequestError('nvidia image generation failed (504)', 504);
+      }
+      throw err;
     }
-    throw err;
   }
 
   if (!response.ok) {
@@ -1845,12 +1869,12 @@ async function callKieImage(params: {
 }
 
 const IMAGE_FALLBACK_ORDER: Record<ImageProvider, ImageProvider[]> = {
-  cloudflare: ['openrouter', 'nvidia', 'gemini', 'kie', 'siliconflow'],
+  openrouter: ['nvidia', 'gemini', 'cloudflare', 'kie', 'siliconflow'],
   nvidia: ['openrouter', 'gemini', 'cloudflare', 'kie', 'siliconflow'],
-  gemini: ['openrouter', 'cloudflare', 'nvidia', 'kie', 'siliconflow'],
-  kie: ['openrouter', 'gemini', 'cloudflare', 'nvidia', 'siliconflow'],
-  siliconflow: ['openrouter', 'gemini', 'cloudflare', 'nvidia', 'kie'],
-  openrouter: ['gemini', 'cloudflare', 'nvidia', 'kie', 'siliconflow'],
+  cloudflare: ['openrouter', 'nvidia', 'gemini', 'kie', 'siliconflow'],
+  gemini: ['openrouter', 'nvidia', 'cloudflare', 'kie', 'siliconflow'],
+  kie: ['openrouter', 'nvidia', 'gemini', 'cloudflare', 'siliconflow'],
+  siliconflow: ['openrouter', 'nvidia', 'gemini', 'cloudflare', 'kie'],
 };
 
 async function callSingleTextImageProvider(params: {

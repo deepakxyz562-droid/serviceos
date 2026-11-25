@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { generateDesignImage, resolveCuratedImageFallback, type ImageProvider } from '@/lib/designs/image-provider';
 import { uploadFile } from '@/lib/supabase-storage';
 import { getCategoryStorageFolder } from '@/lib/designs/business-image-resolver';
+import { evaluateBgosEntitlement, pickBestSubscriptionRow } from '@/lib/bgos-entitlement';
 import {
   getOrGenerateCachedSceneSuggestions,
   generateSeoMetadataForScene,
@@ -11,6 +12,68 @@ import {
 } from '@/lib/designs/business-image-suggestions';
 import { optimizeAndCompressImage } from '@/lib/designs/image-compressor';
 import crypto from 'crypto';
+
+async function loadTenantEntitlementInputs(tenantId: string) {
+  const [tenant, subscriptionsRaw, bgosWorkspaces] = await Promise.all([
+    db.tenant
+      .findUnique({
+        where: { id: tenantId },
+        select: {
+          name: true,
+          industry: true,
+          city: true,
+          settingsJson: true,
+          planStatus: true,
+          plan: true,
+          trialEndsAt: true,
+          planEndsAt: true,
+        },
+      })
+      .catch(() => null),
+    (
+      (db as any).subscription?.findMany?.({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { plan: true, status: true, trialEndsAt: true, endDate: true },
+      }) ??
+      (db as any).subscription?.findFirst?.({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        select: { plan: true, status: true, trialEndsAt: true, endDate: true },
+      }).then((r: any) => (r ? [r] : [])) ??
+      Promise.resolve([])
+    ).catch(() => []),
+    (
+      (db as any).productWorkspace?.findMany?.({
+        where: { tenantId, product: 'bgos' },
+        select: { workspaceId: true },
+      }) ?? Promise.resolve([])
+    ).catch(() => []),
+  ]);
+
+  const wsIds = Array.isArray(bgosWorkspaces)
+    ? bgosWorkspaces.map((w: any) => w.workspaceId).filter(Boolean)
+    : [];
+  let productSubscription: any = null;
+  if (wsIds.length > 0 && typeof (db as any).productSubscription?.findMany === 'function') {
+    const prodSubs = await (db as any).productSubscription
+      .findMany({ where: { workspaceId: { in: wsIds } } })
+      .catch(() => []);
+    productSubscription = pickBestSubscriptionRow(Array.isArray(prodSubs) ? prodSubs : []);
+  }
+
+  const subscription = pickBestSubscriptionRow(
+    Array.isArray(subscriptionsRaw) ? subscriptionsRaw : [],
+  );
+  const entitlement = evaluateBgosEntitlement({
+    tenant: tenant || undefined,
+    subscription: subscription || undefined,
+    productSubscription: productSubscription || undefined,
+  });
+
+  return { tenant, entitlement };
+}
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -34,22 +97,13 @@ export async function POST(request: NextRequest) {
       generateAll?: boolean;
       category?: string;
       aspectRatio?: '1:1' | '4:5' | '9:16' | '16:9';
+      autoStarter?: boolean;
     };
 
     const targetAspectRatio = body.aspectRatio || '4:5';
 
-    const [tenant, brandProfile, gbpAccount, merchantServices] = await Promise.all([
-      db.tenant.findUnique({
-        where: { id: user.tenantId },
-        select: {
-          name: true,
-          industry: true,
-          city: true,
-          settingsJson: true,
-          planStatus: true,
-          plan: true,
-        },
-      }).catch(() => null),
+    const [entitlementCtx, brandProfile, gbpAccount, merchantServices] = await Promise.all([
+      loadTenantEntitlementInputs(user.tenantId),
       (db.brandProfile?.findUnique({
         where: { tenantId: user.tenantId },
       }) ?? Promise.resolve(null)).catch(() => null),
@@ -63,37 +117,78 @@ export async function POST(request: NextRequest) {
       }) ?? Promise.resolve([])).catch(() => []),
     ]);
 
-    // ── Tier & Quota Enforcement ──
-    // Trial Merchants: Max 5 AI images total for the entire trial period.
-    // Active/Subscribed Merchants: Max 5 AI images per day.
-    const isPaidSubscriber =
-      tenant?.planStatus === 'active' &&
-      Boolean(tenant?.plan) &&
-      tenant.plan !== 'free';
+    // ── Tier & Quota Enforcement via evaluateBgosEntitlement ──
+    const { tenant, entitlement } = entitlementCtx;
+    const isPaidSubscriber = entitlement.isPaid;
     const isTrial = !isPaidSubscriber;
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    let usedCount = 0;
-    if (isTrial) {
-      usedCount = await (db.imageLibrary?.count?.({
-        where: {
-          tenantId: user.tenantId,
-          folder: 'bgos_ai_photos',
-        },
-      }) ?? Promise.resolve(0)).catch(() => 0);
-    } else {
-      usedCount = await (db.imageLibrary?.count?.({
-        where: {
-          tenantId: user.tenantId,
-          folder: 'bgos_ai_photos',
-          createdAt: { gte: startOfDay },
-        },
-      }) ?? Promise.resolve(0)).catch(() => 0);
-    }
+    const totalAiCountPromise = (db.imageLibrary?.count?.({
+      where: {
+        tenantId: user.tenantId,
+        folder: 'bgos_ai_photos',
+      },
+    }) ?? Promise.resolve(0)).catch(() => 0);
+
+    const dailyAiCountPromise = isPaidSubscriber
+      ? (db.imageLibrary?.count?.({
+          where: {
+            tenantId: user.tenantId,
+            folder: 'bgos_ai_photos',
+            createdAt: { gte: startOfDay },
+          },
+        }) ?? Promise.resolve(0)).catch(() => 0)
+      : totalAiCountPromise;
+
+    const [totalAiCount, usedCount] = await Promise.all([totalAiCountPromise, dailyAiCountPromise]);
 
     const quotaLimit = 5;
+
+    // ── Paid-Subscriber Safeguarded Starter First-Image Check ──
+    if (body.autoStarter) {
+      if (!isPaidSubscriber) {
+        return NextResponse.json({
+          success: false,
+          skipped: true,
+          reason: 'paid_subscription_required',
+          quota: {
+            used: usedCount,
+            limit: quotaLimit,
+            remaining: Math.max(0, quotaLimit - usedCount),
+            tier: 'trial',
+          },
+        });
+      }
+      if (totalAiCount > 0) {
+        return NextResponse.json({
+          success: false,
+          skipped: true,
+          reason: 'already_has_ai_photos',
+          quota: {
+            used: usedCount,
+            limit: quotaLimit,
+            remaining: Math.max(0, quotaLimit - usedCount),
+            tier: 'active',
+          },
+        });
+      }
+      if (usedCount >= quotaLimit) {
+        return NextResponse.json({
+          success: false,
+          skipped: true,
+          limitReached: true,
+          reason: 'quota_exhausted',
+          quota: {
+            used: usedCount,
+            limit: quotaLimit,
+            remaining: 0,
+            tier: 'active',
+          },
+        });
+      }
+    }
     if (usedCount >= quotaLimit) {
       const isTrialUser = isTrial;
       const limitMessage = isTrialUser
@@ -169,6 +264,41 @@ export async function POST(request: NextRequest) {
       '';
     const services = merchantServices.map((s) => s.name).filter(Boolean);
     const folder = getCategoryStorageFolder(category);
+
+    // Atomic Idempotency Lock for Paid-Subscriber Auto-Starter Image (runs max 1x per business context)
+    if (body.autoStarter && db.designGenerationJob?.create) {
+      const ctxHash = crypto
+        .createHash('sha256')
+        .update(`${user.tenantId}|${businessName}|${category}|${city}`)
+        .digest('hex')
+        .slice(0, 16);
+      const lockId = `starter_img_${user.tenantId}_${ctxHash}`;
+      try {
+        await db.designGenerationJob.create({
+          data: {
+            id: lockId,
+            tenantId: user.tenantId,
+            userId: user.id,
+            provider: 'starter_image',
+            prompt: `${businessName} (${category}) starter visual`,
+            status: 'processing',
+            startedAt: new Date(),
+          },
+        });
+      } catch {
+        return NextResponse.json({
+          success: false,
+          skipped: true,
+          reason: 'starter_already_generated',
+          quota: {
+            used: usedCount,
+            limit: quotaLimit,
+            remaining: Math.max(0, quotaLimit - usedCount),
+            tier: 'active',
+          },
+        });
+      }
+    }
 
     // 1. Gather scene prompts and active scene title
     const scenesToGenerate: string[] = [];
@@ -441,15 +571,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: user.tenantId },
-      select: { planStatus: true, plan: true },
-    }).catch(() => null);
-
-    const isPaidSubscriber =
-      tenant?.planStatus === 'active' &&
-      Boolean(tenant?.plan) &&
-      tenant.plan !== 'free';
+    const { entitlement } = await loadTenantEntitlementInputs(user.tenantId);
+    const isPaidSubscriber = entitlement.isPaid;
     const isTrial = !isPaidSubscriber;
 
     let usedCount = 0;

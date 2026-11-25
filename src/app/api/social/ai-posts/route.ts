@@ -2,13 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
-import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
-import { getCategoryVisualPool } from '@/lib/designs/dynamic-visual-resolver';
-import {
-  getCategoryImagesFromS3,
-  ensureOnboardingCategoryPack,
-  getCategoryStorageFolder,
-} from '@/lib/designs/category-image-engine';
+import { ensureOnboardingCategoryPack } from '@/lib/designs/category-image-engine';
+import { resolveTenantVisuals } from '@/lib/designs/ai-visual-engine';
 import { callAI } from '@/lib/ai-client';
 
 export const dynamic = 'force-dynamic';
@@ -31,65 +26,6 @@ interface GeneratedPostItem {
   businessName?: string;
 }
 
-const S3_BUCKET = process.env.AWS_S3_BUCKET || 'serviceos-assets-prod';
-const S3_REGION = process.env.AWS_REGION || 'ap-south-1';
-const S3_BASE = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/bgos-business-images/category_library`;
-
-function buildPresetS3Urls(slug: string): string[] {
-  return Array.from({ length: 12 }, (_, i) => `${S3_BASE}/${slug}/${slug}-${String(i + 1).padStart(3, '0')}.webp`);
-}
-
-const CATEGORY_IMAGE_PRESETS: Record<string, string[]> = {
-  film_studio: buildPresetS3Urls('film_production_studio'),
-  market: buildPresetS3Urls('grocery_supermarket'),
-  pool: buildPresetS3Urls('farmhouse_resort'),
-  cake: buildPresetS3Urls('bakery_cafe'),
-  hardware: buildPresetS3Urls('hardware_tools'),
-  paint: buildPresetS3Urls('paint_decor'),
-  software: buildPresetS3Urls('it_software'),
-  fashion: buildPresetS3Urls('fashion_boutique'),
-  salon: buildPresetS3Urls('salon_spa'),
-  restaurant: buildPresetS3Urls('restaurant_dining'),
-  generic: buildPresetS3Urls('general_business'),
-};
-
-function resolveCategoryKey(blob: string): string {
-  const lower = blob.toLowerCase();
-  // Film, Media & Creative Studios must NOT be classified as software/IT
-  if (/(film|cinema|movie|studio|video production|production house|cinematography|audiovisual)/.test(lower)) {
-    return 'film_studio';
-  }
-  // Software & Tech
-  if (/(software|it company|developer|code|web development|app development|cloud|saas|crm|platform|digital marketing)/.test(lower) && !/(film|cinema|studio|parlour|salon|hotel)/.test(lower)) {
-    return 'software';
-  }
-  if (/(market|grocery|supermarket|kirana|general store|provision|mart|vegetable|fruit|bazaar|mandi|departmental)/.test(lower)) {
-    return 'market';
-  }
-  if (/(fashion|boutique|cloth|garment|apparel|saree|lehenga|textile|tailor)/.test(lower)) {
-    return 'fashion';
-  }
-  if (/(salon|spa|beauty|parlour|parlor|haircut|makeup|facial|barber|grooming)/.test(lower)) {
-    return 'salon';
-  }
-  if (/(pool|swimming|farmhouse|resort|villa|cottage|homestay|retreat|staycation|banquet|lawn)/.test(lower)) {
-    return 'pool';
-  }
-  if (/(cake|bakery|pastry|dessert|mithai|sweet|cupcake|baker|patisserie|confection)/.test(lower)) {
-    return 'cake';
-  }
-  if (/(paint|hardware|tool|plumbing|electrical supply|plywood|sanitary|pipe|machinery)/.test(lower)) {
-    return 'hardware';
-  }
-  if (/(paint|color|wall finish|coating|texture|primer|asian paints|berger|nerolac|decor)/.test(lower)) {
-    return 'paint';
-  }
-  if (/(restaurant|dining|cafe|bistro|diner|food|fast food|dhaba|kitchen)/.test(lower)) {
-    return 'restaurant';
-  }
-  return 'generic';
-}
-
 function cleanHash(str: string): string {
   return str.replace(/[^a-zA-Z0-9]/g, '');
 }
@@ -101,303 +37,143 @@ function generate20PostsForBusiness(params: {
   phone: string;
   website: string;
   photos: string[];
+  services?: string[];
   logoUrl?: string | null;
   seed?: number;
 }): GeneratedPostItem[] {
-  const { businessName, category, city, phone, website, photos, logoUrl, seed = 0 } = params;
-  const catKey = resolveCategoryKey(`${businessName} ${category}`);
-  const dynamicVisualPool = getCategoryVisualPool(`${businessName} ${category}`);
-  const baseImages = photos.length > 0 ? [...photos, ...dynamicVisualPool] : (CATEGORY_IMAGE_PRESETS[catKey] || dynamicVisualPool);
+  const { businessName, category, city, phone, website, photos, services = [], logoUrl, seed = 0 } = params;
+  const fallbackLogo = logoUrl && /^(https?:\/\/|\/)/i.test(logoUrl) ? logoUrl : '';
+  const baseImages = photos.length > 0 ? photos : fallbackLogo ? [fallbackLogo] : [];
   // Rotate images if seed is provided for fresh look on refresh
-  const imgShift = seed ? Math.abs(seed) % baseImages.length : 0;
-  const allImages = [...baseImages.slice(imgShift), ...baseImages.slice(0, imgShift)];
+  const imgShift = seed && baseImages.length > 0 ? Math.abs(seed) % baseImages.length : 0;
+  const allImages =
+    baseImages.length > 0
+      ? [...baseImages.slice(imgShift), ...baseImages.slice(0, imgShift)]
+      : [];
 
   const cityToken = city || 'your local area';
   const bizClean = cleanHash(businessName);
+  const catClean = cleanHash(category || 'Services');
   const cityClean = cleanHash(city || 'Local');
+  const primaryService = services[0] || category;
 
-  // Templates for 20 diverse SEO themes
+  // Dynamic, business-agnostic blueprints customized from real GBP category & services
   const postBlueprints = [
     {
       theme: 'Primary Local SEO Hero Service',
       badge: 'Standard Post' as const,
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
-      titleFactory: () =>
-        catKey === 'market'
-          ? `Fresh Grocery Essentials & Daily Household Supplies in ${cityToken} at ${businessName}`
-          : catKey === 'pool'
-          ? `Private Pool Venues Near ${cityToken} for Stress-Free Family Time`
-          : catKey === 'cake'
-          ? `Custom Designer Birthday Cakes in ${cityToken} with Fresh Cream & Handcrafted Toppings`
-          : catKey === 'hardware'
-          ? `Heavy-Duty Power Tools & Construction Hardware Supplies in ${cityToken}`
-          : catKey === 'paint'
-          ? `Luxury Designer Wall Paints & All-Weather Exterior Finishes in ${cityToken}`
-          : catKey === 'software'
-          ? `Enterprise Web & Custom Mobile App Development Services in ${cityToken}`
-          : `Premier ${category} & Professional Trusted Services in ${cityToken}`,
+      titleFactory: () => `Premier ${category} & ${primaryService} in ${cityToken} | ${businessName}`,
       introFactory: () =>
-        catKey === 'market'
-          ? `Stock up on fresh quality groceries, daily kitchen staples, and trusted packaged goods at ${businessName} in ${cityToken}. From farm-fresh produce to everyday FMCG essentials, we bring you unmatched variety at honest neighborhood prices.`
-          : catKey === 'pool'
-          ? `Looking for a peaceful escape from the city rush without driving too far? ${businessName} offers a private swimming pool and green farmhouse setting designed for relaxed, stress-free family time. If you've been searching for a private farmhouse with pool, our property gives you privacy, safety, and pristine space to unwind together.`
-          : catKey === 'cake'
-          ? `Planning a birthday, anniversary, or milestone celebration in ${cityToken}? ${businessName} specializes in custom designer cakes made fresh from scratch with rich layers, premium ingredients, and stunning edible artistry to make your special moments truly memorable.`
-          : catKey === 'hardware'
-          ? `Whether you are a professional contractor or taking on a DIY renovation in ${cityToken}, ${businessName} carries a comprehensive inventory of industrial power tools, genuine fasteners, electrical fittings, and durable plumbing supplies under one roof.`
-          : catKey === 'paint'
-          ? `Transform your home or commercial space with vibrant colors and durable finishes from ${businessName} in ${cityToken}. We supply premium interior emulsions, waterproof exterior coatings, and expert color consultation tailored for local climate.`
-          : catKey === 'software'
-          ? `Accelerate your business growth with scalable digital engineering from ${businessName} in ${cityToken}. From high-performing web platforms to cloud solutions and custom software, our dedicated engineering team delivers robust technology for modern enterprises.`
-          : `Looking for dependable ${category} solutions in ${cityToken}? ${businessName} provides high-quality services with dedicated attention to detail, transparent pricing, and trusted customer care.`,
-      bulletFactory: () =>
-        catKey === 'market'
-          ? [
-              'Farm-fresh vegetables, seasonal fruits, and dairy products stocked every morning',
-              'Complete range of packaged staples, pulses, spices, oils, and household essentials',
-              'Best wholesale and retail pricing with unbeatable daily combo savings',
-              '100% genuine products with clear expiry checks and quality hygiene standards',
-              `Convenient neighborhood shopping in ${cityToken} with quick checkout and parking`,
-              'All digital payments accepted: UPI, PhonePe, Google Pay, Cards, and Cash',
-            ]
-          : catKey === 'pool'
-          ? [
-              'Exclusive private use of the swimming pool so your family never has to share space with strangers',
-              'Spacious green lawns perfect for kids to play and elders to relax in clean, fresh air',
-              'Hygienic, well-maintained pool with regular water filtration checks for a safe dip every time',
-              `Convenient drive from ${cityToken} and surrounding areas with hassle-free parking`,
-              'Flexible booking slots for half-day, full-day, or overnight stays to fit your schedule',
-              'Ideal setting for birthdays, family get-togethers, and intimate outdoor celebrations',
-            ]
-          : catKey === 'cake'
-          ? [
-              '100% fresh baking on order with premium Belgian cocoa, real fruits, and dairy-pure ingredients',
-              'Custom fondant designs, photo prints, and elegant floral toppings crafted to your vision',
-              'Wide flavor palette: Dutch Truffle, Red Velvet, Fresh Berry, Butterscotch, and Biscoff',
-              'Eggless and dietary customization options available upon advance request',
-              `Punctual chilled temperature-safe delivery across ${cityToken} right to your doorstep`,
-              'Complimentary cake knife, sparkler candles, and personalized message card included',
-            ]
-          : catKey === 'hardware'
-          ? [
-              'Authorized supplier of genuine branded power tools, cordless drills, and grinders',
-              'Comprehensive stock of high-tensile fasteners, bolts, screws, and architectural hardware',
-              'Heavy-duty plumbing, PVC fittings, sanitary ware, and high-pressure valves',
-              'Bulk wholesale pricing and flexible credit terms for licensed local contractors',
-              `Fast on-site delivery to construction and project sites throughout ${cityToken}`,
-              'Expert technical assistance to help you pick the exact tool or material specification',
-            ]
-          : catKey === 'paint'
-          ? [
-              'Computerized precision color tinting with thousands of custom designer shades',
-              'Heavy-duty exterior waterproof coatings designed to resist intense monsoons and UV fading',
-              'Low-VOC, odorless interior emulsions that ensure safe indoor air quality for your family',
-              'Complimentary color consultation and digital room visualization previews',
-              `Genuine manufacturer guarantee on all paints, primers, and wall textures`,
-              `Prompt local delivery across ${cityToken} for residential and commercial projects`,
-            ]
-          : catKey === 'software'
-          ? [
-              'Full-stack modern web and mobile application engineering built on scalable cloud infrastructure',
-              'Custom API integration, automated CRM pipelines, and secure payment processing',
-              'Intuitive UI/UX design optimized for frictionless user engagement and high conversion rates',
-              'Rigorous QA automated testing and enterprise-grade data security compliance',
-              'Agile sprint delivery with transparent weekly progress updates and dedicated project managers',
-              'Ongoing 24/7 technical maintenance and performance monitoring post-launch',
-            ]
-          : [
-              `Experienced and verified professionals delivering top-quality ${category} in ${cityToken}`,
-              'Transparent quotes with no hidden charges or last-minute surprises',
-              'Modern equipment and industry-approved methodologies for dependable results',
-              'Convenient scheduling with quick response times when you need us most',
-              '100% client satisfaction commitment backed by positive customer reviews',
-              `Dedicated local customer support based right here in ${cityToken}`,
-            ],
+        `Looking for dependable ${category} solutions in ${cityToken}? ${businessName} delivers ${services.slice(0, 3).join(', ') || category} with dedicated attention to detail, transparent pricing, and trusted local care.`,
+      bulletFactory: () => [
+        `Experienced professionals delivering top-quality ${primaryService} in ${cityToken}`,
+        'Transparent quotes with clear scope and zero hidden surprises',
+        'Modern workflow and industry-approved standards for dependable results',
+        'Prompt scheduling and responsive client communication',
+        `Dedicated local team serving customers across ${cityToken}`,
+      ],
       conclusionFactory: () =>
-        catKey === 'market'
-          ? `Visit ${businessName} in ${cityToken} today for all your daily grocery and household needs. Call or message our store desk for quick queries or bulk orders.`
-          : catKey === 'pool'
-          ? `If you are searching for a family swimming pool venue or peaceful green retreat near you, book your break at ${businessName} in ${cityToken}. Call our team today to verify slot availability and reserve your date.`
-          : catKey === 'cake'
-          ? `Celebrate your special milestones with a showstopping handcrafted cake from ${businessName}. Call us or drop a message to discuss your custom design and place your order today.`
-          : catKey === 'hardware'
-          ? `Stop by ${businessName} in ${cityToken} for heavy-duty tools and hardware supplies you can rely on. Call our desk now for inventory checks and instant bulk quotes.`
-          : catKey === 'paint'
-          ? `Give your walls a lasting, beautiful finish with ${businessName} in ${cityToken}. Contact our color experts today for a free shade guide and project estimate.`
-          : catKey === 'software'
-          ? `Ready to build or scale your digital product? Schedule a discovery consultation with ${businessName} in ${cityToken} and bring your vision to life.`
-          : `Experience trusted ${category} services in ${cityToken} with ${businessName}. Contact our team today to discuss your requirements.`,
+        `Experience trusted ${category} in ${cityToken} with ${businessName}. Contact our team today to discuss your requirements.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}${catKey === 'market' ? 'Market' : catKey === 'pool' ? 'Farmhouse' : catKey === 'cake' ? 'Bakery' : catKey === 'hardware' ? 'Hardware' : catKey === 'paint' ? 'Paints' : 'Services'}`,
-        `#${cityClean}Shopping`,
-        `#DailyEssentials`,
-        `#LocalStore`,
+        `#${cityClean}${catClean}`,
+        `#${catClean}`,
+        `#LocalExperts`,
         `#GoogleVerified`,
       ],
     },
     {
-      theme: 'Weekend Super Saver Offers',
+      theme: 'Weekend & Seasonal Spotlight',
       badge: 'Special Offer' as const,
       postType: 'OFFER' as const,
       ctaText: 'GET OFFER' as const,
-      titleFactory: () =>
-        catKey === 'market'
-          ? `Weekend Super Saver: Massive Discounts on Daily Essentials at ${businessName}`
-          : `Weekend Special: Exclusive Package at ${businessName} in ${cityToken}`,
+      titleFactory: () => `Featured ${primaryService} Consultation & Service Window at ${businessName}`,
       introFactory: () =>
-        catKey === 'market'
-          ? `Planning your weekly grocery run? Enjoy exclusive weekend discounts across pantry staples, snacks, personal care, and fresh produce at ${businessName} in ${cityToken}.`
-          : `Make your upcoming weekend truly memorable with our limited-capacity exclusive package at ${businessName}. Reserve early to secure preferred timings and personalized service in ${cityToken}.`,
-      bulletFactory: () =>
-        catKey === 'market'
-          ? [
-              'Up to 20% off on selected grocery bundles and family bulk packs',
-              'Special weekend discounts on fresh seasonal fruits and premium dry fruits',
-              'Extra savings when you buy combos of cooking oils, rice, and pulses',
-              'Loyalty rewards and surprise gift vouchers on minimum purchases',
-              'Fast billing counters to ensure minimum waiting time for weekend shoppers',
-            ]
-          : [
-              'Special weekend pricing for pre-booked groups and advance reservations',
-              'Complimentary value-added amenities and priority slot allocation',
-              'Dedicated staff on-site to ensure smooth, stress-free hospitality and assistance',
-              'Clean, sanitized, and fully prepared facilities prior to your arrival',
-              'Transparent package pricing with zero unexpected extra charges',
-            ],
+        `Planning ahead in ${cityToken}? Book your ${primaryService} consultation with ${businessName} for priority scheduling and tailored recommendations.`,
+      bulletFactory: () => [
+        `Priority booking slots available for ${category} requirements`,
+        'Tailored assessment matched to your exact needs and timeline',
+        'Dedicated specialists supporting you from kickoff to completion',
+        'Verified local standards and clear milestone tracking',
+      ],
       conclusionFactory: () =>
-        catKey === 'market'
-          ? `Weekend deals are valid while stock lasts! Drop by ${businessName} in ${cityToken} or call us today to confirm offer items.`
-          : `Weekend dates fill up quickly. Contact ${businessName} now to check open slots and lock in your weekend booking.`,
+        `Connect with ${businessName} in ${cityToken} today to reserve your preferred slot and learn more about our ${category} offerings.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#WeekendIn${cityClean}`,
-        `#${cityClean}Deals`,
-        `#SuperSaver`,
-        `#ShopLocal`,
+        `#${cityClean}`,
+        `#${catClean}`,
+        `#LocalBusiness`,
+        `#BookNow`,
       ],
     },
     {
-      theme: 'Safety, Hygiene & Quality Assurance',
+      theme: 'Quality & Trust Assurance',
       badge: 'Standard Post' as const,
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
-      titleFactory: () =>
-        catKey === 'market'
-          ? `100% Quality & Freshness Guarantee at ${businessName} in ${cityToken}`
-          : `Why Families & Clients in ${cityToken} Choose ${businessName} for Quality & Safety`,
+      titleFactory: () => `Why Clients in ${cityToken} Trust ${businessName} for ${category}`,
       introFactory: () =>
-        catKey === 'market'
-          ? `Your family deserves pure, hygienic, and fresh essentials every single day. At ${businessName}, every item on our shelves passes thorough quality and freshness checks before you take it home.`
-          : `When it comes to ${category}, quality, safety, and hygiene come first. Discover how ${businessName} maintains strict quality benchmarks so you can enjoy complete peace of mind.`,
-      bulletFactory: () =>
-        catKey === 'market'
-          ? [
-              'Directly sourced fresh vegetables and fruits delivered from trusted farms',
-              'Authorized retailer of certified FSSAI brands and genuine packaged goods',
-              'Clean, organized, and temperature-managed shelves for hygienic storage',
-              'Transparent digital weighing scales and computerized accurate billing',
-              'Friendly store associates ready to assist you in locating your favorite items',
-            ]
-          : [
-              'Rigorous quality control and sanitation procedures implemented daily',
-              'Certified materials, genuine equipment, and premium-grade supplies',
-              'Trained and courteous team following standard operating safety guidelines',
-              'Clean and inviting ambiance maintained round the clock',
-              'Hundreds of genuine 5-star reviews from satisfied local clients',
-            ],
+        `When choosing a ${category} provider in ${cityToken}, reliability and consistent standards matter. Discover how ${businessName} upholds quality on every engagement.`,
+      bulletFactory: () => [
+        `Verified local track record across ${services.slice(0, 2).join(' and ') || category}`,
+        'Standardized quality checklists and transparent communication',
+        'Skilled specialists following documented safety & quality practices',
+        `Accessible support team right here in ${cityToken}`,
+      ],
       conclusionFactory: () =>
-        catKey === 'market'
-          ? `Choose purity and authentic quality for your home. Visit ${businessName} in ${cityToken} or reach out to our team today.`
-          : `Choose uncompromising standards for your loved ones and projects. Call ${businessName} today to learn more or schedule your visit.`,
+        `Choose uncompromising standards for your next project. Reach out to ${businessName} in ${cityToken} to get started.`,
       tagFactory: () => [
         `#${bizClean}`,
         `#QualityFirst`,
-        `#${cityClean}Market`,
-        `#SafeAndFresh`,
+        `#${cityClean}${catClean}`,
         `#CustomerTrust`,
       ],
     },
     {
-      theme: 'Festive Shopping & Bulk Specials',
+      theme: 'Seasonal Showcase & Highlights',
       badge: 'Seasonal Event' as const,
       postType: 'EVENT' as const,
-      ctaText: 'ORDER' as const,
-      titleFactory: () =>
-        catKey === 'market'
-          ? `Festive Shopping Festival: Special Combos & Festive Gift Hampers at ${businessName}`
-          : `Host Memorable Private Events & Celebrations at ${businessName}`,
+      ctaText: 'LEARN MORE' as const,
+      titleFactory: () => `${category} Seasonal Highlight & Showcase with ${businessName}`,
       introFactory: () =>
-        catKey === 'market'
-          ? `Celebrate every festival with joy and savings! ${businessName} brings you custom festive gift packs, premium sweets, dry fruits, and festive essentials in ${cityToken}.`
-          : `Looking for the perfect venue or service to host your next private celebration in ${cityToken}? ${businessName} offers custom event setups designed for joyful, intimate gatherings.`,
-      bulletFactory: () =>
-        catKey === 'market'
-          ? [
-              'Curated gift hampers with premium dry fruits, chocolates, and festive goodies',
-              'Bulk corporate and family orders accepted with customized gift wrapping',
-              'Special festival combo pricing on cooking oils, ghee, flour, and sugar',
-              'Exclusive festive discount vouchers on purchases above eligible thresholds',
-              'Advance booking and timely pickup available for busy festive weeks',
-            ]
-          : [
-              'Dedicated spaces and customized arrangements for birthdays and anniversaries',
-              'Ample seating and tailored ambiance with ambient lighting',
-              'Catering support and flexible vendor coordination permitted',
-              'Privacy assured with exclusive venue or service booking',
-              'Affordable celebration packages tailored to group size',
-            ],
+        `Updating your plans this season in ${cityToken}? ${businessName} helps local clients get the most out of our core ${category} capabilities.`,
+      bulletFactory: () => [
+        `Focused solutions covering ${services.slice(0, 3).join(', ') || category}`,
+        'Smooth onboarding and clear deliverables',
+        'Responsive support for both new and returning local clients',
+        'Convenient digital inquiry & fast callback response',
+      ],
       conclusionFactory: () =>
-        catKey === 'market'
-          ? `Make your festival truly festive! Visit ${businessName} in ${cityToken} or call us today to order your festive hampers.`
-          : `Let us make your milestone unforgettable. Call ${businessName} in ${cityToken} to discuss your event dates and requirements.`,
+        `Let ${businessName} support your upcoming goals in ${cityToken}. Message or call us today for details.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}Festivals`,
-        `#FestiveShopping`,
-        `#GiftHampers`,
-        `#SpecialMoments`,
+        `#${cityClean}`,
+        `#${catClean}Showcase`,
+        `#LocalSupport`,
       ],
     },
     {
-      theme: 'Customer Trust & Neighborhood Convenience',
+      theme: 'Expert Advice & Local Insights',
       badge: 'Standard Post' as const,
       postType: 'STANDARD' as const,
       ctaText: 'CALL' as const,
-      titleFactory: () =>
-        catKey === 'market'
-          ? `Why Neighborhood Shoppers in ${cityToken} Rely on ${businessName}`
-          : `Expert ${category} Advice: What Every Customer in ${cityToken} Should Know`,
+      titleFactory: () => `Expert ${category} Insights for ${cityToken} Clients | ${businessName}`,
       introFactory: () =>
-        catKey === 'market'
-          ? `Serving hundreds of satisfied families every week, ${businessName} is proud to be your trusted neighborhood market in ${cityToken}. Experience hassle-free shopping with genuine warmth and reliability.`
-          : `Navigating your choices for ${category} can be overwhelming. The experts at ${businessName} share top insights to help you make informed decisions and get the best value in ${cityToken}.`,
-      bulletFactory: () =>
-        catKey === 'market'
-          ? [
-              'Decades of trusted service with an outstanding reputation for fair pricing',
-              'Prompt phone order assistance and curbside pickup for local residents',
-              'Stock updated weekly with all popular regional and national brands',
-              'Smooth exchange and replacement policy on unopened packaged goods',
-              'Consistently rated 5 stars for customer friendliness and product freshness',
-            ]
-          : [
-              'Key factors to check before hiring or purchasing services',
-              'How to maintain quality and longevity for long-term savings',
-              'Common mistakes to avoid and how to spot genuine quality',
-              'Personalized consultation available directly from our experienced specialists',
-            ],
+        `Making the right decision for ${primaryService} doesn't have to be complicated. Here is how our specialists at ${businessName} help ${cityToken} clients plan effectively.`,
+      bulletFactory: () => [
+        `Key considerations before choosing ${primaryService}`,
+        'How proactive planning saves time and avoids costly rework',
+        'Direct guidance from our experienced specialists',
+      ],
       conclusionFactory: () =>
-        catKey === 'market'
-          ? `Experience the joy of friendly, honest neighborhood shopping. Stop by ${businessName} in ${cityToken} or call us today.`
-          : `Have questions about your upcoming requirement? Reach out to ${businessName} for honest, expert advice with zero obligations.`,
+        `Have questions about ${category}? Reach out to ${businessName} in ${cityToken} for clear, practical guidance.`,
       tagFactory: () => [
         `#${bizClean}`,
-        `#${cityClean}Shoppers`,
-        `#NeighborhoodMarket`,
-        `#TrustedStore`,
-        `#LocalExperts`,
+        `#${cityClean}`,
+        `#${catClean}Tips`,
+        `#TrustedLocal`,
       ],
     },
   ];
@@ -408,7 +184,7 @@ function generate20PostsForBusiness(params: {
   for (let i = 0; i < 20; i++) {
     const blueprintIdx = (i + blueprintOffset) % postBlueprints.length;
     const blueprint = postBlueprints[blueprintIdx];
-    const image = allImages[i % allImages.length];
+    const image = allImages.length > 0 ? allImages[i % allImages.length] : '';
     const title = i < postBlueprints.length ? blueprint.titleFactory() : `${blueprint.titleFactory()} — Feature Edition #${i + 1}`;
     const intro = blueprint.introFactory();
     const bullets = blueprint.bulletFactory();
@@ -599,40 +375,28 @@ export async function GET(request: NextRequest) {
       ]),
     );
 
-    // Fetch real GBP photos if connected
-    let realPhotos: string[] = [];
-    if (googleAccount) {
-      try {
-        const gbpMedia = await listGoogleBusinessMedia(googleAccount, { pageSize: 12 });
-        realPhotos = (gbpMedia?.mediaItems || [])
-          .map((m) => m.googleUrl || m.thumbnailUrl)
-          .filter((u): u is string => typeof u === 'string' && u.length > 0);
-      } catch {}
-    }
-
-    // Also fetch uploaded images from imageLibrary
-    const libraryRows = await db.imageLibrary.findMany({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { url: true },
-    }).catch(() => []);
-
-    const libraryUrls = libraryRows.map((r) => r.url).filter(Boolean);
-
-    // Retrieve verified Cloudflare AI S3 Category Library images (Instant reuse if already existing)
-    let s3CategoryVisuals = await getCategoryImagesFromS3(category, 20);
-    if (s3CategoryVisuals.length < 5) {
-      s3CategoryVisuals = await ensureOnboardingCategoryPack({
+    // Resolve authentic visuals via shared AI Visual Engine: GBP Photos First -> Uploaded -> Cached AI -> Dynamic S3
+    const resolvedVisuals = await resolveTenantVisuals({
+      tenantId: user.tenantId,
+      industry: category,
+      businessName,
+      city,
+      limit: 24,
+      forceRefreshGbp: Boolean(refreshParam),
+    });
+    const ownedVisuals = resolvedVisuals.filter((v) => v.source !== 'stock_library');
+    const s3StockVisuals = resolvedVisuals.filter((v) => v.source === 'stock_library');
+    if (s3StockVisuals.length < 5 && ownedVisuals.length === 0) {
+      // Non-blocking warm-up so UI never stalls
+      void ensureOnboardingCategoryPack({
         category,
         businessName,
         city,
         services,
         targetCount: 5,
-      });
+      }).catch(() => {});
     }
-
-    const combinedPhotos = [...realPhotos, ...libraryUrls, ...s3CategoryVisuals];
+    const combinedPhotos = (ownedVisuals.length > 0 ? ownedVisuals : resolvedVisuals).map((v) => v.url);
 
     const basePosts = generate20PostsForBusiness({
       businessName,
@@ -641,6 +405,7 @@ export async function GET(request: NextRequest) {
       phone,
       website,
       photos: combinedPhotos,
+      services,
       logoUrl: resolvedLogoUrl,
       seed,
     });

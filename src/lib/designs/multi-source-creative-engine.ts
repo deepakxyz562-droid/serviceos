@@ -147,36 +147,23 @@ export async function getMultiSourceCategoryVisuals(
   ctx: MultiSourceRequestContext,
 ): Promise<MultiSourceCreativeVisual[]> {
   const requestedCount = Math.max(8, Math.min(400, ctx.requestedCount || 100));
-  const matchedKey = scoreIndustryMatch(ctx.industryText);
-  void matchedKey; // kept for logging parity; plan builder handles keywords
 
-  const plan = buildVisualQueryPlan({
-    industryText: ctx.industryText,
-    purpose: ctx.purpose || 'profile',
-    occasionId: ctx.occasionId,
-  });
+  // ── Priority 1: Merchant own photos (GBP + ImageLibrary) -> Priority 2: Dynamic S3 Category Library ──
+  const userVisuals = (ctx.userPhotos || []).slice(0, 20).map((p, i) => toUserPhotoVisual(p, i));
 
-  const livePhotos = await searchLivePhotos({
-    queries: plan.queries,
-    pinterestBoards: plan.pinterestBoards,
-    limit: Math.max(120, requestedCount),
-  });
-
-  // ── Tier stack: Merchant photos -> Cloudflare AI S3 Category Library -> Verified curated pool ──
-  const userVisuals = (ctx.userPhotos || []).slice(0, 12).map((p, i) => toUserPhotoVisual(p, i));
-
-  // Retrieve AWS S3 category library images
+  // Retrieve AWS S3 category library images without any external Pinterest/live scraping
   const s3Urls = await getCategoryImagesFromS3(ctx.industryText, Math.max(40, requestedCount));
   const s3Visuals = s3Urls.map((url, i) => ({
     id: `s3_${i}`,
     url,
     source: 'curated' as const,
-    credit: 'Cloudflare AI S3 Library',
+    credit: 'BGOS Visual Library',
   }));
 
-  const curatedVisuals = getCategoryVisualPool(ctx.industryText).map((url, i) =>
-    toCuratedVisual(url, i),
-  );
+  const curatedVisuals =
+    s3Visuals.length > 0
+      ? []
+      : getCategoryVisualPool(ctx.industryText).map((url, i) => toCuratedVisual(url, i));
 
   // Rotate each tier internally with a daily seed so photos refresh daily
   const dayKey = new Date().toISOString().slice(0, 10);
@@ -184,16 +171,7 @@ export async function getMultiSourceCategoryVisuals(
   const rotatedUser = rotate(userVisuals, seed);
   const rotatedS3 = rotate(s3Visuals.length > 0 ? s3Visuals : curatedVisuals, seed);
 
-  // Tier 1: User's own photos
-  // Tier 2: Cloudflare AI S3 Category Library
-  let pool = dedupeByUrKey([...rotatedUser, ...rotatedS3]);
-
-  // Augment pool with industry photography if pool is small (< 8) to prevent visual repetition
-  if (pool.length < 8) {
-    const fallbackCategoryUrls = getCategoryVisualPool(ctx.industryText);
-    const fallbackVisuals = fallbackCategoryUrls.map((url, i) => toCuratedVisual(url, i + 100));
-    pool = dedupeByUrKey([...pool, ...fallbackVisuals]);
-  }
+  const pool = dedupeByUrKey([...rotatedUser, ...rotatedS3]);
 
   if (pool.length === 0) return [];
 
@@ -230,8 +208,7 @@ export async function getMultiSourceCategoryVisuals(
 }
 
 /**
- * Festival-specific visuals: pulls the verified Pinterest festival boards
- * (postermywall/diwali-posters etc.) + occasion queries across all sources.
+ * Festival-specific visuals sourced from owned catalog & licensed library (no Pinterest scraping).
  */
 export async function getFestivalVisuals(
   occasionId: string,
@@ -240,25 +217,18 @@ export async function getFestivalVisuals(
 ): Promise<MultiSourceCreativeVisual[]> {
   const requested = Math.max(8, Math.min(120, requestedCount));
   const occasionLabel = occasionId.replace(/_/g, ' ');
-  const boards =
-    PINTEREST_FESTIVAL_BOARDS[occasionId] || matchPinterestBoards(occasionId);
-
-  const livePhotos = await searchLivePhotos({
-    queries: [
-      `${occasionLabel} poster design`,
-      `${occasionLabel} offer banner template`,
-      `${occasionLabel} greeting creative`,
-    ],
-    pinterestBoards: boards,
-    limit: Math.max(60, requested),
-  });
-
-  const liveVisuals = livePhotos.map((p, i) => toVisual(p, i));
   const curatedVisuals = getCategoryVisualPool(occasionLabel).map((url, i) =>
     toCuratedVisual(url, i),
   );
+  const s3FestivalUrls = await getCategoryImagesFromS3(`festival ${occasionLabel}`, requested).catch(() => []);
+  const s3Visuals = s3FestivalUrls.map((url, i) => ({
+    id: `fest_s3_${i}`,
+    url,
+    source: 'curated' as const,
+    credit: 'BGOS Festival Library',
+  }));
 
-  let pool = dedupeByUrKey([...liveVisuals, ...curatedVisuals]);
+  let pool = dedupeByUrKey([...s3Visuals, ...curatedVisuals]);
   if (pool.length === 0) return [];
 
   const dayKey = new Date().toISOString().slice(0, 10);

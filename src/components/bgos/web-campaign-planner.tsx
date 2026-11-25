@@ -99,18 +99,40 @@ export function WebCampaignPlanner({ businessName }: { businessName?: string }) 
     }
   }, []);
 
-  // 3. 1-Tap Autonomous Generation (No prompt required!)
+  // 3. 1-Tap Autonomous Async Generation (No prompt required!)
   const handleGenerateCampaign = async () => {
     try {
       setIsGenerating(true);
+      const idempotencyKey = `web_camp_${Date.now()}`;
       const res = await fetch('/api/social/ai-batch-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daysCount: 30 }),
+        body: JSON.stringify({ daysCount: 30, idempotencyKey }),
       });
       const data = await res.json();
 
-      if (data?.success) {
+      if (data?.async && data?.jobId) {
+        const deadline = Date.now() + 90_000;
+        let finished = false;
+        while (!finished && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 1500));
+          const stRes = await fetch(
+            `/api/social/ai-batch-campaign/status?jobId=${encodeURIComponent(data.jobId)}`,
+          );
+          const st = await stRes.json();
+          if (st?.status === 'completed') {
+            finished = true;
+            break;
+          }
+          if (st?.status === 'failed') {
+            throw new Error(st?.error || 'Failed to generate 30-day campaign');
+          }
+        }
+        if (!finished) {
+          throw new Error('Campaign generation timed out; refresh shortly to view drafted posts.');
+        }
+        await fetchPosts();
+      } else if (data?.success) {
         await fetchPosts();
       } else {
         alert(data?.error || 'Failed to generate 30-day campaign');
@@ -319,7 +341,7 @@ export function WebCampaignPlanner({ businessName }: { businessName?: string }) 
             const mediaUrl =
               post.mediaUrls && post.mediaUrls.length > 0
                 ? post.mediaUrls[0]
-                : 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
+                : googlePhotos[idx % Math.max(1, googlePhotos.length)]?.url || '';
 
             const dateDisplay = post.scheduledAt
               ? new Date(post.scheduledAt).toLocaleDateString('en-US', {
@@ -354,8 +376,12 @@ export function WebCampaignPlanner({ businessName }: { businessName?: string }) 
                   </div>
 
                   {/* Image */}
-                  <div className="relative aspect-video bg-muted overflow-hidden">
-                    <img src={mediaUrl} alt="Campaign post visual" className="w-full h-full object-cover" />
+                  <div className="relative aspect-video bg-muted overflow-hidden flex items-center justify-center">
+                    {mediaUrl ? (
+                      <img src={mediaUrl} alt="Campaign post visual" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground font-medium">Choose GBP or AI Photo</span>
+                    )}
                   </div>
 
                   {/* Caption */}

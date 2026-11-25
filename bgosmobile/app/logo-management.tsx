@@ -33,9 +33,6 @@ const PRESET_COLORS = [
   { label: 'Slate Navy', hex: '#0F172A' },
 ];
 
-const DEFAULT_SAMPLE_PHOTO =
-  'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
-
 export default function LogoManagementScreen() {
   const router = useRouter();
   const brandRes = useResource<any>('/api/brand-profile');
@@ -238,11 +235,7 @@ export default function LogoManagementScreen() {
     gbpPlace.data?.place?.title || brandRes.data?.profile?.businessName || 'My Business';
   const effectiveCategory =
     gbpPlace.data?.place?.category || brandRes.data?.profile?.industry || '';
-  const samplePreviewPhoto = /security|guard|gunman|bouncer|bodyguard|patrol|shieldhire/i.test(
-    `${effectiveBusinessName} ${effectiveCategory}`,
-  )
-    ? `${BGOS_PUBLIC_WEB_URL}/images/industry/security.webp`
-    : DEFAULT_SAMPLE_PHOTO;
+  const samplePreviewPhoto = '';
 
   return (
     <Screen scrollable={false}>
@@ -434,11 +427,28 @@ export default function LogoManagementScreen() {
           <Text style={styles.previewSubtext}>*Image is for representational purposes</Text>
 
           <View style={styles.mockupContainer}>
-            <Image
-              source={{ uri: samplePreviewPhoto }}
-              style={styles.mockupImage}
-              resizeMode="cover"
-            />
+            {samplePreviewPhoto ? (
+              <Image
+                source={{ uri: samplePreviewPhoto }}
+                style={styles.mockupImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.mockupImage,
+                  {
+                    backgroundColor: brandColor || '#1B8380',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
+              >
+                <Text style={{ color: 'rgba(255,255,255,0.88)', fontWeight: '700', fontSize: 15 }}>
+                  {effectiveBusinessName}
+                </Text>
+              </View>
+            )}
             {/* Watermark in bottom right corner */}
             <View
               style={[

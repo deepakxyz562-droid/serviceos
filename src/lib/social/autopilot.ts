@@ -323,7 +323,7 @@ Requirements:
     if(!content.trim())throw new Error('AI returned empty content');
     }
 
-    // 2. Generate Graphic with configured AI image provider (Cloudflare FLUX.2 / SiliconFlow / NVIDIA / Gemini)
+    // 2. Resolve Visual: GBP Photos First -> Uploaded -> Cached AI -> Recraft V4.1 Flash V2 / NVIDIA Schnell
     const imagePrompt = `High quality commercial advertisement visual for ${businessName} (${industry} in ${city}) showcasing ${todayTheme.focus} — ${todayTheme.angle}. Professional commercial photography, authentic setting, dynamic composition, warm natural lighting, ultra sharp focus, pure visual photography.`;
     const mediaUrls: string[] = [];
     let postDesignJson: string | null = null;
@@ -341,25 +341,40 @@ Requirements:
       content = template.content?.trim() || '';
       if (!content) throw new Error('Add a caption to the selected saved poster before publishing.');
     } else {
-      const key = await db.aiProviderKey.findFirst({where:{isActive:true,provider:{in:['gemini','cloudflare','siliconflow','nvidia','openrouter']}},orderBy:{priority:'asc'},select:{provider:true}});
-      const envProvider =
-        process.env.GEMINI_API_KEY?.trim()
-          ? 'gemini'
-          : process.env.CLOUDFLARE_ACCOUNT_ID && (process.env.CLOUDFLARE_AUTH_KEY || process.env.CLOUDFLARE_API_TOKEN)
-            ? 'cloudflare'
-            : process.env.SILICONFLOW_API_KEY?.trim()
-              ? 'siliconflow'
-              : (process.env.NVIDIA_API_KEY || process.env.NVAPI_KEY)?.trim()
-                ? 'nvidia'
-                : process.env.OPENROUTER_API_KEY?.trim()
-                  ? 'openrouter'
-                  : null;
-      const selectedProvider = (key?.provider || envProvider) as 'gemini'|'cloudflare'|'siliconflow'|'nvidia'|'openrouter'|null;
-      if (!selectedProvider) throw new Error('Configure an image provider in Superadmin.');
-      const generated = await generateDesignImage(imagePrompt,selectedProvider,AbortSignal.timeout(60000),true);
-      if (!generated?.bytes) throw new Error('Image generation returned no image.');
-      const asset = await saveDesignAsset(generated.bytes, tenantId, actorId, { format: 'jpeg' });
-      mediaUrls.push(asset.url);
+      const { pickPostVisualUrl } = await import('@/lib/designs/ai-visual-engine');
+      const selectedVisual = await pickPostVisualUrl({
+        tenantId,
+        industry,
+        businessName,
+        city,
+        topic: todayTheme.focus,
+        slotIndex: Number(slot.date.replace(/-/g, '')) || 0,
+        allowAiGeneration: false,
+      });
+
+      if (selectedVisual && selectedVisual.source !== 'stock_library') {
+        mediaUrls.push(selectedVisual.url);
+      } else {
+        try {
+          const generated = await generateDesignImage(
+            imagePrompt,
+            'openrouter',
+            AbortSignal.timeout(45000),
+            false,
+            { businessName, category: industry, city },
+          );
+          if (generated?.bytes) {
+            const asset = await saveDesignAsset(generated.bytes, tenantId, actorId, { format: 'jpeg' });
+            mediaUrls.push(asset.url);
+          }
+        } catch (imgErr) {
+          if (selectedVisual?.url) {
+            mediaUrls.push(selectedVisual.url);
+          } else {
+            throw imgErr;
+          }
+        }
+      }
     }
 
     // 3. Match publish targets to enabled channels

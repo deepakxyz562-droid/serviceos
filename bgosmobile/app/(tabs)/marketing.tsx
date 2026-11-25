@@ -78,9 +78,6 @@ import {
 } from '../../../shared/image-review';
 import { normalizePendingUpload, uploadFileToStorage } from '../../src/lib/upload';
 
-const DEFAULT_FALLBACK_PHOTO =
-  'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
-
 const TIME_SLOTS = [
   { label: '08:00 AM (Early Rush)', value: '08:00' },
   { label: '09:00 AM (Standard Business)', value: '09:00' },
@@ -226,11 +223,17 @@ function AutoBrandedPosterCard({
       {layout === 'split_card' ? (
         <View style={{ flex: 1 }}>
           <View style={{ height: '52%', width: '100%', overflow: 'hidden' }}>
-            <Image
-              source={{ uri: photoUri || DEFAULT_FALLBACK_PHOTO }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-            />
+            {photoUri ? (
+              <Image
+                source={{ uri: photoUri }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: '100%', height: '100%', backgroundColor: themeConfig.accent || '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="photo-library" size={28} color="rgba(255,255,255,0.6)" />
+              </View>
+            )}
           </View>
           <View
             style={{
@@ -292,11 +295,15 @@ function AutoBrandedPosterCard({
         </View>
       ) : (
         <>
-          <Image
-            source={{ uri: photoUri || DEFAULT_FALLBACK_PHOTO }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-          />
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={{ width: '100%', height: '100%', backgroundColor: themeConfig.scrimBg || '#0F172A' }} />
+          )}
 
           {/* If Urgent 24/7 Layout: Top Red Banner */}
           {layout === 'urgent_callout' ? (
@@ -1201,9 +1208,7 @@ export default function MarketingScreen() {
   const [discountBadge, setDiscountBadge] = useState('SPECIAL OFFER');
   const [subtitle, setSubtitle] = useState('Quality & Service You Can Trust.');
   const [ctaText, setCtaText] = useState('Learn More');
-  const [bgPhotoUrl, setBgPhotoUrl] = useState(
-    'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp'
-  );
+  const [bgPhotoUrl, setBgPhotoUrl] = useState('');
 
   // Caption & copy
   const [caption, setCaption] = useState('');
@@ -1857,7 +1862,7 @@ export default function MarketingScreen() {
         subtitle,
         badge: discountBadge,
         cta: ctaText,
-        photo: 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp',
+        photo: bgPhotoUrl || '',
         ratio: aspectRatio,
         theme: colorTheme,
         layout: posterLayout,

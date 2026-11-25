@@ -1090,10 +1090,7 @@ export async function uploadGoogleBusinessMedia(
  *
  * GET https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/media
  */
-export async function listGoogleBusinessMedia(
-  account: SocialAccountData,
-  options?: { pageSize?: number; pageToken?: string },
-): Promise<{
+type GbpMediaListResult = {
   mediaItems: Array<{
     name: string;
     googleUrl: string;
@@ -1103,10 +1100,40 @@ export async function listGoogleBusinessMedia(
     mediaFormat?: 'PHOTO' | 'VIDEO' | string;
   }>;
   nextPageToken?: string;
-}> {
+};
+
+const GBP_MEDIA_CACHE_TTL_MS = 5 * 60 * 1000;
+const gbpMediaListCache = new Map<string, { value: GbpMediaListResult; expiresAt: number }>();
+
+export function invalidateGoogleBusinessMediaCache(accountId?: string): void {
+  if (!accountId) {
+    gbpMediaListCache.clear();
+    return;
+  }
+  for (const key of gbpMediaListCache.keys()) {
+    if (key.startsWith(`${accountId}:`)) {
+      gbpMediaListCache.delete(key);
+    }
+  }
+}
+
+export async function listGoogleBusinessMedia(
+  account: SocialAccountData,
+  options?: { pageSize?: number; pageToken?: string; forceRefresh?: boolean },
+): Promise<GbpMediaListResult> {
   const { accountName, locationId } = await extractLocationRef(account);
   const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
   const pageSize = options?.pageSize || 50;
+  const cacheKey = `${account.id || locationId}:${normalizedAccount}:${locationId}:${pageSize}:${options?.pageToken || ''}`;
+  const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+
+  if (!isTestEnv && !options?.forceRefresh) {
+    const cached = gbpMediaListCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+  }
+
   let url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media?pageSize=${pageSize}`;
   if (options?.pageToken) {
     url += `&pageToken=${encodeURIComponent(options.pageToken)}`;
@@ -1143,10 +1170,19 @@ export async function listGoogleBusinessMedia(
       (/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(m.googleUrl || '') ? 'VIDEO' : 'PHOTO'),
   }));
 
-  return {
+  const result: GbpMediaListResult = {
     mediaItems: items,
     nextPageToken: data.nextPageToken,
   };
+
+  if (!isTestEnv) {
+    gbpMediaListCache.set(cacheKey, {
+      value: result,
+      expiresAt: Date.now() + GBP_MEDIA_CACHE_TTL_MS,
+    });
+  }
+
+  return result;
 }
 
 /**

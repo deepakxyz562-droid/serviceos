@@ -425,9 +425,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update tenant settings with active & bound profile
+    // Update tenant settings with active & bound profile without blindly wiping established workspace identity
+    const existingLocationProfiles =
+      tenantSettings.locationProfiles && typeof tenantSettings.locationProfiles === 'object'
+        ? (tenantSettings.locationProfiles as Record<string, Record<string, unknown>>)
+        : {};
+    existingLocationProfiles[profileId] = {
+      title: finalName,
+      category: finalCategory,
+      city: gbpCity || undefined,
+      address: gbpAddress || undefined,
+      placeId: gbpPlaceId || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    tenantSettings.locationProfiles = existingLocationProfiles;
     tenantSettings.activeGbpLocationId = profileId;
-    tenantSettings.boundGbpLocationId = profileId;
+    tenantSettings.boundGbpLocationId = tenantSettings.boundGbpLocationId || profileId;
     tenantSettings.boundAt = tenantSettings.boundAt || new Date().toISOString();
     tenantSettings.activeGbpTitle = finalName;
     tenantSettings.activeGbpCategory = finalCategory;
@@ -451,35 +464,50 @@ export async function POST(request: NextRequest) {
         ? await ensureUniqueBgosWorkspaceSlug(finalName, user.tenantId, user.workspaceId || undefined)
         : tenant?.slug;
 
-    // Atomically synchronize Tenant, Workspace and BrandProfile
+    const existingBp = await db.brandProfile.findUnique({ where: { tenantId } }).catch(() => null);
+    const isPlaceholderIdentity = (val?: string | null) =>
+      !val || /^(business|local business|local service pro|professional services|general|services)$/i.test(val.trim());
+    const shouldSyncPrimaryIdentity =
+      body.allowReplace === true ||
+      (!activity.hasActivity && (!boundProfileId || boundProfileId === profileId)) ||
+      isPlaceholderIdentity(tenant?.industry) ||
+      isPlaceholderIdentity(existingBp?.industry);
+
+    // Synchronize Tenant, Workspace and BrandProfile while protecting primary workspace identity
     await Promise.all([
       db.tenant.update({
         where: { id: user.tenantId },
         data: {
           settingsJson: JSON.stringify(tenantSettings),
-          industry: finalCategory,
-          name: finalName,
+          ...(shouldSyncPrimaryIdentity ? { industry: finalCategory, name: finalName } : {}),
           ...(nextSlug && nextSlug !== tenant?.slug ? { slug: nextSlug } : {}),
-          ...(gbpAddress ? { address: gbpAddress } : {}),
-          ...(gbpCity ? { city: gbpCity } : {}),
-          ...(gbpPlaceId ? { googlePlaceId: gbpPlaceId } : {}),
+          ...(shouldSyncPrimaryIdentity && gbpAddress ? { address: gbpAddress } : {}),
+          ...(shouldSyncPrimaryIdentity && gbpCity ? { city: gbpCity } : {}),
+          ...(shouldSyncPrimaryIdentity && gbpPlaceId ? { googlePlaceId: gbpPlaceId } : {}),
           ...(sanitizedState !== (tenant?.state ?? null) ? { state: sanitizedState } : {}),
         },
       }),
-      db.workspace
-        .updateMany({
-          where: { tenantId: user.tenantId },
-          data: {
-            name: finalName,
-            industry: finalCategory,
-            ...(nextSlug && nextSlug !== tenant?.slug ? { slug: nextSlug } : {}),
-          },
-        })
-        .catch(() => {}),
+      ...(shouldSyncPrimaryIdentity
+        ? [
+            db.workspace
+              .updateMany({
+                where: { tenantId: user.tenantId },
+                data: {
+                  name: finalName,
+                  industry: finalCategory,
+                  ...(nextSlug && nextSlug !== tenant?.slug ? { slug: nextSlug } : {}),
+                },
+              })
+              .catch(() => {}),
+          ]
+        : []),
       // Purge cached competitors so the new profile loads fresh local competitors
       db.competitor.deleteMany({ where: { tenantId: user.tenantId } }).catch(() => {}),
       (async () => {
-        const existingBp = await db.brandProfile.findUnique({ where: { tenantId } }).catch(() => null);
+        if (!shouldSyncPrimaryIdentity && existingBp) {
+          // Preserve established BrandProfile workspace identity; do not overwrite with another location's category/services
+          return;
+        }
         const dataToSave: any = {
           businessName: finalName,
           industry: finalCategory,
