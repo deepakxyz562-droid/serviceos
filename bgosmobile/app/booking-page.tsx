@@ -23,6 +23,8 @@ import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { BGOS_PUBLIC_WEB_URL } from '../src/lib/constants';
 import { normalizePendingUpload, uploadFileToStorage } from '../src/lib/upload';
+import { BookingLinkModal } from '../src/components/gbp/booking-link-modal';
+import type { GbpPlaceResult } from '../src/components/gbp/types';
 import type { BgosPageVisibility, BgosWorkspace } from '../../shared/bgos-contracts';
 
 interface ServiceItem {
@@ -115,6 +117,9 @@ export default function BusinessPageSettingsScreen() {
     0,
     tab === 'controls',
   );
+  const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place', 0, tab === 'controls');
+
+  const [bookingLinkModalOpen, setBookingLinkModalOpen] = useState(false);
 
   const [config, setConfig] = useState<PageConfig>({});
   const [dirty, setDirty] = useState(false);
@@ -1178,6 +1183,33 @@ export default function BusinessPageSettingsScreen() {
                     />
                   )}
                 </View>
+                <View style={[styles.toggleRow, { alignItems: 'flex-start', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }]}>
+                  <View style={{ flex: 1, paddingRight: 10, gap: 3 }}>
+                    <Text style={styles.toggleTitle}>Google Business Booking Link</Text>
+                    {gbpPlace.data?.place?.googleBookingUrl ? (
+                      <Pressable onPress={() => Linking.openURL(gbpPlace.data!.place!.googleBookingUrl!).catch(() => {})}>
+                        <Text selectable style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>
+                          {gbpPlace.data.place.googleBookingUrl}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.toggleDesc}>
+                        {gbpPlace.loading
+                          ? 'Checking live Google Business link...'
+                          : gbpPlace.data?.place?.savedBookingUrl ||
+                            gbpPlace.data?.tenantFallback?.bookingUrl ||
+                            'Not set on Google Business Profile'}
+                      </Text>
+                    )}
+                  </View>
+                  <Action
+                    label="Update"
+                    icon="edit"
+                    secondary
+                    compact
+                    onPress={() => setBookingLinkModalOpen(true)}
+                  />
+                </View>
               </Card>
 
               <Card>
@@ -1307,6 +1339,32 @@ export default function BusinessPageSettingsScreen() {
           <Text style={styles.uploadOverlayText}>Uploading {uploadingMedia} image...</Text>
         </View>
       ) : null}
+
+      <BookingLinkModal
+        visible={bookingLinkModalOpen}
+        googleBookingUrl={gbpPlace.data?.place?.googleBookingUrl || null}
+        currentBookingUrl={
+          gbpPlace.data?.place?.savedBookingUrl ||
+          gbpPlace.data?.place?.bookingUrl ||
+          gbpPlace.data?.tenantFallback?.bookingUrl ||
+          null
+        }
+        defaultBookingUrl={
+          gbpPlace.data?.place?.defaultBookingUrl ||
+          gbpPlace.data?.tenantFallback?.defaultBookingUrl ||
+          `${fullPublicUrl}/book`
+        }
+        isLocked={
+          gbpPlace.data?.place?.pendingGoogleUpdate?.status === 'PENDING' ||
+          gbpPlace.data?.place?.pendingGoogleUpdate?.status === 'VERIFICATION_REQUIRED'
+        }
+        pendingUpdateLabel={gbpPlace.data?.place?.pendingGoogleUpdate?.label}
+        onClose={() => setBookingLinkModalOpen(false)}
+        onSaved={async (res) => {
+          await Promise.all([gbpPlace.refresh(), workspace.refresh()]);
+          showToast(res.syncedToGoogle ? 'Booking link synced to Google' : 'Booking link saved');
+        }}
+      />
     </Screen>
   );
 }

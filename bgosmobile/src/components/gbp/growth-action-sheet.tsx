@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { colors, ui } from '../ui';
 import { TutorialVideoModal } from './tutorial-video-modal';
 import { PendingUpdateBanner } from './pending-update-banner';
+import { BookingLinkEditorContent } from './booking-link-modal';
 import type { PendingGoogleUpdate } from './types';
 import { apiRequest } from '../../lib/api';
 
@@ -179,10 +180,8 @@ export function GrowthActionSheet({
 
   // Booking Modal state (Video 3)
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
-  const [bookingType, setBookingType] = useState<'bgos' | 'google_calendar'>('bgos');
-  const [customBookingUrl, setCustomBookingUrl] = useState('');
   const [defaultBookingUrl, setDefaultBookingUrl] = useState('');
-  const [savingBooking, setSavingBooking] = useState(false);
+  const [activeBookingUrl, setActiveBookingUrl] = useState('');
 
   const [inAppNotice, setInAppNotice] = useState<{ title: string; message: string; type: 'success' | 'error' } | null>(null);
 
@@ -435,35 +434,6 @@ export function GrowthActionSheet({
     }
   };
 
-  const handleSaveBooking = async () => {
-    if (isLocked) {
-      Alert.alert(
-        'Update in Progress',
-        `A previous Google update (${pendingUpdate?.label || 'Profile edit'}) is currently under review by Google. To protect your listing from conflicts, new submissions are locked until this completes.`,
-      );
-      return;
-    }
-    setSavingBooking(true);
-    try {
-      const res = await apiRequest<{ success: boolean; bookingUrl: string; syncedToGoogle: boolean; message: string }>('/api/gbp/growth-actions', {
-        method: 'POST',
-        body: {
-          action: 'update_booking_button',
-          bookingType,
-          customUrl: bookingType !== 'bgos' ? customBookingUrl.trim() : undefined,
-          customBookingUrl: bookingType !== 'bgos' ? customBookingUrl.trim() : undefined,
-        },
-      });
-      showNotice('✓ Booking Button Set', res.message || 'Booking action updated.', 'success');
-      setBookingModalOpen(false);
-      await onRefresh();
-    } catch (e: any) {
-      showNotice('Booking Setup Issue', e?.message || 'Could not save booking link.', 'error');
-    } finally {
-      setSavingBooking(false);
-    }
-  };
-
   const handleAutoWriteAllServices = async (actionId?: string) => {
     if (isLocked) {
       Alert.alert(
@@ -496,12 +466,9 @@ export function GrowthActionSheet({
         break;
       case 'enable_booking':
         if (action.bookingUrl) {
-          setDefaultBookingUrl(action.bookingUrl);
-          if (action.bookingUrl.includes('google') || action.bookingUrl.includes('calendar')) {
-            setBookingType('google_calendar');
-            setCustomBookingUrl(action.bookingUrl);
-          } else {
-            setBookingType('bgos');
+          setActiveBookingUrl(action.bookingUrl);
+          if (!action.bookingUrl.includes('google') && !action.bookingUrl.includes('calendar')) {
+            setDefaultBookingUrl(action.bookingUrl);
           }
         }
         setBookingModalOpen(true);
@@ -1949,221 +1916,20 @@ export function GrowthActionSheet({
                 borderTopRightRadius: 28,
               }}
             >
-              <View
-                style={{
-                  width: '100%',
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 20,
-                  padding: 20,
-                  gap: 14,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 10,
-                  elevation: 10,
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+              <View style={{ width: '100%' }}>
+                <BookingLinkEditorContent
+                  visible={bookingModalOpen}
+                  currentBookingUrl={activeBookingUrl || defaultBookingUrl || null}
+                  defaultBookingUrl={defaultBookingUrl || null}
+                  isLocked={isLocked}
+                  pendingUpdateLabel={pendingUpdate?.label}
+                  onClose={() => setBookingModalOpen(false)}
+                  onError={(msg) => showNotice('Booking Setup Issue', msg, 'error')}
+                  onSaved={async (res) => {
+                    showNotice('✓ Booking Button Set', res.message || 'Booking action updated.', 'success');
+                    await onRefresh();
                   }}
-                >
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 8,
-                      flex: 1,
-                      minWidth: 0,
-                      marginRight: 10,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: '#EFF6FF',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <MaterialIcons name="event-available" size={18} color="#2563EB" />
-                    </View>
-                    <Text
-                      style={{ fontSize: 16, fontWeight: '800', color: colors.ink, flex: 1, minWidth: 0 }}
-                      numberOfLines={1}
-                    >
-                      Google Maps Booking Button
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setBookingModalOpen(false)}
-                    hitSlop={12}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: '#F1F5F9',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <MaterialIcons name="close" size={18} color={colors.ink} />
-                  </Pressable>
-                </View>
-
-                <Text style={{ fontSize: 12, color: colors.muted, lineHeight: 17 }}>
-                  Add a 1-tap &ldquo;Book Online&rdquo; button directly on your Google Maps listing without paying for Calendly.
-                </Text>
-
-                {/* Choice 1: BGOS Free Online Booking Page */}
-                <Pressable
-                  onPress={() => setBookingType('bgos')}
-                  style={{
-                    backgroundColor: bookingType === 'bgos' ? '#F0FDF4' : '#F8FAFC',
-                    borderColor: bookingType === 'bgos' ? '#16A34A' : '#E2E8F0',
-                    borderWidth: 1.5,
-                    borderRadius: 12,
-                    padding: 12,
-                    gap: 4,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons
-                        name={bookingType === 'bgos' ? 'radio-button-checked' : 'radio-button-unchecked'}
-                        size={18}
-                        color={bookingType === 'bgos' ? '#16A34A' : '#94A3B8'}
-                      />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                        ⚡ BGOS Free Booking Page (Recommended)
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#15803D' }}>FREE</Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 11, color: '#64748B', marginLeft: 24, lineHeight: 15 }}>
-                    Zero monthly fee. Live appointment calendar, SMS/WhatsApp alerts, and CRM customer tracking built in.
-                  </Text>
-                  {defaultBookingUrl ? (
-                    <Text style={{ fontSize: 10.5, color: '#0369A1', marginLeft: 24, fontFamily: 'monospace' }}>
-                      {defaultBookingUrl}
-                    </Text>
-                  ) : null}
-                </Pressable>
-
-                {/* Choice 2: Google Calendar Appointment Schedule */}
-                <Pressable
-                  onPress={() => setBookingType('google_calendar')}
-                  style={{
-                    backgroundColor: bookingType === 'google_calendar' ? '#EFF6FF' : '#F8FAFC',
-                    borderColor: bookingType === 'google_calendar' ? '#2563EB' : '#E2E8F0',
-                    borderWidth: 1.5,
-                    borderRadius: 12,
-                    padding: 12,
-                    gap: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons
-                        name={bookingType === 'google_calendar' ? 'radio-button-checked' : 'radio-button-unchecked'}
-                        size={18}
-                        color={bookingType === 'google_calendar' ? '#2563EB' : '#94A3B8'}
-                      />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
-                        📅 Custom Website or Google Calendar Link
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                      <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#1D4ED8' }}>CUSTOM</Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 11, color: '#64748B', marginLeft: 24, lineHeight: 15 }}>
-                    Paste your official booking URL, website page, or Google Calendar schedule link below.
-                  </Text>
-
-                  {bookingType === 'google_calendar' && (
-                    <TextInput
-                      value={customBookingUrl}
-                      onChangeText={setCustomBookingUrl}
-                      placeholder="https://partypies-events.grexa.site/ or https://calendar.app.google/..."
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="url"
-                      autoCapitalize="none"
-                      style={{
-                        backgroundColor: '#FFFFFF',
-                        borderWidth: 1,
-                        borderColor: '#CBD5E1',
-                        borderRadius: 10,
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        fontSize: 13,
-                        color: colors.ink,
-                        marginTop: 4,
-                      }}
-                    />
-                  )}
-                </Pressable>
-
-                {(() => {
-                  const testUrl = bookingType === 'bgos' ? defaultBookingUrl : customBookingUrl;
-                  if (!testUrl) return null;
-                  return (
-                    <Pressable
-                      onPress={() => Linking.openURL(testUrl).catch(() => {})}
-                      style={{ alignSelf: 'flex-start', paddingVertical: 2 }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#2563EB' }}>
-                        Test Booking Page ↗
-                      </Text>
-                    </Pressable>
-                  );
-                })()}
-
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                  <Pressable
-                    onPress={() => setBookingModalOpen(false)}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#F1F5F9',
-                      paddingVertical: 12,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '700' }}>Cancel</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={handleSaveBooking}
-                    disabled={savingBooking || (bookingType === 'google_calendar' && !customBookingUrl.trim())}
-                    style={{
-                      flex: 2,
-                      backgroundColor: colors.brand,
-                      paddingVertical: 12,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: savingBooking || (bookingType === 'google_calendar' && !customBookingUrl.trim()) ? 0.6 : 1,
-                    }}
-                  >
-                    {savingBooking ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
-                        Save &amp; Sync to Google
-                      </Text>
-                    )}
-                  </Pressable>
-                </View>
+                />
               </View>
             </View>
           )}

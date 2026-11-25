@@ -17,6 +17,7 @@ import {
   resolveTenantPublicUrls,
 } from '@/lib/gbp/place-actions-sync';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
+import { invalidatePlacePayloadCacheForTenant } from '@/lib/social/google-connection-state';
 import {
   getPendingGoogleUpdate,
   setPendingGoogleUpdate,
@@ -1287,8 +1288,11 @@ export async function POST(request: NextRequest) {
         settings = JSON.parse(tenant.settingsJson || '{}');
       } catch {}
 
-      const urls = resolveTenantPublicUrls(tenant, settings);
-      let selectedBookingUrl = urls.bookingUrl;
+      const defaultUrls = resolveTenantPublicUrls(tenant, {
+        ...settings,
+        bookingLink: undefined,
+      });
+      let selectedBookingUrl = defaultUrls.bookingUrl;
       if (bookingType === 'google_calendar' || bookingType === 'custom') {
         if (!customUrl || !/^https?:\/\//i.test(customUrl)) {
           return NextResponse.json({ error: 'Please enter a valid https:// booking URL' }, { status: 400 });
@@ -1297,7 +1301,7 @@ export async function POST(request: NextRequest) {
         settings.bookingLink = customUrl;
       } else {
         // Default to BGOS free booking page
-        settings.bookingLink = urls.bookingUrl;
+        settings.bookingLink = defaultUrls.bookingUrl;
       }
 
       if (!settings.googlePlaceActions) settings.googlePlaceActions = {};
@@ -1315,6 +1319,7 @@ export async function POST(request: NextRequest) {
       }).catch(() => null);
 
       const syncedToGoogle = Boolean(syncRes?.syncedActions?.includes('APPOINTMENT'));
+      const googleWarnings = Array.isArray(syncRes?.warnings) ? syncRes.warnings : [];
       if (syncedToGoogle) {
         const newPending: PendingGoogleUpdate = {
           status: 'PENDING',
@@ -1333,10 +1338,14 @@ export async function POST(request: NextRequest) {
         }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
       }
 
+      invalidatePlacePayloadCacheForTenant(user.tenantId);
+      invalidateBootstrapCache(user.tenantId);
+
       return NextResponse.json({
         success: true,
         bookingUrl: selectedBookingUrl,
         syncedToGoogle,
+        googleWarnings,
         message: syncedToGoogle
           ? `Booking button synced to Google Maps (${selectedBookingUrl}).`
           : `Booking URL saved (${selectedBookingUrl}).`,

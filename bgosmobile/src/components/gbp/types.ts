@@ -148,6 +148,12 @@ export type PendingGoogleUpdate = {
   hasPendingEdits?: boolean;
 };
 
+export type GbpPlaceActionLinkItem = {
+  name: string;
+  placeActionType: string;
+  uri: string;
+};
+
 export type GbpPlaceResult = {
   isConnected: boolean;
   connectionState?: GbpConnectionState;
@@ -186,6 +192,11 @@ export type GbpPlaceResult = {
     attributes?: Record<string, string[]>;
     specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
     moreHours?: Record<string, string>;
+    googleBookingUrl?: string | null;
+    savedBookingUrl?: string | null;
+    bookingUrl?: string | null;
+    defaultBookingUrl?: string | null;
+    placeActionLinks?: GbpPlaceActionLinkItem[];
     pendingGoogleUpdate?: PendingGoogleUpdate | null;
   } | null;
   tenantFallback?: {
@@ -214,6 +225,11 @@ export type GbpPlaceResult = {
     attributes?: Record<string, string[]>;
     specialHours?: Array<{ date: string; open: boolean; openTime?: string; closeTime?: string }>;
     moreHours?: Record<string, string>;
+    googleBookingUrl?: string | null;
+    savedBookingUrl?: string | null;
+    bookingUrl?: string | null;
+    defaultBookingUrl?: string | null;
+    placeActionLinks?: GbpPlaceActionLinkItem[];
   } | null;
   metrics?: {
     totalViews: number;

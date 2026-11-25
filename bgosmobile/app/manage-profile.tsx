@@ -24,6 +24,7 @@ import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
 import { extractCityOrLocality } from '../src/lib/address';
 import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
 import { PendingUpdateBanner } from '../src/components/gbp/pending-update-banner';
+import { BookingLinkModal } from '../src/components/gbp/booking-link-modal';
 import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
@@ -208,11 +209,27 @@ export default function ManageGoogleProfileScreen() {
   const [savingSecondaryPhone, setSavingSecondaryPhone] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
   const [savingChatToggle, setSavingChatToggle] = useState(false);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [hoursState, setHoursState] = useState<RegularHoursMap>(() => ({ ...DEFAULT_REGULAR_HOURS }));
 
   const place = placeRes.data?.place;
   const isConnected = Boolean(placeRes.data?.isConnected);
   const currencySymbol = workspaceRes.data?.billing?.currency === 'USD' ? '$' : '₹';
+  const googleBookingUrl = place?.googleBookingUrl || null;
+  const savedBookingUrl =
+    place?.savedBookingUrl ||
+    place?.bookingUrl ||
+    placeRes.data?.tenantFallback?.bookingUrl ||
+    null;
+  const defaultBookingUrl =
+    place?.defaultBookingUrl ||
+    placeRes.data?.tenantFallback?.defaultBookingUrl ||
+    (workspaceRes.data?.publicSlug
+      ? `https://bgos.site/${encodeURIComponent(workspaceRes.data.publicSlug)}/book`
+      : null);
+  const isBookingLocked =
+    place?.pendingGoogleUpdate?.status === 'PENDING' ||
+    place?.pendingGoogleUpdate?.status === 'VERIFICATION_REQUIRED';
 
   function openServiceEditor(svc?: ProfileServiceItem) {
     setEditingSvcId(svc?.id || null);
@@ -1113,6 +1130,40 @@ export default function ManageGoogleProfileScreen() {
                   hitSlop={8}
                 >
                   <MaterialIcons name="edit" size={18} color="#009F50" />
+                </Pressable>
+              </View>
+
+              {/* Google Business Booking Link */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="event-available" size={20} color="#2563EB" style={styles.rowIcon} />
+                <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={styles.rowLabel}>Google Business Booking Link</Text>
+                    {googleBookingUrl ? (
+                      <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#15803D' }}>Live on Google</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {googleBookingUrl ? (
+                    <Pressable onPress={() => Linking.openURL(googleBookingUrl).catch(() => {})}>
+                      <Text selectable style={[styles.rowValue, { color: '#2563EB' }]}>
+                        {googleBookingUrl}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.rowValue, { color: '#94A3B8' }]}>
+                      Not set on Google Business Profile
+                    </Text>
+                  )}
+                  {savedBookingUrl && savedBookingUrl !== googleBookingUrl ? (
+                    <Text selectable style={{ fontSize: 11.5, color: '#64748B' }}>
+                      Saved in BGOS: {savedBookingUrl}
+                    </Text>
+                  ) : null}
+                </View>
+                <Pressable onPress={() => setBookingModalOpen(true)} hitSlop={8}>
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
                 </Pressable>
               </View>
 
@@ -2308,6 +2359,26 @@ export default function ManageGoogleProfileScreen() {
         onSaved={async (msg) => {
           Alert.alert('Media Saved', msg);
           await photosRes.refresh();
+        }}
+      />
+
+      <BookingLinkModal
+        visible={bookingModalOpen}
+        googleBookingUrl={googleBookingUrl}
+        currentBookingUrl={savedBookingUrl}
+        defaultBookingUrl={defaultBookingUrl}
+        isLocked={isBookingLocked}
+        pendingUpdateLabel={place?.pendingGoogleUpdate?.label}
+        onClose={() => setBookingModalOpen(false)}
+        onSaved={async (res) => {
+          await Promise.all([placeRes.refresh(), workspaceRes.refresh()]);
+          const warn = res.googleWarnings?.length
+            ? `\n\nGoogle notice: ${res.googleWarnings.join(' ')}`
+            : '';
+          Alert.alert(
+            res.syncedToGoogle ? 'Synced to Google & BGOS' : 'Booking Link Saved',
+            `${res.message || 'Booking link updated.'}${warn}`,
+          );
         }}
       />
     </Screen>

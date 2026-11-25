@@ -11,8 +11,10 @@ import {
 import {
   fetchGoogleBusinessPlaceDetails,
   fetchGoogleBusinessPerformanceMetrics,
+  listGooglePlaceActions,
   updateGoogleBusinessProfile,
 } from '@/lib/social/adapters/googlebusiness';
+import { resolveTenantPublicUrls } from '@/lib/gbp/place-actions-sync';
 import {
   mergeStructuredServices,
   upsertTenantStructuredServices,
@@ -322,6 +324,20 @@ export async function GET(request: NextRequest) {
     const hasOpeningDate = Boolean(tenantSettings.openingDate);
     const hasAttributes = Boolean(tenantSettings.attributes && Object.keys(tenantSettings.attributes).length > 0);
 
+    const defaultBookingUrl = resolveTenantPublicUrls(
+      tenant ? { name: fallbackName, slug: tenant.slug, publicSlug: (tenant as any).publicSlug } : { name: fallbackName },
+      { ...tenantSettings, bookingLink: undefined },
+    ).bookingUrl;
+    const savedBookingUrl =
+      (typeof tenantSettings.googlePlaceActions?.appointmentUri === 'string' &&
+      tenantSettings.googlePlaceActions.appointmentUri.trim()
+        ? tenantSettings.googlePlaceActions.appointmentUri.trim()
+        : '') ||
+      (typeof tenantSettings.bookingLink === 'string' && tenantSettings.bookingLink.trim()
+        ? tenantSettings.bookingLink.trim()
+        : '') ||
+      null;
+
     if (!googleAccount) {
       const placesBackfill = await fetchPublicPlacesBackfill(fallbackPlaceId);
       const resolvedFallbackCategory = placesBackfill?.category || fallbackCategory;
@@ -382,6 +398,11 @@ export async function GET(request: NextRequest) {
           attributes: tenantSettings.attributes || {},
           specialHours: tenantSettings.specialHours || [],
           moreHours: tenantSettings.moreHours || {},
+          googleBookingUrl: null,
+          savedBookingUrl,
+          bookingUrl: savedBookingUrl,
+          defaultBookingUrl,
+          placeActionLinks: [],
         },
         metrics: {
           totalViews: 0,
@@ -406,11 +427,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Connected Google Account: Fetch genuine place details & Google API telemetry in parallel
-    const [placeDetailsResult, perfResult] = await Promise.allSettled([
+    // Connected Google Account: Fetch genuine place details, performance metrics & live Place Action Links in parallel
+    const [placeDetailsResult, perfResult, placeActionsResult] = await Promise.allSettled([
       fetchGoogleBusinessPlaceDetails(googleAccount),
       fetchGoogleBusinessPerformanceMetrics(googleAccount),
+      listGooglePlaceActions(googleAccount),
     ]);
+
+    const placeActionLinks =
+      placeActionsResult.status === 'fulfilled' && Array.isArray(placeActionsResult.value)
+        ? placeActionsResult.value
+        : [];
+    const liveGoogleAppointmentLink =
+      placeActionLinks.find((l) => l.placeActionType === 'APPOINTMENT')?.uri || null;
+    const effectiveBookingUrl = liveGoogleAppointmentLink || savedBookingUrl || null;
 
     const placeDetails: {
       title: string;
@@ -672,6 +702,11 @@ export async function GET(request: NextRequest) {
         attributes: tenantSettings.attributes || {},
         specialHours: tenantSettings.specialHours || [],
         moreHours: tenantSettings.moreHours || {},
+        googleBookingUrl: liveGoogleAppointmentLink,
+        savedBookingUrl,
+        bookingUrl: effectiveBookingUrl,
+        defaultBookingUrl,
+        placeActionLinks,
         pendingGoogleUpdate: pendingGoogleUpdate || null,
       },
       metrics: {
