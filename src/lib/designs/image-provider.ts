@@ -459,8 +459,8 @@ function resolveDimensionsForAspectRatio(
     return {
       width: 896,
       height: 1120,
-      nvidiaWidth: 896,
-      nvidiaHeight: 1152,
+      nvidiaWidth: 832,
+      nvidiaHeight: 1024,
       siliconflowSize: '896x1152',
     };
   }
@@ -1651,7 +1651,7 @@ async function callNvidiaImage(params: {
 
     return fetch(`${baseUrl}/${modelPath}`, {
       method: 'POST',
-      signal: combineSignals(params.signal, isSchnell ? 10_000 : 8_000),
+      signal: combineSignals(params.signal, isSchnell ? 18_000 : 8_000),
       headers: {
         Authorization: `Bearer ${cred.secret}`,
         Accept: 'application/json',
@@ -2024,6 +2024,7 @@ export async function generateDesignImage(
     throw primaryErr;
   }
 
+  const fallbackErrors: string[] = [];
   for (const fallbackProvider of IMAGE_FALLBACK_ORDER[provider] || []) {
     if (signal.aborted) break;
     if (getActiveProviderCooldown(fallbackProvider)) continue;
@@ -2045,9 +2046,15 @@ export async function generateDesignImage(
       };
     } catch (fallbackErr) {
       recordProviderFailureCooldown(fallbackProvider, fallbackErr);
+      fallbackErrors.push(
+        `${fallbackProvider}: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
     }
   }
 
+  if (primaryErr instanceof Error && fallbackErrors.length > 0) {
+    throw new Error(`${primaryErr.message} | fallbacks -> ${fallbackErrors.join('; ')}`);
+  }
   throw primaryErr;
 }
 

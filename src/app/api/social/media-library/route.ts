@@ -201,6 +201,7 @@ export async function POST(request: NextRequest) {
         category: industry,
         city,
       },
+      { aspectRatio: '4:5' },
     );
 
     if (!generated?.bytes) {
