@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, getProductAppUrl } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { listGoogleBusinessMedia } from '@/lib/social/adapters/googlebusiness';
 
 export const dynamic = 'force-dynamic';
 import {
@@ -314,12 +316,12 @@ export async function GET(request: NextRequest) {
 
   const matchedIndustryKey = scoreIndustryMatch(effectiveCategoryText);
 
-  // ── Tier 1: the merchant's own photos (brand library + recent post media) ──
-  const [libraryRows, postRows] = await Promise.all([
+  // ── Tier 1: the merchant's own photos (brand library + recent post media + live GBP photos) ──
+  const [libraryRows, postRows, googleMediaItems] = await Promise.all([
     (db.imageLibrary?.findMany({
       where: { tenantId: user.tenantId },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 30,
       select: { id: true, name: true, url: true, folder: true, mediaType: true },
     }) ?? Promise.resolve([])).catch(
       () =>
@@ -339,6 +341,18 @@ export async function GET(request: NextRequest) {
     }) ?? Promise.resolve([])).catch(
       () => [] as Array<{ id: string; mediaUrls: string | null }>,
     ),
+    (async () => {
+      try {
+        const gAccount = await prepareGoogleAccount(user.tenantId);
+        if (gAccount) {
+          const res = await listGoogleBusinessMedia(gAccount);
+          return res.mediaItems || [];
+        }
+      } catch {
+        // Fallback gracefully if GBP is not connected or media API fails
+      }
+      return [];
+    })(),
   ]);
 
   const parseMediaList = (raw: unknown): string[] => {
@@ -362,19 +376,36 @@ export async function GET(request: NextRequest) {
   const seenUserPhotoUrls = new Set<string>();
   const invalidTechPhotoIds: string[] = [];
 
+  // Incorporate authentic Google Business Profile photos (highest commercial priority)
+  for (const gItem of googleMediaItems) {
+    const gUrl = gItem?.googleUrl || gItem?.thumbnailUrl;
+    const mediaFormat = (gItem as { mediaFormat?: string })?.mediaFormat;
+    if (
+      gUrl &&
+      typeof gUrl === 'string' &&
+      gUrl.trim() &&
+      mediaFormat !== 'VIDEO' &&
+      !/\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(gUrl)
+    ) {
+      if (!seenUserPhotoUrls.has(gUrl)) {
+        seenUserPhotoUrls.add(gUrl);
+        userPhotos.push({ url: gUrl, title: 'Google Business Profile Photo' });
+      }
+    }
+  }
+
   for (const row of libraryRows) {
     const url = typeof row?.url === 'string' ? row.url.trim() : '';
     if (!url || /\.(mp4|mov|webm|m4v|3gp|mkv|avi)(\?|$)/i.test(url)) continue;
 
-    // Filter out legacy produce/vegetable/fruit photos and Supabase images for non-food / tech merchants
+    // Filter out legacy produce/vegetable/fruit photos for non-food / tech merchants
     if (isMerchantTech || !isExplicitFoodOrGrocery) {
       const rowName = (row.name || '').toLowerCase();
       const rowFolder = (row.folder || '').toLowerCase();
-      const isLegacySupabase = url.includes('supabase.co');
       const isGroceryOrProduce =
         /grocery|supermarket|vegetable|fruit|produce|mandi|retail-local-services|bazaar/.test(
           `${rowName} ${rowFolder} ${url.toLowerCase()}`
-        ) || url.includes('1542838132-92c53300491e') || url.includes('1533900298318-6b8da08a523e') || isLegacySupabase;
+        ) || url.includes('1542838132-92c53300491e') || url.includes('1533900298318-6b8da08a523e');
       if (isGroceryOrProduce) {
         if (row.id) invalidTechPhotoIds.push(row.id);
         continue;
@@ -480,7 +511,7 @@ export async function GET(request: NextRequest) {
   // Pool of truly distinct photos (never repeat a photo across multiple cards)
   const distinctVisualPool = Array.from(
     new Set([
-      ...(userPhotos || []),
+      ...(userPhotos || []).map((p) => p.url),
       ...s3CategoryVisuals,
       ...visuals,
     ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0))
@@ -504,12 +535,20 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. Trade products & conflict adaptation engine
-  const gbpCat = getGbpCategoryByNameOrAlias(effectiveCategoryText);
+  const isTextureOrPaintBusiness =
+    /\b(texture|paint|painting|wall art|wall decor|painter)\b/i.test(
+      `${businessName} ${effectiveCategoryText} ${rawServiceTokens.join(' ')}`
+    );
+
+  const gbpCat = isTextureOrPaintBusiness
+    ? getGbpCategoryByNameOrAlias('Painting contractor') || getGbpCategoryByNameOrAlias(effectiveCategoryText)
+    : getGbpCategoryByNameOrAlias(effectiveCategoryText);
+
   const baseTradeProducts =
     gbpCat?.coreProducts && gbpCat.coreProducts.length > 0 ? gbpCat.coreProducts : [industry];
   const tradeProducts =
     realServiceNames.length > 0
-      ? [...realServiceNames, ...baseTradeProducts]
+      ? Array.from(new Set([...realServiceNames, ...baseTradeProducts]))
       : baseTradeProducts;
 
   const isMerchantTrade = (word: string): boolean => {
@@ -783,6 +822,89 @@ export async function GET(request: NextRequest) {
     });
 
   // 3d. Adapt POSTER_TEMPLATES with strict merchant trade relevance & S3 category photography
+  const TEXTURE_WALL_HEADLINES = [
+    'Marble & Stone Texture Wall Painting',
+    'Royal Luxury Velvet & Metallic Accents',
+    'Designer Stencil & Geometric Wall Art',
+    'Living Room Feature Accent Walls',
+    'Flawless Surface Smoothing & Repainting',
+    'Exterior Weatherproof Texture Coating',
+    'Premium Italian Marble Wall Finishes',
+    'Artisan Textured Wall Craftsmanship',
+    'Modern 3D Textured Wall Concepts',
+    'Durable Washable Luxury Wall Textures',
+    'Transform Your Interiors with Wall Textures',
+    '5-Star Rated Texture Painting in {city}',
+    'Custom Texture Finishes for Homes & Offices',
+    'Bespoke Wall Art & Metallic Finishes',
+    'Commercial & Residential Painting Experts',
+    'Book Your Free Texture Wall Consultation',
+  ];
+
+  const TEXTURE_WALL_SUBTITLES = [
+    'Elevate your living spaces with bespoke luxury textures crafted by certified specialists in {city}.',
+    'Guaranteed Italian marble and velvet finishes using premium washable, long-lasting materials.',
+    'Dust-free, professional application completed on schedule with zero hassle for your home.',
+    'High-end designer accent walls that add timeless elegance, depth, and character to any room.',
+    'Superior weatherproof exterior protection with rich architectural textures that withstand all climates.',
+    'Full color shade consultation and on-site wall sample demonstration before you begin.',
+    'Guwahati & regional specialists trusted by 500+ happy homeowners and interior architects.',
+    'Flawless craftsmanship, seamless edges, and complete post-painting cleanup guaranteed.',
+  ];
+
+  const DIVERSE_TRADE_BADGES = [
+    'CORE SERVICE',
+    'POPULAR CHOICE',
+    'PREMIUM FINISH',
+    'TOP RATED',
+    'TRENDING DESIGN',
+    'FEATURED CRAFT',
+    'VERIFIED EXPERT',
+    'SPECIAL OFFER',
+  ];
+
+  const getDiverseTradeCopy = (index: number, tabKey: string) => {
+    if (isTextureOrPaintBusiness) {
+      const h = TEXTURE_WALL_HEADLINES[index % TEXTURE_WALL_HEADLINES.length].replace(/\{city\}/g, city);
+      const s = TEXTURE_WALL_SUBTITLES[index % TEXTURE_WALL_SUBTITLES.length].replace(/\{city\}/g, city);
+      let b = DIVERSE_TRADE_BADGES[index % DIVERSE_TRADE_BADGES.length];
+      if (tabKey === 'promotions') b = 'SPECIAL OFFER';
+      else if (tabKey === 'festivals') b = 'FESTIVAL SPECIAL';
+      else if (tabKey === 'reviews') b = '5-STAR RATED';
+      return { headline: h, subtitle: s, badge: b };
+    }
+
+    const product = tradeProducts[index % tradeProducts.length] || industry;
+    const headlinePatterns = [
+      product,
+      `Premium ${product} in ${city}`,
+      `Expert ${product} Solutions`,
+      `Top-Rated ${product} Specialist`,
+      `Quality ${product} You Can Rely On`,
+      `Transform Your Space with ${product}`,
+      `Professional ${product} Services`,
+      `Dependable ${product} for Homes & Offices`,
+    ];
+    const subtitlePatterns = [
+      `Certified ${industry} excellence and guaranteed craftsmanship across ${city}.`,
+      `Trusted by local clients for on-time delivery, transparent pricing, and lasting results.`,
+      `Experience superior quality ${product.toLowerCase()} tailored to your exact requirements.`,
+      `Book your consultation today with the leading ${industry.toLowerCase()} experts in ${city}.`,
+      `Premium materials, experienced professionals, and 100% satisfaction guaranteed.`,
+      `Highly rated across ${city} for dependable service, honesty, and immaculate execution.`,
+    ];
+    let b = DIVERSE_TRADE_BADGES[index % DIVERSE_TRADE_BADGES.length];
+    if (tabKey === 'promotions') b = 'SPECIAL OFFER';
+    else if (tabKey === 'festivals') b = 'FESTIVAL SPECIAL';
+    else if (tabKey === 'reviews') b = '5-STAR RATED';
+
+    return {
+      headline: headlinePatterns[index % headlinePatterns.length],
+      subtitle: subtitlePatterns[index % subtitlePatterns.length],
+      badge: b,
+    };
+  };
+
   const allAdaptedPosterItems: BusinessTemplateResponseItem[] = tradeRelevantPosterTemplates.map((tpl, idx) => {
     const isFestival =
       tpl.category === 'festival' ||
@@ -834,14 +956,24 @@ export async function GET(request: NextRequest) {
       !tpl.industries.some((i) => normalizeCategoryContext(i).verticalKey === searchContext.verticalKey)
     );
 
+    let badge = tpl.badge || '';
+
     if (!isFestival) {
       const match = headline.match(conflictingTradesRegex);
       if ((match && !isMerchantTrade(match[0])) || isConflictingBadge || isConflictingIndustry) {
-        headline = tradeProducts[idx % tradeProducts.length];
+        const copy = getDiverseTradeCopy(idx, tab);
+        headline = copy.headline;
+        subtitle = copy.subtitle;
+        badge = copy.badge;
       }
-      const subMatch = subtitle.match(conflictingTradesRegex);
-      if ((subMatch && !isMerchantTrade(subMatch[0])) || isConflictingBadge || isConflictingIndustry) {
-        subtitle = `Certified ${industry} services in ${city}`;
+    }
+
+    if (isConflictingBadge || isConflictingIndustry || !badge || badge.length > 20) {
+      if (tab === 'promotions') badge = 'SPECIAL OFFER';
+      else if (tab === 'festivals') badge = 'FESTIVAL SPECIAL';
+      else if (tab === 'reviews') badge = '5-STAR RATED';
+      else if (!badge || badge.length > 20) {
+        badge = DIVERSE_TRADE_BADGES[idx % DIVERSE_TRADE_BADGES.length];
       }
     }
 
@@ -892,14 +1024,6 @@ export async function GET(request: NextRequest) {
     }
 
     assignedPhoto = assignedPhoto ? toAbsoluteUrl(assignedPhoto) : '';
-
-    let badge = tpl.badge || '';
-    if (isConflictingBadge || isConflictingIndustry || !badge || badge.length > 20) {
-      if (tab === 'promotions') badge = 'SPECIAL OFFER';
-      else if (tab === 'festivals') badge = 'FESTIVAL SPECIAL';
-      else if (tab === 'reviews') badge = '5-STAR RATED';
-      else badge = 'CORE SERVICE';
-    }
 
     const aspect = (tpl.aspect as '1:1' | '4:5' | '9:16') || '4:5';
 

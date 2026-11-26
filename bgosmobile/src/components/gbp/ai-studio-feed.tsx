@@ -72,6 +72,27 @@ const STYLE_CHIPS = [
   { id: 'premium', label: '🌟 Premium Showcase', promptSuffix: 'clean modern presentation, luxury aesthetic, ultra-sharp 8k resolution' },
 ];
 
+const GRAPHIC_BUSINESS_PALETTES = [
+  '#064E3B', // Emerald
+  '#0F172A', // Slate Dark
+  '#1E1B4B', // Deep Indigo
+  '#1E293B', // Charcoal Slate
+  '#312E81', // Sapphire
+  '#701A75', // Royal Plum
+  '#7C2D12', // Terracotta
+  '#14532D', // Forest Green
+];
+
+const GRAPHIC_BUSINESS_ICONS: Array<keyof typeof MaterialIcons.glyphMap> = [
+  'verified',
+  'format-paint',
+  'brush',
+  'palette',
+  'auto-awesome',
+  'workspace-premium',
+  'thumb-up',
+];
+
 export function AiStudioFeed({
   businessName,
   industry,
@@ -1157,7 +1178,7 @@ export function AiStudioFeed({
               )}
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const resolvedImg = resolveTemplateSource(item.photoUrl);
             return (
               <Pressable
@@ -1184,7 +1205,7 @@ export function AiStudioFeed({
                           ? styles.graphicCardReview
                           : item.tab === 'festivals'
                             ? styles.graphicCardFestival
-                            : styles.graphicCardBusiness,
+                            : { backgroundColor: GRAPHIC_BUSINESS_PALETTES[index % GRAPHIC_BUSINESS_PALETTES.length] },
                     ]}
                   >
                     <View style={styles.graphicCardInner}>
@@ -1197,7 +1218,7 @@ export function AiStudioFeed({
                                 ? 'star'
                                 : item.tab === 'festivals'
                                   ? 'celebration'
-                                  : 'verified'
+                                  : GRAPHIC_BUSINESS_ICONS[index % GRAPHIC_BUSINESS_ICONS.length]
                           }
                           size={24}
                           color="#FFFFFF"

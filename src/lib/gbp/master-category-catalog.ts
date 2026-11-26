@@ -1,10 +1,26 @@
-import {
-  MASTER_GBP_CATEGORIES,
-  type GbpCategoryDefinition,
-} from '../../../shared/gbp-category-dataset';
 import { normalizeCategoryContext } from '../designs/category-taxonomy';
 import { getCategoryVisualPool } from '../designs/dynamic-visual-resolver';
 import { generateStructuredLocalSeoPost } from './seo-copy-generator';
+
+export interface GbpCategoryDefinition {
+  id: string;
+  displayName: string;
+  pillar: string;
+  aliases?: string[];
+  relatedCategories: string[];
+  coreProducts: string[];
+  customerIntentKeywords: string[];
+  visualSearchTerms: string[];
+  preferredTheme: 'emerald' | 'amber' | 'rose_chic' | 'cyber_tech' | 'royal_gold' | 'luxe_dark' | 'trust_amber' | 'sand';
+  defaultHooks: {
+    offerHeadline: string;
+    showcaseHeadline: string;
+    trustHeadline: string;
+    subtitle: string;
+    bullets: string[];
+    cta: string;
+  };
+}
 
 export interface GeneratedCreativeBlueprint {
   id: string;
@@ -24,38 +40,167 @@ export interface GeneratedCreativeBlueprint {
   defaultCaption: string;
 }
 
-// In-memory indexed lookup tables for sub-millisecond query speed
-const idIndex = new Map<string, GbpCategoryDefinition>();
-const nameIndex = new Map<string, GbpCategoryDefinition>();
-const aliasIndex = new Map<string, GbpCategoryDefinition>();
-
-for (const cat of MASTER_GBP_CATEGORIES) {
-  idIndex.set(cat.id.toLowerCase(), cat);
-  nameIndex.set(cat.displayName.toLowerCase(), cat);
-  if (Array.isArray(cat.aliases)) {
-    for (const a of cat.aliases) {
-      aliasIndex.set(a.toLowerCase(), cat);
-    }
-  }
+interface CategoryAliasHint {
+  displayName: string;
+  pillar?: string;
+  coreProducts?: string[];
+  defaultHooks?: {
+    offerHeadline: string;
+    showcaseHeadline: string;
+    trustHeadline: string;
+    subtitle: string;
+    bullets: string[];
+    cta: string;
+  };
 }
 
 /**
+ * Concise local SMB trade aliases and short abbreviations.
+ * Maps common vernacular search terms (e.g. "ply", "mithai", "saloon", "ca firm")
+ * to standard trade taxonomy without needing 4,000 hardcoded records.
+ */
+const COMMON_TRADE_ALIASES: Record<string, CategoryAliasHint> = {
+  ply: {
+    displayName: 'Plywood supplier',
+    pillar: 'building_materials_hardware',
+    coreProducts: ['IS:710 Marine Grade Plywood', 'Commercial Calibrated Boards', 'Decorative Sunmica Laminates', 'Flush Doors'],
+    defaultHooks: {
+      offerHeadline: 'Premium Waterproof Marine Plywood — Factory Direct Rates',
+      showcaseHeadline: 'Guaranteed 100% Termite & Borer Proof Calibrated Boards',
+      trustHeadline: 'Leading Plywood & Architectural Surface Partner in {city}',
+      subtitle: 'IS:710 Marine Grade certified boards with 25-year manufacturer guarantee and on-site delivery.',
+      bullets: ['IS:710 Marine Grade Quality', '25-Year Termite & Fungus Guarantee', 'Factory Wholesale Pricing'],
+      cta: 'GET WHOLESALE QUOTE',
+    },
+  },
+  'ply shop': {
+    displayName: 'Plywood supplier',
+    pillar: 'building_materials_hardware',
+    coreProducts: ['IS:710 Marine Grade Plywood', 'Commercial Calibrated Boards', 'Decorative Sunmica Laminates', 'Flush Doors'],
+  },
+  'plywood store': {
+    displayName: 'Plywood supplier',
+    pillar: 'building_materials_hardware',
+  },
+  'plywood supplier': {
+    displayName: 'Plywood supplier',
+    pillar: 'building_materials_hardware',
+    coreProducts: ['IS:710 Marine Grade Plywood', 'Commercial Calibrated Boards', 'Decorative Sunmica Laminates', 'Flush Doors'],
+    defaultHooks: {
+      offerHeadline: 'Premium Waterproof Marine Plywood — Factory Direct Rates',
+      showcaseHeadline: 'Guaranteed 100% Termite & Borer Proof Calibrated Boards',
+      trustHeadline: 'Leading Plywood & Architectural Surface Partner in {city}',
+      subtitle: 'IS:710 Marine Grade certified boards with 25-year manufacturer guarantee and on-site delivery.',
+      bullets: ['IS:710 Marine Grade Quality', '25-Year Termite & Fungus Guarantee', 'Factory Wholesale Pricing'],
+      cta: 'GET WHOLESALE QUOTE',
+    },
+  },
+  sweet: {
+    displayName: 'Indian sweets shop',
+    pillar: 'food_sweets_confectionery',
+    coreProducts: ['Pure Desi Ghee Kaju Katli', 'Motichoor Ladoos', 'Hot Crispy Jalebi', 'Dry Fruit Gift Boxes'],
+    defaultHooks: {
+      offerHeadline: '100% Pure Desi Ghee Sweets & Festive Gift Hampers',
+      showcaseHeadline: 'Handcrafted Daily with Pure Ingredients & Royal Dry Fruits',
+      trustHeadline: 'Generations of Authentic Sweet Taste & Purity in {city}',
+      subtitle: 'Prepared fresh every morning using 100% pure desi ghee, premium saffron, and certified ingredients.',
+      bullets: ['100% Pure Desi Ghee Preparation', 'Zero Artificial Preservatives', 'Customized Corporate & Wedding Boxes'],
+      cta: 'ORDER FRESH SWEETS',
+    },
+  },
+  'sweet shop': {
+    displayName: 'Indian sweets shop',
+    pillar: 'food_sweets_confectionery',
+  },
+  'mithai shop': {
+    displayName: 'Indian sweets shop',
+    pillar: 'food_sweets_confectionery',
+  },
+  'indian sweets shop': {
+    displayName: 'Indian sweets shop',
+    pillar: 'food_sweets_confectionery',
+    coreProducts: ['Pure Desi Ghee Kaju Katli', 'Motichoor Ladoos', 'Hot Crispy Jalebi', 'Dry Fruit Gift Boxes'],
+    defaultHooks: {
+      offerHeadline: '100% Pure Desi Ghee Sweets & Festive Gift Hampers',
+      showcaseHeadline: 'Handcrafted Daily with Pure Ingredients & Royal Dry Fruits',
+      trustHeadline: 'Generations of Authentic Sweet Taste & Purity in {city}',
+      subtitle: 'Prepared fresh every morning using 100% pure desi ghee, premium saffron, and certified ingredients.',
+      bullets: ['100% Pure Desi Ghee Preparation', 'Zero Artificial Preservatives', 'Customized Corporate & Wedding Boxes'],
+      cta: 'ORDER FRESH SWEETS',
+    },
+  },
+  saloon: {
+    displayName: 'Beauty salon',
+    pillar: 'beauty_personal_care',
+  },
+  'gents saloon': {
+    displayName: 'Barber shop',
+    pillar: 'beauty_personal_care',
+  },
+  'ca firm': {
+    displayName: 'Chartered accountant',
+    pillar: 'professional_legal_finance',
+  },
+  accountant: {
+    displayName: 'Accountant',
+    pillar: 'professional_legal_finance',
+  },
+  solar: {
+    displayName: 'Solar energy contractor',
+    pillar: 'home_electrical_services',
+  },
+  cctv: {
+    displayName: 'Security system supplier',
+    pillar: 'it_software_digital',
+  },
+  'air cond': {
+    displayName: 'Air conditioning contractor',
+    pillar: 'home_electrical_services',
+  },
+  'air conditioning contractor': {
+    displayName: 'Air conditioning contractor',
+    pillar: 'home_electrical_services',
+  },
+  painter: {
+    displayName: 'Painting contractor',
+    pillar: 'home_improvement',
+  },
+  'painting contractor': {
+    displayName: 'Painting contractor',
+    pillar: 'home_improvement',
+  },
+  'texture paint': {
+    displayName: 'Painting contractor',
+    pillar: 'home_improvement',
+  },
+  'texture paint wala': {
+    displayName: 'Painting contractor',
+    pillar: 'home_improvement',
+  },
+  'wall painting': {
+    displayName: 'Painting contractor',
+    pillar: 'home_improvement',
+  },
+};
+
+/**
  * Dynamically synthesizes a full GbpCategoryDefinition for ANY category string on-the-fly.
- * Zero hardcoded lists — handles all Google categories dynamically.
+ * 100% dynamic architecture — no static 4,000 category database required.
  */
 export function synthesizeCategoryDefinition(nameOrGcid: string): GbpCategoryDefinition {
-  let clean = nameOrGcid.replace(/^gcid:/i, '').replace(/_/g, ' ').trim();
-  if (/^air\s*cond$/i.test(clean)) {
-    clean = 'air conditioning contractor';
-  }
-  const rawDisplayName = clean.charAt(0).toUpperCase() + clean.slice(1);
+  const clean = (nameOrGcid || '').replace(/^gcid:/i, '').replace(/_/g, ' ').trim().toLowerCase();
+
+  const aliasHit = COMMON_TRADE_ALIASES[clean];
+  const targetName = aliasHit?.displayName || clean;
+
+  const rawDisplayName = targetName.charAt(0).toUpperCase() + targetName.slice(1);
   const displayName = rawDisplayName.replace(/\baadhar\b/i, 'Aadhaar');
-  const gcid = clean.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const gcid = displayName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   const context = normalizeCategoryContext(displayName);
-  const pillar = context.verticalKey || 'specialty_local_services';
+  const pillar = aliasHit?.pillar || context.verticalKey || 'specialty_local_services';
   const name = displayName;
 
-  const coreProducts = [
+  const coreProducts = aliasHit?.coreProducts || [
     `Professional ${name}`,
     `Certified ${name} Solutions`,
     `Premium ${name} Services`,
@@ -74,7 +219,7 @@ export function synthesizeCategoryDefinition(nameOrGcid: string): GbpCategoryDef
     `${name.toLowerCase()} commercial setting`,
   ];
 
-  const preferredTheme =
+  const preferredTheme: GbpCategoryDefinition['preferredTheme'] =
     pillar === 'it_software_digital'
       ? 'cyber_tech'
       : pillar === 'professional_legal_finance'
@@ -87,6 +232,19 @@ export function synthesizeCategoryDefinition(nameOrGcid: string): GbpCategoryDef
               ? 'emerald'
               : 'trust_amber';
 
+  const defaultHooks = aliasHit?.defaultHooks || {
+    offerHeadline: `Top-Rated ${name} in {city} — Special Limited Offer`,
+    showcaseHeadline: `Certified & Trusted ${name} Services in {city}`,
+    trustHeadline: `Rated #1 ${name} Provider in {city} — 100% Quality Assurance`,
+    subtitle: `Delivering trusted, certified ${name} and prompt assistance for clients across {city}.`,
+    bullets: [
+      `Verified ${name} Experts with Proven Local Track Record`,
+      `100% Genuine Materials & Transparent Estimates`,
+      `Fast Turnaround & Professional On-Site Support`,
+    ],
+    cta: 'BOOK CONSULTATION',
+  };
+
   return {
     id: `gcid:${gcid}`,
     displayName,
@@ -97,118 +255,72 @@ export function synthesizeCategoryDefinition(nameOrGcid: string): GbpCategoryDef
     customerIntentKeywords,
     visualSearchTerms,
     preferredTheme,
-    defaultHooks: {
-      offerHeadline: `Top-Rated ${name} in {city} — Special Limited Offer`,
-      showcaseHeadline: `Certified & Trusted ${name} Services in {city}`,
-      trustHeadline: `Rated #1 ${name} Provider in {city} — 100% Quality Assurance`,
-      subtitle: `Delivering trusted, certified ${name} and prompt assistance for clients across {city}.`,
-      bullets: [
-        `Verified ${name} Experts with Proven Local Track Record`,
-        `100% Genuine Materials & Transparent Estimates`,
-        `Fast Turnaround & Professional On-Site Support`,
-      ],
-      cta: 'BOOK CONSULTATION',
-    },
+    defaultHooks,
   };
 }
+
 /**
- * O(1) Category lookup by ID across curated dataset & dynamic on-demand synthesis
+ * Category lookup by ID via dynamic on-demand synthesis
  */
 export function getGbpCategoryById(id: string): GbpCategoryDefinition | undefined {
   if (!id) return undefined;
-  const clean = id.toLowerCase().trim();
-  const direct = idIndex.get(clean);
-  if (direct) return direct;
-
-  return synthesizeCategoryDefinition(clean);
+  return synthesizeCategoryDefinition(id);
 }
 
 /**
- * O(1) Category lookup by Name or common Trade Alias (e.g. "ply shop", "saloon", "sweet shop", "accountant")
+ * Category lookup by Name or common Trade Alias via dynamic on-demand synthesis
  */
 export function getGbpCategoryByNameOrAlias(rawText: string): GbpCategoryDefinition | undefined {
   if (!rawText) return undefined;
-  const clean = rawText.toLowerCase().trim();
-
-  // 1. Direct name match in rich curated list
-  if (nameIndex.has(clean)) return nameIndex.get(clean);
-
-  // 2. Direct alias match in rich curated list
-  if (aliasIndex.has(clean)) return aliasIndex.get(clean);
-
-  // 3. Substring / Token match across aliases and display names in rich curated list
-  for (const cat of MASTER_GBP_CATEGORIES) {
-    if (clean.includes(cat.displayName.toLowerCase())) return cat;
-    if (cat.aliases?.some((a) => clean.includes(a.toLowerCase()) || a.toLowerCase().includes(clean))) {
-      return cat;
-    }
-  }
-
-  // 4. Token search in keywords in rich curated list
-  for (const cat of MASTER_GBP_CATEGORIES) {
-    if (cat.customerIntentKeywords.some((k) => clean.includes(k.toLowerCase()))) {
-      return cat;
-    }
-  }
-
-  // 5. Synthesize on-the-fly dynamically (zero hardcoded list required)
-  return synthesizeCategoryDefinition(clean);
+  return synthesizeCategoryDefinition(rawText);
 }
 
 /**
- * Live search auto-complete across master & dynamically synthesized categories.
- * Ranks prefix matches highest, followed by token and alias matches.
+ * Category search and auto-complete across dynamic SMB trade taxonomy.
  */
 export function searchGbpCategories(query: string, limit = 10): GbpCategoryDefinition[] {
   const clean = (query || '').toLowerCase().trim();
   if (!clean) {
-    return MASTER_GBP_CATEGORIES.slice(0, limit);
+    const defaultTrades = [
+      'Retail & Local Services',
+      'Restaurant & Cafe',
+      'Health & Medical',
+      'Beauty & Personal Care',
+      'Home Improvement & Repairs',
+      'Professional & Legal Services',
+      'IT & Digital Services',
+      'Automotive & Repairs',
+    ];
+    return defaultTrades.slice(0, limit).map((d) => synthesizeCategoryDefinition(d));
   }
 
-  const prefixMatches: GbpCategoryDefinition[] = [];
-  const tokenMatches: GbpCategoryDefinition[] = [];
+  const results: GbpCategoryDefinition[] = [];
   const seenIds = new Set<string>();
 
-  // A. Prefix matches in rich curated categories
-  for (const cat of MASTER_GBP_CATEGORIES) {
-    const dName = cat.displayName.toLowerCase();
-    if (dName.startsWith(clean)) {
-      prefixMatches.push(cat);
-      seenIds.add(cat.id);
-      if (prefixMatches.length >= limit) return prefixMatches;
-    }
-  }
-
-  // B. Token / Substring matches in rich curated categories
-  for (const cat of MASTER_GBP_CATEGORIES) {
-    if (seenIds.has(cat.id)) continue;
-    const dName = cat.displayName.toLowerCase();
-    const aliasHit = cat.aliases?.some((a) => a.toLowerCase().includes(clean));
-    const productHit = cat.coreProducts.some((p) => p.toLowerCase().includes(clean));
-    const keywordHit = cat.customerIntentKeywords.some((k) => k.toLowerCase().includes(clean));
-
-    if (dName.includes(clean) || aliasHit || productHit || keywordHit) {
-      tokenMatches.push(cat);
-      seenIds.add(cat.id);
-      if (prefixMatches.length + tokenMatches.length >= limit) {
-        return [...prefixMatches, ...tokenMatches].slice(0, limit);
+  // 1. Direct or partial alias matches
+  for (const [aliasKey, hint] of Object.entries(COMMON_TRADE_ALIASES)) {
+    if (aliasKey.startsWith(clean) || aliasKey.includes(clean) || hint.displayName.toLowerCase().includes(clean)) {
+      const def = synthesizeCategoryDefinition(hint.displayName);
+      if (!seenIds.has(def.id)) {
+        seenIds.add(def.id);
+        results.push(def);
+        if (results.length >= limit) return results;
       }
     }
   }
 
-  // C. Dynamically synthesize query as a valid option if limit not reached
-  if (prefixMatches.length + tokenMatches.length < limit && clean.length >= 2) {
-    const synthesized = synthesizeCategoryDefinition(clean);
-    if (!seenIds.has(synthesized.id)) {
-      tokenMatches.push(synthesized);
-    }
+  // 2. Synthesize query directly
+  const directDef = synthesizeCategoryDefinition(clean);
+  if (!seenIds.has(directDef.id)) {
+    seenIds.add(directDef.id);
+    results.push(directDef);
   }
 
-  return [...prefixMatches, ...tokenMatches].slice(0, limit);
+  return results.slice(0, limit);
 }
 
 /**
- * Synthesizes reusable creative blueprints directly from the category's first-class profile.
+ * Synthesizes reusable creative blueprints directly from merchant trade context & real services.
  */
 export function generateCategoryBlueprints(params: {
   categoryOrTitle: string;
@@ -218,25 +330,31 @@ export function generateCategoryBlueprints(params: {
   realServices?: string[];
 }): GeneratedCreativeBlueprint[] {
   const { categoryOrTitle, businessName, city = 'Patna', phone = '', realServices } = params;
-  const category = getGbpCategoryByNameOrAlias(categoryOrTitle);
 
-  // If no exact category definition is found, resolve via the Universal Category Taxonomy
-  const context = normalizeCategoryContext(categoryOrTitle);
-  const matchedPillar = category?.pillar || context.verticalKey;
-  const displayName = category?.displayName || (context.detectedSubject ? `${context.detectedSubject} Service` : categoryOrTitle.trim());
+  // Specific trade context check: if business name or services indicate painting/texture, resolve to Painting contractor
+  const isTextureOrPaint =
+    /\b(texture|paint|painting|wall art|wall decor|painter)\b/i.test(
+      `${businessName} ${categoryOrTitle} ${(realServices || []).join(' ')}`
+    );
+
+  const resolvedTradeCategory = isTextureOrPaint ? 'Painting contractor' : categoryOrTitle;
+  const category = getGbpCategoryByNameOrAlias(resolvedTradeCategory);
+  const context = normalizeCategoryContext(resolvedTradeCategory);
+  const matchedPillar = isTextureOrPaint ? 'home_improvement' : (category?.pillar || context.verticalKey || 'specialty_local_services');
+  const displayName = isTextureOrPaint
+    ? 'Texture Painting & Wall Finishes'
+    : (category?.displayName || (context.detectedSubject ? `${context.detectedSubject} Service` : categoryOrTitle.trim()));
 
   const visuals = getCategoryVisualPool(categoryOrTitle);
   const distinctVisuals = Array.from(new Set(visuals.filter(Boolean)));
   let photoCursor = 0;
   const getNextUniquePhoto = (): string => {
-    if (photoCursor < distinctVisuals.length) {
-      return distinctVisuals[photoCursor++];
-    }
-    return '';
+    if (distinctVisuals.length === 0) return '';
+    return distinctVisuals[photoCursor++ % distinctVisuals.length];
   };
 
   const isServiceTrade =
-    /service|agency|consult|guard|security|law|tech|clean|repair|contractor|salon|clinic|driver|transport|hire|rental|care|app|hospital|education|academy|advisory/i.test(
+    /service|agency|consult|guard|security|law|tech|clean|repair|contractor|salon|clinic|driver|transport|hire|rental|care|app|hospital|education|academy|advisory|paint/i.test(
       categoryOrTitle,
     );
 

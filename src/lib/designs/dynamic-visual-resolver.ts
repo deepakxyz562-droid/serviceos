@@ -18,7 +18,7 @@ function buildCategoryVisualUrls(folder: string, verifiedList: string[], count =
 }
 
 const LOCAL_CATEGORY_TEMPLATES: Record<string, string[]> = {
-  plywood_timber: buildCategoryVisualUrls('plywood_timber', ['/images/industry/industry.webp', '/images/bgos/templates/property.webp']),
+  plywood_timber: buildCategoryVisualUrls('plywood_timber', ['/images/bgos/templates/property.webp', '/images/industry/industry.webp']),
   indian_sweets: buildCategoryVisualUrls('indian_sweets', ['/images/bgos/templates/cafe.webp', '/images/industry/food.webp', '/images/bgos/templates/restaurant.webp']),
   welding_fabrication: buildCategoryVisualUrls('welding_fabrication', ['/images/industry/industry.webp', '/images/industry/auto.webp']),
   solar_energy: buildCategoryVisualUrls('solar_energy', ['/images/industry/electrical.webp', '/images/industry/roofing.webp']),

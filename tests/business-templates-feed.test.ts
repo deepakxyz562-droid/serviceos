@@ -417,7 +417,22 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
       .map((t: any) => t.photoUrl);
     expect(new Set(nonFestPhotos).size).toBe(nonFestPhotos.length);
 
-    // 3. In for_business tab directly:
+    // 3. ZERO modular kitchen or wardrobe text for Texture Paint business
+    const allTitlesAndCaptions = data.templates
+      .map((t: any) => `${t.headline} ${t.subtitle} ${t.name}`)
+      .join(' ')
+      .toLowerCase();
+    expect(allTitlesAndCaptions).not.toContain('modular kitchen');
+    expect(allTitlesAndCaptions).not.toContain('wardrobe');
+
+    // 4. Diverse headlines and subtitles: cards must not be identical clones
+    const forBizCards = data.templates.filter((t: any) => t.tab === 'for_business');
+    const distinctHeadlines = new Set(forBizCards.map((t: any) => t.headline));
+    expect(distinctHeadlines.size).toBeGreaterThan(1);
+    const distinctSubtitles = new Set(forBizCards.map((t: any) => t.subtitle));
+    expect(distinctSubtitles.size).toBeGreaterThan(1);
+
+    // 5. In for_business tab directly:
     mockGetAuthUser.mockResolvedValueOnce({ id: 'user-texture', tenantId: 'tenant-texture' });
     const bizReq = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=50');
     const bizRes = await GET(bizReq);

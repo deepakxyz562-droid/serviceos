@@ -492,7 +492,18 @@ export function ScheduledPhotosTimeline({
               }}
               style={styles.creativeCard}
             >
-              <Image source={resolveTemplateSource(tpl.photoUrl)} style={styles.creativeImage} resizeMode="cover" />
+              {tpl.photoUrl ? (
+                <Image source={resolveTemplateSource(tpl.photoUrl)} style={styles.creativeImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.creativeGraphicFallback}>
+                  <View style={styles.creativeGraphicIconBox}>
+                    <MaterialIcons name="brush" size={24} color="#FFFFFF" />
+                  </View>
+                  <Text numberOfLines={2} style={styles.creativeGraphicSubtitle}>
+                    {tpl.subtitle || tpl.headline}
+                  </Text>
+                </View>
+              )}
               <View style={styles.creativeTopBadge}>
                 <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
                   {tpl.badge || 'Ready'}
@@ -1281,6 +1292,31 @@ const styles = StyleSheet.create({
   creativeImage: {
     width: '100%',
     height: '100%',
+  },
+  creativeGraphicFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#064E3B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 48,
+  },
+  creativeGraphicIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  creativeGraphicSubtitle: {
+    fontSize: 10,
+    color: '#D1FAE5',
+    textAlign: 'center',
+    lineHeight: 14,
+    fontWeight: '500',
   },
   creativeTopBadge: {
     position: 'absolute',
