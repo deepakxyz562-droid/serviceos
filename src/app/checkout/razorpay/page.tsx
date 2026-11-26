@@ -212,7 +212,7 @@ function RazorpayCheckoutContent() {
     }, 4500);
 
     try {
-      // 1. Create Razorpay order & generate Hosted Payment Link (fail-safe)
+      // 1. Create Razorpay Subscription (monthly/yearly auto-pay) or Order fallback
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: authHeaders,
@@ -220,6 +220,9 @@ function RazorpayCheckoutContent() {
           amount: amountPaise,
           currency: 'INR',
           planCode,
+          billingCycle,
+          product: 'bgos',
+          recurring: true,
           notes: {
             plan: planCode,
             planCode,
@@ -230,9 +233,9 @@ function RazorpayCheckoutContent() {
       });
 
       const orderData = await orderRes.json();
-      if (!orderRes.ok || !orderData?.order_id) {
+      if (!orderRes.ok || (!orderData?.subscription_id && !orderData?.order_id)) {
         clearTimeout(watchdog);
-        throw new Error(orderData?.error || 'Order creation failed');
+        throw new Error(orderData?.error || 'Subscription checkout initialization failed');
       }
 
       if (orderData.payment_link_url) {
@@ -285,13 +288,10 @@ function RazorpayCheckoutContent() {
         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
         'rzp_live_Tvlk7fEiubLEkh';
 
-      const options = {
+      const options: Record<string, any> = {
         key: keyId,
-        amount: orderData.amount,
-        currency: orderData.currency || 'INR',
         name: 'BGOS / FieserOS',
-        description: `${plan.name} Subscription · ₹${finalPriceInr.toLocaleString('en-IN')}`,
-        order_id: orderData.order_id,
+        description: `${plan.name} (${billingCycle === 'yearly' ? 'Yearly Auto-Pay' : 'Monthly Auto-Pay'}) · ₹${finalPriceInr.toLocaleString('en-IN')}`,
         theme: { color: '#009F50' },
         prefill: {
           name: userPrefill.name || '',
@@ -312,7 +312,12 @@ function RazorpayCheckoutContent() {
               method: 'POST',
               headers: authHeaders,
               body: JSON.stringify({
-                razorpay_order_id: resp.razorpay_order_id,
+                ...(resp.razorpay_subscription_id
+                  ? { razorpay_subscription_id: resp.razorpay_subscription_id }
+                  : {}),
+                ...(resp.razorpay_order_id
+                  ? { razorpay_order_id: resp.razorpay_order_id }
+                  : {}),
                 razorpay_payment_id: resp.razorpay_payment_id,
                 razorpay_signature: resp.razorpay_signature,
                 planCode,
@@ -322,7 +327,10 @@ function RazorpayCheckoutContent() {
 
             const verifyData = await verifyRes.json();
             if (verifyRes.ok && verifyData.success) {
-              setPaymentSuccess(resp);
+              setPaymentSuccess({
+                ...resp,
+                razorpay_order_id: resp.razorpay_order_id || resp.razorpay_subscription_id,
+              });
             } else {
               setError(verifyData.error || 'Payment signature verification failed');
             }
@@ -333,6 +341,14 @@ function RazorpayCheckoutContent() {
           }
         },
       };
+
+      if (orderData.subscription_id) {
+        options.subscription_id = orderData.subscription_id;
+      } else {
+        options.amount = orderData.amount;
+        options.currency = orderData.currency || 'INR';
+        options.order_id = orderData.order_id;
+      }
 
       const rzpInstance = new (window as any).Razorpay(options);
       rzpInstance.on('payment.failed', (resp: any) => {
@@ -359,7 +375,7 @@ function RazorpayCheckoutContent() {
           </div>
           <h1 className="text-xl font-bold tracking-tight">BGOS Secure Checkout</h1>
           <p className="text-xs text-emerald-200 mt-1">
-            Instant Plan Activation · UPI, QR, Netbanking & Cards
+            Auto-Pay Subscription · UPI AutoPay, Cards &amp; Netbanking
           </p>
         </div>
 
@@ -435,7 +451,7 @@ function RazorpayCheckoutContent() {
                     <span className="text-2xl font-black text-[#009F50]">
                       ₹{finalPriceInr.toLocaleString('en-IN')}
                     </span>
-                    <span className="text-xs text-muted-foreground"> / month</span>
+                    <span className="text-xs text-muted-foreground"> / {billingCycle === 'yearly' ? 'year' : 'month'}</span>
                   </div>
                 </div>
 
@@ -457,7 +473,7 @@ function RazorpayCheckoutContent() {
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="size-5 text-[#009F50] shrink-0" />
                   <div>
-                    <span className="font-bold">UPI, Cards & Netbanking Enabled</span>
+                    <span className="font-bold">UPI AutoPay &amp; Card Auto-Renewal</span>
                     <p className="text-[11px] text-emerald-700">Google Pay, PhonePe, Paytm, RuPay, Visa, MC</p>
                   </div>
                 </div>

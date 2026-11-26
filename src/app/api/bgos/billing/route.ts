@@ -15,6 +15,11 @@ import {
 } from '@/lib/bgos-entitlement';
 import { db } from '@/lib/db';
 import { isCreemConfigured, createCreemCheckoutSession } from '@/lib/creem';
+import {
+  createRazorpaySubscription,
+  cancelRazorpaySubscription,
+} from '@/lib/razorpay-subscriptions';
+import { logBillingEvent } from '@/lib/billing-events';
 
 async function getOrProvisionBgosAccess(user: {
   id: string;
@@ -79,7 +84,7 @@ export async function GET(request: NextRequest) {
   }
   try {
     const access = await getOrProvisionBgosAccess(user as any);
-    const { entitlement } = await getTenantBgosEntitlement(user.tenantId);
+    const { entitlement, subscription: subRow, productSubscription: prodSubRow } = await getTenantBgosEntitlement(user.tenantId);
 
     const usedLeadCredits = await leadUsage(access.workspace.workspaceId).catch(() => 0);
     const contacts = await db.contact.count({ where: { tenantId: user.tenantId } });
@@ -92,6 +97,24 @@ export async function GET(request: NextRequest) {
       tenant: access.tenant,
     });
     const defaultRegion = locationBilling.defaultRegion;
+    const providerSubscriptionId =
+      prodSubRow?.providerSubscriptionId ||
+      subRow?.paypalSubscriptionId ||
+      access.subscription.providerSubscriptionId ||
+      null;
+    let autoPayCancelled = false;
+    try {
+      const settingsObj = access.tenant?.settingsJson ? JSON.parse(access.tenant.settingsJson) : {};
+      autoPayCancelled = settingsObj?.autoPayCancelled === true;
+    } catch {}
+    const resolvedProvider =
+      prodSubRow?.provider || subRow?.paymentProvider || access.subscription.provider || null;
+    const autoPayEnabled = Boolean(
+      entitlement.isPaid &&
+      providerSubscriptionId &&
+      !autoPayCancelled &&
+      (resolvedProvider === 'razorpay' || resolvedProvider === 'creem'),
+    );
 
     return NextResponse.json(
       {
@@ -101,8 +124,12 @@ export async function GET(request: NextRequest) {
           trialEndsAt: entitlement.trialEndsAt ?? access.subscription.trialEndsAt,
           currentPeriodEnd:
             entitlement.currentPeriodEnd ?? access.subscription.currentPeriodEnd,
+          billingCycle: subRow?.billingCycle || 'monthly',
           legacy: access.subscription.billingSource === 'legacy',
-          provider: access.subscription.provider || null,
+          provider: resolvedProvider,
+          providerSubscriptionId,
+          autoPayEnabled,
+          autoPayCancelled,
         },
         entitlement,
         defaultRegion,
@@ -119,7 +146,9 @@ export async function GET(request: NextRequest) {
         plans: Object.entries(BGOS_PLANS).map(([code, plan]) => ({
           code,
           ...plan,
+          yearlyPriceInr: plan.priceInr * 10,
           priceUsd: BGOS_USD_PRICES[code as BgosPlan] ?? 0,
+          yearlyPriceUsd: (BGOS_USD_PRICES[code as BgosPlan] ?? 0) * 10,
           price:
             locationBilling.currency === 'INR'
               ? plan.priceInr
@@ -167,6 +196,52 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    if (body.action === 'cancel_autopay') {
+      const { entitlement, subscription: subRow, productSubscription: prodSubRow } =
+        await getTenantBgosEntitlement(user.tenantId);
+      const subId =
+        prodSubRow?.providerSubscriptionId ||
+        subRow?.paypalSubscriptionId ||
+        access.subscription.providerSubscriptionId ||
+        null;
+      const keyId = process.env.RAZORPAY_KEY_ID;
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+      if (subId && subId.startsWith('sub_') && keyId && keySecret) {
+        await cancelRazorpaySubscription(keyId, keySecret, subId, true);
+      }
+
+      try {
+        const latestTenant = await db.tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { settingsJson: true },
+        });
+        const settingsObj = latestTenant?.settingsJson ? JSON.parse(latestTenant.settingsJson) : {};
+        settingsObj.autoPayCancelled = true;
+        settingsObj.autoPayCancelledAt = new Date().toISOString();
+        await db.tenant.update({
+          where: { id: user.tenantId },
+          data: { settingsJson: JSON.stringify(settingsObj) },
+        });
+      } catch {}
+
+      await logBillingEvent({
+        tenantId: user.tenantId,
+        subscriptionId: subRow?.id ?? null,
+        type: 'cancel',
+        status: 'success',
+        paymentProvider: prodSubRow?.provider || subRow?.paymentProvider || 'razorpay',
+        description: `Auto-pay cancelled at period end for ${entitlement.plan.toUpperCase()}`,
+        metadata: { providerSubscriptionId: subId, cancelAtCycleEnd: true },
+      }).catch(() => {});
+
+      return NextResponse.json({
+        success: true,
+        autoPayCancelled: true,
+        message: 'Auto-pay has been turned off. Your current plan remains active until the end of this billing period.',
+      });
+    }
+
     if (body.action === 'portal' || body.gateway === 'stripe') {
       return NextResponse.json(
         { error: 'Please select a supported plan on your billing page.' },
@@ -246,7 +321,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── 2. Razorpay India Order + Payment Link (UPI / Netbanking / Cards in INR) ──
+    // ── 2. Razorpay India Recurring Auto-Pay Subscription (UPI AutoPay / Cards) ──
     if (resolvedGateway === 'razorpay') {
       if (!hasRazorpay) {
         return NextResponse.json(
@@ -266,6 +341,38 @@ export async function POST(request: NextRequest) {
         platform: 'bgos',
       };
 
+      // Primary path: Razorpay Recurring Subscription (monthly / yearly auto-pay)
+      try {
+        const sub = await createRazorpaySubscription({
+          keyId: keyId!,
+          keySecret: keySecret!,
+          planCode,
+          planName: chosenPlan.name,
+          billingCycle,
+          amountPaise,
+          tenantId: user.tenantId,
+          customerEmail: user.email,
+          notes,
+        });
+        return NextResponse.json({
+          gateway: 'razorpay',
+          isRecurring: true,
+          subscription_id: sub.subscriptionId,
+          plan_id: sub.planId,
+          short_url: sub.shortUrl,
+          payment_link_url: sub.shortUrl,
+          amount: amountPaise,
+          currency: 'INR',
+          key_id: keyId,
+          plan: planCode,
+          planName: chosenPlan.name,
+          billingCycle,
+        });
+      } catch (subErr: any) {
+        console.warn('[bgos/billing] Razorpay Subscription fallback to one-time order:', subErr?.message || subErr);
+      }
+
+      // Fallback path if Razorpay Subscriptions feature isn't enabled on merchant key
       const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
         method: 'POST',
         headers: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 import { getAuthUser, getProductAppUrl } from '@/lib/auth';
+import { createRazorpaySubscription } from '@/lib/razorpay-subscriptions';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,6 +58,46 @@ export async function POST(request: NextRequest) {
       planCode: body.planCode || body.plan || body.notes?.planCode || '',
       ...(authUser?.tenantId && !body.notes?.tenantId ? { tenantId: authUser.tenantId } : {}),
     };
+
+    const normalizedPlanCode = String(notes.planCode || '').toLowerCase();
+    const billingCycle = notes.billingCycle === 'yearly' || body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const shouldUseRecurringSubscription =
+      body.recurring !== false &&
+      currency === 'INR' &&
+      amount >= 10000 && // exclude ₹1 verification micro-payments
+      ['starter', 'growth', 'business'].includes(normalizedPlanCode) &&
+      (notes.product === 'bgos' || body.product === 'bgos' || body.recurring === true);
+
+    if (shouldUseRecurringSubscription) {
+      try {
+        const sub = await createRazorpaySubscription({
+          keyId,
+          keySecret,
+          planCode: normalizedPlanCode,
+          planName: normalizedPlanCode.charAt(0).toUpperCase() + normalizedPlanCode.slice(1),
+          billingCycle,
+          amountPaise: amount,
+          tenantId: authUser?.tenantId || notes.tenantId,
+          customerEmail: authUser?.email || undefined,
+          notes: {
+            ...Object.fromEntries(Object.entries(notes).map(([k, v]) => [k, String(v ?? '')])),
+            platform: 'bgos',
+          },
+        });
+        return NextResponse.json({
+          subscription_id: sub.subscriptionId,
+          plan_id: sub.planId,
+          short_url: sub.shortUrl,
+          payment_link_url: sub.shortUrl,
+          amount,
+          currency: 'INR',
+          key_id: keyId,
+          isRecurring: true,
+        });
+      } catch (subErr: any) {
+        console.warn('[create-order] Subscription auto-pay creation failed, falling back to order:', subErr?.message || subErr);
+      }
+    }
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
     const orderRes = await fetch('https://api.razorpay.com/v1/orders', {

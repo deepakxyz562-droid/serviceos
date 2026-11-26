@@ -170,14 +170,22 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
   }, []);
 
   useEffect(() => {
-    if (businessTab !== 'login' || loginMethod !== 'phone') {
+    if (isBgos && loginMethod !== 'email') {
+      setLoginMethod('email');
+      setOtpSent(false);
+      setOtpCode('');
+    }
+  }, [isBgos, loginMethod]);
+
+  useEffect(() => {
+    if (isBgos || businessTab !== 'login' || loginMethod !== 'phone') {
       clearRecaptcha();
       confirmationResultRef.current = null;
     }
     return () => {
       clearRecaptcha();
     };
-  }, [businessTab, loginMethod, clearRecaptcha]);
+  }, [isBgos, businessTab, loginMethod, clearRecaptcha]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -490,29 +498,31 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             animate="center"
             exit="exit"
           >
-            {/* Login Method Sub-Toggle */}
-            <div className="flex items-center justify-center p-1 bg-slate-100 rounded-lg mb-4">
-              <button
-                type="button"
-                onClick={() => { setLoginMethod('email'); }}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  loginMethod === 'email' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Email & Password
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLoginMethod('phone'); setShowForgotPassword(false); }}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                  loginMethod === 'phone' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Mobile OTP
-              </button>
-            </div>
+            {/* Login Method Sub-Toggle (OTP login disabled on BGOS web) */}
+            {!isBgos && (
+              <div className="flex items-center justify-center p-1 bg-slate-100 rounded-lg mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMethod('email'); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    loginMethod === 'email' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Email & Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMethod('phone'); setShowForgotPassword(false); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    loginMethod === 'phone' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Mobile OTP
+                </button>
+              </div>
+            )}
 
-            {loginMethod === 'email' && showForgotPassword ? (
+            {(isBgos || loginMethod === 'email') && showForgotPassword ? (
               <form onSubmit={handleRequestPasswordReset} className="space-y-4">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-1">
                   <p className="text-sm font-semibold text-slate-900">Reset your password</p>
@@ -566,8 +576,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 </button>
               </form>
             ) : (
-            <form onSubmit={loginMethod === 'phone' ? (otpSent ? handleVerifyWebOtp : handleSendWebOtp) : handleBusinessLogin} className="space-y-4">
-              {loginMethod === 'email' ? (
+            <form onSubmit={!isBgos && loginMethod === 'phone' ? (otpSent ? handleVerifyWebOtp : handleSendWebOtp) : handleBusinessLogin} className="space-y-4">
+              {(isBgos || loginMethod === 'email') ? (
                 <>
                   <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
                     <Label htmlFor="login-email" className="text-slate-700">Email</Label>

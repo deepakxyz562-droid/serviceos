@@ -3,6 +3,7 @@ import {
   Alert,
   AppState,
   Linking,
+  Pressable,
   Text,
   View,
 } from 'react-native';
@@ -35,6 +36,9 @@ interface BillingResponse {
     status: string;
     trialEndsAt?: string | null;
     currentPeriodEnd?: string | null;
+    billingCycle?: 'monthly' | 'yearly';
+    autoPayEnabled?: boolean;
+    autoPayCancelled?: boolean;
   };
   entitlement?: BgosEntitlement;
   defaultRegion?: 'india' | 'international';
@@ -110,6 +114,8 @@ export default function MyPlanScreen() {
   const user = useAuthStore((s) => s.user);
   const billingRes = useResource<BillingResponse>('/api/bgos/billing');
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [cancellingAutoPay, setCancellingAutoPay] = useState(false);
   const [region, setRegion] = useState<'india' | 'international'>(() => {
     try {
       return detectDeviceCountryAndTimezone().country.code === 'IN' ? 'india' : 'international';
@@ -146,6 +152,35 @@ export default function MyPlanScreen() {
       ? Math.max(0, Math.ceil((new Date(sub.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
       : 0;
 
+  async function handleCancelAutoPay() {
+    Alert.alert(
+      'Cancel Auto-Pay?',
+      'Turn off automatic renewal? Your current plan stays active until the end of this billing period.',
+      [
+        { text: 'Keep Auto-Pay', style: 'cancel' },
+        {
+          text: 'Turn Off',
+          style: 'destructive',
+          onPress: async () => {
+            setCancellingAutoPay(true);
+            try {
+              const res = await apiRequest<{ message?: string }>('/api/bgos/billing', {
+                method: 'POST',
+                body: { action: 'cancel_autopay' },
+              });
+              Alert.alert('Auto-Pay Disabled', res?.message || 'Automatic renewal has been turned off.');
+              await billingRes.refresh();
+            } catch (err: any) {
+              Alert.alert('Notice', err?.message || 'Could not cancel auto-pay.');
+            } finally {
+              setCancellingAutoPay(false);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   async function handleActivatePlan(planCode: string) {
     setActivatingPlan(planCode);
     try {
@@ -154,7 +189,7 @@ export default function MyPlanScreen() {
           '/api/bgos/billing',
           {
             method: 'POST',
-            body: { plan: planCode },
+            body: { plan: planCode, billingCycle },
           },
         );
         if (!res?.url) {
@@ -171,6 +206,7 @@ export default function MyPlanScreen() {
       const token = await getToken();
       const params = new URLSearchParams();
       params.set('plan', planCode);
+      params.set('billingCycle', billingCycle);
       params.set('product', 'bgos');
       if (token) params.set('token', token);
       if (user?.email) params.set('email', user.email);
@@ -188,6 +224,7 @@ export default function MyPlanScreen() {
         try {
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('plan', planCode);
+          fallbackParams.set('billingCycle', billingCycle);
           fallbackParams.set('product', 'bgos');
           if (user?.email) fallbackParams.set('email', user.email);
           await Linking.openURL(`${PAYMENT_WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
@@ -307,18 +344,72 @@ export default function MyPlanScreen() {
             </Text>
           </View>
         </View>
+
+        {isPaid && sub?.autoPayEnabled ? (
+          <View style={{ paddingTop: 4 }}>
+            <Action
+              label={cancellingAutoPay ? 'Turning Off Auto-Pay…' : 'Cancel Auto-Pay Renewal'}
+              secondary
+              icon="cancel"
+              disabled={cancellingAutoPay}
+              onPress={() => void handleCancelAutoPay()}
+            />
+          </View>
+        ) : null}
       </Card>
 
       {/* 2. Plans Section (currency & pricing automatically matched to installation region) */}
       <View style={{ gap: 14 }}>
-        <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
-          Upgrade or Activate Your Plan
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink, letterSpacing: -0.2 }}>
+            Upgrade or Activate Your Plan
+          </Text>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            backgroundColor: '#E2E8F0',
+            borderRadius: 10,
+            padding: 3,
+          }}
+        >
+          {(['monthly', 'yearly'] as const).map((cycle) => {
+            const active = billingCycle === cycle;
+            return (
+              <Pressable
+                key={cycle}
+                onPress={() => setBillingCycle(cycle)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  backgroundColor: active ? '#FFFFFF' : 'transparent',
+                  alignItems: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: active ? '800' : '600',
+                    color: active ? colors.ink : colors.muted,
+                  }}
+                >
+                  {cycle === 'monthly' ? 'Monthly Auto-Pay' : 'Yearly (2 Mo Free)'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {BGOS_DEFAULT_PLANS.map((plan) => {
           const isCurrentPaid = isPaid && (ent?.plan || sub?.plan)?.toLowerCase() === plan.code;
           const isBusy = activatingPlan === plan.code;
-          const priceDisplay = region === 'india' ? `₹${plan.priceInr.toLocaleString('en-IN')}` : `$${plan.priceUsd}`;
+          const amountInr = billingCycle === 'yearly' ? plan.priceInr * 10 : plan.priceInr;
+          const amountUsd = billingCycle === 'yearly' ? plan.priceUsd * 10 : plan.priceUsd;
+          const priceDisplay = region === 'india' ? `₹${amountInr.toLocaleString('en-IN')}` : `$${amountUsd}`;
+          const cycleShort = billingCycle === 'yearly' ? 'yr' : 'mo';
+          const cycleLong = billingCycle === 'yearly' ? 'year' : 'month';
           const gatewayReady =
             region === 'india'
               ? billingRes.data?.gateways?.razorpay !== false
@@ -349,7 +440,7 @@ export default function MyPlanScreen() {
                     {priceDisplay}
                   </Text>
                   <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }}>
-                    {region === 'india' ? 'per month' : 'USD / month'}
+                    {region === 'india' ? `per ${cycleLong} · auto-pay` : `USD / ${cycleLong}`}
                   </Text>
                 </View>
               </View>
@@ -372,7 +463,7 @@ export default function MyPlanScreen() {
                       ? 'Current Active Plan'
                       : !gatewayReady
                         ? 'Checkout Unavailable'
-                        : `Subscribe ${priceDisplay}/mo`
+                        : `Subscribe ${priceDisplay}/${cycleShort}`
                 }
                 disabled={isBusy || isCurrentPaid || !gatewayReady}
                 icon={plan.highlight ? 'flash-on' : 'check'}

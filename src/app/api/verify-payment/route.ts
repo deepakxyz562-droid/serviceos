@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
+      razorpay_subscription_id,
       razorpay_payment_link_id,
       razorpay_payment_link_reference_id,
       razorpay_payment_link_status,
@@ -45,14 +46,46 @@ export async function POST(request: NextRequest) {
     } = body;
 
     const isPaymentLink = Boolean(razorpay_payment_link_id);
+    const isSubscription = Boolean(razorpay_subscription_id);
     const allowSandbox = process.env.NODE_ENV !== 'production';
     const isSandbox =
       allowSandbox &&
       !isPaymentLink &&
       ((typeof razorpay_order_id === 'string' && razorpay_order_id.startsWith('order_sandbox_')) ||
+        (typeof razorpay_subscription_id === 'string' && razorpay_subscription_id.startsWith('sub_sandbox_')) ||
         razorpay_signature === 'sandbox_verified');
 
-    if (isPaymentLink) {
+    if (isSubscription) {
+      if (!razorpay_subscription_id || !razorpay_payment_id || (!isSandbox && !razorpay_signature)) {
+        return NextResponse.json(
+          {
+            error: 'Missing required subscription verification fields',
+            details: {
+              razorpay_subscription_id: !razorpay_subscription_id ? 'Missing' : 'Present',
+              razorpay_payment_id: !razorpay_payment_id ? 'Missing' : 'Present',
+              razorpay_signature: !razorpay_signature ? 'Missing' : 'Present',
+            },
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!isSandbox) {
+        const text = `${razorpay_payment_id}|${razorpay_subscription_id}`;
+        const generatedSignature = crypto
+          .createHmac('sha256', keySecret)
+          .update(text)
+          .digest('hex');
+
+        if (!timingSafeHexMatch(generatedSignature, String(razorpay_signature))) {
+          console.warn('[verify-payment] Subscription signature mismatch:', razorpay_subscription_id);
+          return NextResponse.json(
+            { success: false, error: 'Invalid subscription signature. Payment verification failed.' },
+            { status: 400 }
+          );
+        }
+      }
+    } else if (isPaymentLink) {
       if (!razorpay_payment_link_id || !razorpay_payment_id || !razorpay_signature) {
         return NextResponse.json(
           {
@@ -133,10 +166,13 @@ export async function POST(request: NextRequest) {
         (!resolvedTenantId || !resolvedPlanCode) &&
         !isSandbox &&
         keyId &&
-        (isPaymentLink || Boolean(resolvedPlanCode))
+        (isPaymentLink || isSubscription || Boolean(resolvedPlanCode))
       ) {
         const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
         const endpoints = [
+          razorpay_subscription_id
+            ? `https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(String(razorpay_subscription_id))}`
+            : null,
           razorpay_payment_link_id
             ? `https://api.razorpay.com/v1/payment_links/${encodeURIComponent(String(razorpay_payment_link_id))}`
             : null,
@@ -179,10 +215,22 @@ export async function POST(request: NextRequest) {
           provider: 'razorpay',
           billingCycle: resolvedCycle,
           currency: 'INR',
+          providerSubscriptionId: razorpay_subscription_id ? String(razorpay_subscription_id) : null,
           providerOrderId: razorpay_order_id || razorpay_payment_link_id || null,
           providerPaymentId: razorpay_payment_id,
           payerEmail: resolvedEmail || null,
         });
+        if (razorpay_subscription_id) {
+          try {
+            const { db } = await import('@/lib/db');
+            const t = await db.tenant.findUnique({ where: { id: resolvedTenantId }, select: { settingsJson: true } });
+            const settings = t?.settingsJson ? JSON.parse(t.settingsJson) : {};
+            if (settings.autoPayCancelled) {
+              settings.autoPayCancelled = false;
+              await db.tenant.update({ where: { id: resolvedTenantId }, data: { settingsJson: JSON.stringify(settings) } });
+            }
+          } catch {}
+        }
         planActivated = true;
       }
     } catch (activationErr) {
@@ -193,7 +241,8 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Payment verified successfully',
       payment_id: razorpay_payment_id,
-      order_id: razorpay_order_id || razorpay_payment_link_id,
+      order_id: razorpay_order_id || razorpay_payment_link_id || razorpay_subscription_id,
+      subscription_id: razorpay_subscription_id || null,
       planActivated,
     });
   } catch (error: any) {

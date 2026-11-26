@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { db } from '@/lib/db';
 import { parsePaymentSettings } from '@/app/api/settings/payment-integrations/route';
 import { activateBgosSubscription } from '@/lib/bgos-entitlement';
+import { logBillingEvent } from '@/lib/billing-events';
+import { cache } from '@/lib/cache';
 
 function verifyRazorpayWebhookSig(rawBody: string, signature: string | null, secret: string): boolean {
   if (!signature || !secret) return false;
@@ -29,6 +31,131 @@ export async function POST(request: NextRequest) {
 
     const event = JSON.parse(rawBody);
     const eventType = event?.event;
+
+    // 0. Razorpay Recurring Subscription Webhook Events (Monthly / Yearly Auto-Pay)
+    if (
+      eventType === 'subscription.authenticated' ||
+      eventType === 'subscription.activated' ||
+      eventType === 'subscription.charged' ||
+      eventType === 'subscription.pending' ||
+      eventType === 'subscription.halted' ||
+      eventType === 'subscription.cancelled'
+    ) {
+      const globalSecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+      if (!globalSecret || !verifyRazorpayWebhookSig(rawBody, signature, globalSecret)) {
+        console.warn('[razorpay-webhook] Subscription webhook signature verification failed');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+
+      const subEntity = event.payload?.subscription?.entity;
+      const paymentEntity = event.payload?.payment?.entity;
+      const mergedNotes = {
+        ...(subEntity?.notes || {}),
+        ...(paymentEntity?.notes || {}),
+      };
+
+      const subId = subEntity?.id ? String(subEntity.id) : null;
+      let tenantId = mergedNotes.tenantId ? String(mergedNotes.tenantId) : '';
+      let existingSub = subId
+        ? await db.subscription
+            .findFirst({ where: { paypalSubscriptionId: subId }, orderBy: { createdAt: 'desc' } })
+            .catch(() => null)
+        : null;
+      if (!tenantId && existingSub?.tenantId) tenantId = existingSub.tenantId;
+
+      if (!tenantId && subId) {
+        const prodSub = await db.productSubscription
+          .findFirst({ where: { providerSubscriptionId: subId } })
+          .catch(() => null);
+        if (prodSub?.workspaceId) {
+          const pw = await db.productWorkspace
+            .findFirst({ where: { workspaceId: prodSub.workspaceId }, select: { tenantId: true } })
+            .catch(() => null);
+          if (pw?.tenantId) tenantId = pw.tenantId;
+        }
+      }
+
+      if (!tenantId) {
+        return NextResponse.json({ status: 'ignored', reason: 'tenant_not_found' });
+      }
+
+      if (
+        eventType === 'subscription.authenticated' ||
+        eventType === 'subscription.activated' ||
+        eventType === 'subscription.charged'
+      ) {
+        const planCode = String(mergedNotes.planCode || mergedNotes.plan || existingSub?.plan || 'starter');
+        const billingCycle =
+          mergedNotes.billingCycle === 'yearly' || existingSub?.billingCycle === 'yearly'
+            ? 'yearly'
+            : 'monthly';
+        const amountPaise = Number(paymentEntity?.amount || 0);
+
+        await activateBgosSubscription({
+          tenantId,
+          planCode,
+          provider: 'razorpay',
+          billingCycle,
+          currency: paymentEntity?.currency || 'INR',
+          amount: amountPaise > 0 ? Math.round(amountPaise / 100) : undefined,
+          providerSubscriptionId: subId,
+          providerOrderId: paymentEntity?.order_id ? String(paymentEntity.order_id) : null,
+          providerPaymentId: paymentEntity?.id ? String(paymentEntity.id) : null,
+          payerEmail: paymentEntity?.email || null,
+          description: `Razorpay auto-pay (${eventType}) for ${planCode.toUpperCase()} (${billingCycle})`,
+        });
+
+        try {
+          const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { settingsJson: true } });
+          const s = t?.settingsJson ? JSON.parse(t.settingsJson) : {};
+          if (s.autoPayCancelled) {
+            s.autoPayCancelled = false;
+            await db.tenant.update({ where: { id: tenantId }, data: { settingsJson: JSON.stringify(s) } });
+          }
+        } catch {}
+
+        return NextResponse.json({ status: 'ok', event: eventType, activated: true });
+      }
+
+      if (eventType === 'subscription.halted' || eventType === 'subscription.cancelled') {
+        const nextStatus = eventType === 'subscription.cancelled' ? 'cancelled' : 'past_due';
+        if (existingSub) {
+          await db.subscription
+            .update({ where: { id: existingSub.id }, data: { status: nextStatus } })
+            .catch(() => {});
+        }
+        await db.tenant
+          .update({ where: { id: tenantId }, data: { planStatus: nextStatus } })
+          .catch(() => {});
+        try {
+          const pws = await db.productWorkspace.findMany({
+            where: { tenantId, product: 'bgos' },
+            select: { workspaceId: true },
+          });
+          for (const pw of pws) {
+            await db.productSubscription
+              .update({ where: { workspaceId: pw.workspaceId }, data: { status: nextStatus } })
+              .catch(() => {});
+          }
+        } catch {}
+
+        await logBillingEvent({
+          tenantId,
+          subscriptionId: existingSub?.id ?? null,
+          type: eventType === 'subscription.cancelled' ? 'cancel' : 'fail',
+          status: eventType === 'subscription.cancelled' ? 'success' : 'failed',
+          paymentProvider: 'razorpay',
+          description: `Razorpay subscription ${eventType} (${subId || 'unknown'})`,
+          metadata: { razorpaySubscriptionId: subId, eventType },
+        }).catch(() => {});
+
+        try {
+          cache.invalidateByPrefix(`subscription:${tenantId}`);
+        } catch {}
+      }
+
+      return NextResponse.json({ status: 'ok', event: eventType });
+    }
 
     if (
       eventType === 'payment.captured' ||

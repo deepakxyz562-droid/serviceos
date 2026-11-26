@@ -26,6 +26,11 @@ type Billing = {
     trialEndsAt?: string | null;
     legacy: boolean;
     currentPeriodEnd: string | null;
+    billingCycle?: 'monthly' | 'yearly';
+    provider?: string | null;
+    providerSubscriptionId?: string | null;
+    autoPayEnabled?: boolean;
+    autoPayCancelled?: boolean;
   };
   entitlement?: BgosEntitlement;
   defaultRegion?: 'india' | 'international';
@@ -40,7 +45,9 @@ type Billing = {
     code: string;
     name: string;
     priceInr: number;
+    yearlyPriceInr?: number;
     priceUsd?: number;
+    yearlyPriceUsd?: number;
     features: string[];
     checkoutEnabled: boolean;
   }[];
@@ -78,6 +85,8 @@ function loadRazorpayScript(): Promise<boolean> {
 
 export function BgosBilling() {
   const [busy, setBusy] = useState(false);
+  const [cancellingAutoPay, setCancellingAutoPay] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [error, setError] = useState('');
   const [region, setRegion] = useState<'india' | 'international'>(() => {
     const loc = detectClientDeviceLocale();
@@ -133,6 +142,35 @@ export function BgosBilling() {
     }
   }, [refetchBilling]);
 
+  async function handleCancelAutoPay() {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        'Turn off automatic renewal? Your current plan remains active until the end of this billing period.',
+      );
+      if (!confirmed) return;
+    }
+    setCancellingAutoPay(true);
+    setError('');
+    try {
+      const res = await authFetch('/api/bgos/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_autopay' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not cancel auto-pay');
+      toast.success(data.message || 'Auto-pay disabled.');
+      await query.refetch();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('bgos:billing-updated'));
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not cancel auto-pay');
+    } finally {
+      setCancellingAutoPay(false);
+    }
+  }
+
   async function handleCheckout(planCode: string) {
     setBusy(true);
     setError('');
@@ -143,14 +181,15 @@ export function BgosBilling() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan: planCode,
+          billingCycle,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Checkout initialization failed');
 
-      // ── 1. Modal checkout flow (INR) ──────────────────────────────────────
-      if (data.gateway === 'razorpay' && data.order_id) {
+      // ── 1. Modal checkout flow (INR — Subscription Auto-Pay or Order fallback) ──
+      if (data.gateway === 'razorpay' && (data.subscription_id || data.order_id)) {
         // If running on a domain other than fieseros.com (e.g. bgos.site) where Razorpay
         // website origin policy might block standard checkout, seamlessly route to hosted link
         if (
@@ -158,28 +197,25 @@ export function BgosBilling() {
           window.location.hostname !== 'fieseros.com' &&
           window.location.hostname !== 'localhost' &&
           window.location.hostname !== '127.0.0.1' &&
-          data.payment_link_url
+          (data.short_url || data.payment_link_url)
         ) {
-          window.location.assign(data.payment_link_url);
+          window.location.assign(data.short_url || data.payment_link_url);
           return;
         }
 
         const scriptOk = await loadRazorpayScript();
         if (!scriptOk) {
-          if (data.payment_link_url) {
-            window.location.assign(data.payment_link_url);
+          if (data.short_url || data.payment_link_url) {
+            window.location.assign(data.short_url || data.payment_link_url);
             return;
           }
           throw new Error('Could not load secure checkout script.');
         }
 
-        const options = {
+        const options: Record<string, any> = {
           key: data.key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TuLATkapPzzHZc',
-          amount: data.amount,
-          currency: data.currency || 'INR',
           name: 'BGOS / FieserOS',
-          description: `${data.planName || planCode} Plan Subscription`,
-          order_id: data.order_id,
+          description: `${data.planName || planCode} (${billingCycle === 'yearly' ? 'Yearly Auto-Pay' : 'Monthly Auto-Pay'})`,
           theme: { color: '#009F50' },
           modal: {
             ondismiss: () => {
@@ -193,10 +229,16 @@ export function BgosBilling() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id,
+                  ...(response.razorpay_subscription_id
+                    ? { razorpay_subscription_id: response.razorpay_subscription_id }
+                    : {}),
+                  ...(response.razorpay_order_id
+                    ? { razorpay_order_id: response.razorpay_order_id }
+                    : {}),
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
                   planCode,
+                  billingCycle,
                 }),
               });
               const verifyData = await verifyRes.json();
@@ -216,6 +258,14 @@ export function BgosBilling() {
             }
           },
         };
+
+        if (data.subscription_id) {
+          options.subscription_id = data.subscription_id;
+        } else {
+          options.amount = data.amount;
+          options.currency = data.currency || 'INR';
+          options.order_id = data.order_id;
+        }
 
         const razorpayInstance = new (window as any).Razorpay(options);
         razorpayInstance.on('payment.failed', (resp: any) => {
@@ -276,9 +326,34 @@ export function BgosBilling() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Room for your next stage.</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {region === 'india'
-              ? 'Monthly plans in INR (₹). UPI, Netbanking & Cards accepted.'
-              : 'Monthly plans in USD ($). Global Cards, Apple Pay & Google Pay accepted.'}
+              ? 'Auto-pay subscriptions in INR (₹). UPI AutoPay, Cards & Netbanking accepted.'
+              : 'Auto-pay subscriptions in USD ($). Global Cards, Apple Pay & Google Pay accepted.'}
           </p>
+        </div>
+
+        <div className="inline-flex items-center rounded-xl border bg-muted/40 p-1">
+          <button
+            type="button"
+            onClick={() => setBillingCycle('monthly')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              billingCycle === 'monthly'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Monthly Auto-Pay
+          </button>
+          <button
+            type="button"
+            onClick={() => setBillingCycle('yearly')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              billingCycle === 'yearly'
+                ? 'bg-background text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Yearly (2 Months Free)
+          </button>
         </div>
       </header>
 
@@ -329,6 +404,16 @@ export function BgosBilling() {
                     Active Paid Plan
                   </span>
                 )}
+                {isPaid && sub?.autoPayEnabled && (
+                  <span className="rounded-full bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-700 border border-sky-500/30">
+                    Auto-Pay Active ({sub.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'})
+                  </span>
+                )}
+                {isPaid && sub?.autoPayCancelled && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 border border-slate-200">
+                    Auto-Pay Off
+                  </span>
+                )}
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {sub?.status} · {query.data.usage.contacts} contacts · {query.data.usage.forms} active forms ·{' '}
@@ -336,16 +421,37 @@ export function BgosBilling() {
               </p>
               {sub?.currentPeriodEnd && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Current period ends {new Date(sub.currentPeriodEnd).toLocaleDateString()}
+                  {sub?.autoPayEnabled
+                    ? `Next auto-renewal on ${new Date(sub.currentPeriodEnd).toLocaleDateString()}`
+                    : `Current period ends ${new Date(sub.currentPeriodEnd).toLocaleDateString()}`}
                 </p>
               )}
             </div>
+
+            {isPaid && sub?.autoPayEnabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={cancellingAutoPay}
+                onClick={handleCancelAutoPay}
+                className="text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              >
+                {cancellingAutoPay ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+                Cancel Auto-Pay
+              </Button>
+            )}
           </section>
 
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {query.data.plans.map((plan) => {
-              const inrPrice = plan.priceInr;
-              const usdPrice = plan.priceUsd ?? USD_PRICES[plan.code] ?? Math.round(inrPrice / 50);
+              const baseInrPrice = plan.priceInr;
+              const inrPrice =
+                billingCycle === 'yearly' ? (plan.yearlyPriceInr ?? baseInrPrice * 10) : baseInrPrice;
+              const baseUsdPrice = plan.priceUsd ?? USD_PRICES[plan.code] ?? Math.round(baseInrPrice / 50);
+              const usdPrice =
+                billingCycle === 'yearly' ? (plan.yearlyPriceUsd ?? baseUsdPrice * 10) : baseUsdPrice;
+              const cycleSuffix = billingCycle === 'yearly' ? 'year' : 'month';
+              const shortCycle = billingCycle === 'yearly' ? 'yr' : 'mo';
               const isCurrentPaid = isPaid && sub?.plan === plan.code;
               const isGatewayReady =
                 region === 'india'
@@ -367,18 +473,20 @@ export function BgosBilling() {
                     {region === 'india' ? (
                       <>
                         ₹{inrPrice.toLocaleString('en-IN')}
-                        <span className="text-xs font-normal text-muted-foreground"> / month</span>
+                        <span className="text-xs font-normal text-muted-foreground"> / {cycleSuffix}</span>
                       </>
                     ) : (
                       <>
                         ${usdPrice}
-                        <span className="text-xs font-normal text-muted-foreground"> USD / month</span>
+                        <span className="text-xs font-normal text-muted-foreground"> USD / {cycleSuffix}</span>
                       </>
                     )}
                   </p>
 
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {region === 'india' ? 'UPI, Netbanking & Cards accepted' : 'Global Cards, Apple Pay & Google Pay'}
+                    {region === 'india'
+                      ? 'Auto-renews via UPI AutoPay or Card'
+                      : 'Auto-renews via Card, Apple Pay or Google Pay'}
                   </p>
 
                   <ul className="my-6 flex-1 space-y-3">
@@ -405,7 +513,7 @@ export function BgosBilling() {
                     ) : !isGatewayReady ? (
                       'Checkout unavailable'
                     ) : (
-                      `Subscribe — ${region === 'india' ? `₹${inrPrice.toLocaleString('en-IN')}/mo` : `$${usdPrice}/mo`}`
+                      `Subscribe — ${region === 'india' ? `₹${inrPrice.toLocaleString('en-IN')}/${shortCycle}` : `$${usdPrice}/${shortCycle}`}`
                     )}
                   </Button>
                 </div>
