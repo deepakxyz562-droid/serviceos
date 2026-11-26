@@ -326,38 +326,55 @@ export async function DELETE(
     const { id } = await params;
     const existing = await db.socialPost.findFirst({
       where: { id, tenantId },
-      select: { id: true, status: true, content: true },
+      select: { id: true, status: true, content: true, publishTargets: true },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });
     }
 
-    // Hard-delete drafts. Soft-cancel scheduled or other posts.
-    if (existing.status === 'draft') {
+    // If post was published to Google Business Profile, delete it from Google Maps & Search
+    let deletedFromGoogle = false;
+    try {
+      const targets = safeJsonArray(existing.publishTargets);
+      const gbpTarget = targets.find(
+        (t: any) => t && t.platform === 'googlebusiness' && t.externalPostId,
+      ) as { externalPostId: string } | undefined;
+      if (gbpTarget?.externalPostId) {
+        const { prepareGoogleAccount } = await import('@/lib/social/google-account-helper');
+        const gAccount = await prepareGoogleAccount(tenantId).catch(() => null);
+        if (gAccount) {
+          const { deleteGoogleBusinessPost } = await import('@/lib/social/adapters/googlebusiness');
+          deletedFromGoogle = await deleteGoogleBusinessPost(gAccount, gbpTarget.externalPostId).catch(() => false);
+        }
+      }
+    } catch {}
+
+    // Hard-delete post from database
+    try {
       await db.socialPost.delete({ where: { id } });
-    } else {
+    } catch {
+      // Fallback to cancelled if referenced by other foreign tables
       await db.socialPost.update({
         where: { id },
         data: { status: 'cancelled' },
-      });
+      }).catch(() => null);
     }
 
     await logActivity({
       tenantId,
       actorId: user.id,
       actorType: 'user',
-      action: existing.status === 'draft' ? 'delete' : 'status_change',
+      action: 'delete',
       entityType: 'social_post',
       entityId: id,
       entityName: existing.content?.slice(0, 60) || undefined,
-      description:
-        existing.status === 'draft'
-          ? 'Deleted social post draft.'
-          : 'Cancelled scheduled social post.',
+      description: deletedFromGoogle
+        ? 'Deleted social post and removed from Google Business Profile.'
+        : 'Deleted social post.',
       severity: 'warning',
     }).catch(() => {});
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deletedFromGoogle });
   } catch (error) {
     console.error('[api/social/posts/[id]] DELETE error:', error);
     return NextResponse.json({ error: 'Failed to delete post' }, { status: 500 });

@@ -1402,10 +1402,35 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id')?.trim();
+    const source = searchParams.get('source')?.trim()?.toLowerCase();
     if (!id) {
       return NextResponse.json({ error: 'Media item id is required.' }, { status: 400 });
     }
 
+    // 1. Handle live Google Business Profile media item deletion
+    if (source === 'google' || id.startsWith('accounts/') || id.includes('/locations/') || id.startsWith('media/')) {
+      const gAccount = await prepareGoogleAccount(user.tenantId).catch(() => null);
+      if (gAccount) {
+        const { deleteGoogleBusinessMedia } = await import('@/lib/social/adapters/googlebusiness');
+        await deleteGoogleBusinessMedia(gAccount, id).catch((err) => {
+          console.warn('[social/photos] Failed to delete media from Google:', err);
+        });
+      }
+
+      // Also clean up any mirrored local socialPost row if one exists with this ID or url
+      try {
+        await db.socialPost.deleteMany({
+          where: {
+            tenantId: user.tenantId,
+            OR: [{ id }, { linkUrl: id }],
+          },
+        });
+      } catch {}
+
+      return NextResponse.json({ success: true, id, deletedFromGoogle: true });
+    }
+
+    // 2. Handle queued/published socialPost media row
     const existing = await db.socialPost.findFirst({
       where: { id, tenantId: user.tenantId },
       select: {
@@ -1418,12 +1443,42 @@ export async function DELETE(request: NextRequest) {
         mediaUrls: true,
       },
     });
-    if (!existing || !isPhotoMediaRow(existing)) {
-      return NextResponse.json({ error: 'Media item not found.' }, { status: 404 });
+
+    if (existing) {
+      try {
+        const targets =
+          typeof existing.publishTargets === 'string'
+            ? JSON.parse(existing.publishTargets)
+            : existing.publishTargets;
+        const gbpTarget = Array.isArray(targets)
+          ? targets.find((t: any) => t.platform === 'googlebusiness' && t.externalPostId)
+          : null;
+        if (gbpTarget?.externalPostId) {
+          const gAccount = await prepareGoogleAccount(user.tenantId).catch(() => null);
+          if (gAccount) {
+            const { deleteGoogleBusinessMedia } = await import('@/lib/social/adapters/googlebusiness');
+            await deleteGoogleBusinessMedia(gAccount, gbpTarget.externalPostId).catch(() => null);
+          }
+        }
+      } catch {}
+
+      await db.socialPost.delete({ where: { id: existing.id } });
+      return NextResponse.json({ success: true, id: existing.id });
     }
 
-    await db.socialPost.delete({ where: { id: existing.id } });
-    return NextResponse.json({ success: true, id: existing.id });
+    // 3. Handle brand image library item if present
+    if (db.imageLibrary?.findFirst) {
+      const libraryRow = await db.imageLibrary.findFirst({
+        where: { id, tenantId: user.tenantId },
+        select: { id: true },
+      }).catch(() => null);
+      if (libraryRow) {
+        await db.imageLibrary.delete({ where: { id: libraryRow.id } }).catch(() => null);
+        return NextResponse.json({ success: true, id: libraryRow.id });
+      }
+    }
+
+    return NextResponse.json({ error: 'Media item not found.' }, { status: 404 });
   } catch (error) {
     console.error('[social/photos] DELETE error:', error);
     return NextResponse.json({ error: 'Failed to delete media item' }, { status: 500 });

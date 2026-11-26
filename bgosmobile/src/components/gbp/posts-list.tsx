@@ -239,9 +239,11 @@ export function PostCard({
   approveBusy = false,
   rejectBusy = false,
   retryBusy = false,
+  deleteBusy = false,
   onApprove,
   onReject,
   onRetry,
+  onDelete,
   onPress,
 }: {
   post: SocialPostRow;
@@ -249,9 +251,11 @@ export function PostCard({
   approveBusy?: boolean;
   rejectBusy?: boolean;
   retryBusy?: boolean;
+  deleteBusy?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
   onRetry?: () => void;
+  onDelete?: () => void;
   onPress?: () => void;
 }) {
   const badge = statusBadge(post);
@@ -294,17 +298,46 @@ export function PostCard({
         )}
 
         <View style={{ flex: 1, gap: 5 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
             <Text numberOfLines={1} style={styles.cardTitle}>
               {title}
             </Text>
-            <View
-              style={[
-                styles.badgeWrap,
-                { backgroundColor: badge.bg, borderColor: badge.border },
-              ]}
-            >
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View
+                style={[
+                  styles.badgeWrap,
+                  { backgroundColor: badge.bg, borderColor: badge.border },
+                ]}
+              >
+                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+              </View>
+              {onDelete ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete post"
+                  disabled={deleteBusy}
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    onDelete();
+                  }}
+                  style={{
+                    padding: 4,
+                    borderRadius: 6,
+                    backgroundColor: '#FEF2F2',
+                    borderWidth: 1,
+                    borderColor: '#FECACA',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {deleteBusy ? (
+                    <ActivityIndicator size={13} color="#DC2626" />
+                  ) : (
+                    <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
+                  )}
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -847,9 +880,12 @@ export function PostDetailModal({
 
   const handleDeletePost = () => {
     setMenuVisible(false);
+    const isPublished = post.status === 'published' || post.status === 'partial';
     Alert.alert(
       'Delete Post',
-      'Are you sure you want to delete this post? This action cannot be undone.',
+      isPublished
+        ? 'Are you sure you want to delete this post? It will also be removed from your Google Business Profile listing.'
+        : 'Are you sure you want to delete this post? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1844,6 +1880,38 @@ export function PostsBoard({
     }
   }
 
+  function deletePostFromBoard(post: SocialPostRow) {
+    if (busyId) return;
+    const isPublished = post.status === 'published' || post.status === 'partial';
+    Alert.alert(
+      'Delete Post',
+      isPublished
+        ? 'Are you sure you want to delete this post? It will also be removed from your Google Business Profile listing.'
+        : 'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyId(post.id);
+            try {
+              if (post.id && !post.id.startsWith('ai_post_') && !post.id.startsWith('up-')) {
+                await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' });
+              }
+              board.setRows((prev) => (prev ? prev.filter((r) => r.id !== post.id) : null));
+              Alert.alert('Deleted', 'Post deleted successfully.');
+            } catch (e) {
+              Alert.alert('Delete Failed', e instanceof Error ? e.message : 'Could not delete post.');
+            } finally {
+              setBusyId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const empty = EMPTY_COPY[pill];
 
   return (
@@ -1953,9 +2021,11 @@ export function PostsBoard({
             approveBusy={busyId === post.id}
             rejectBusy={busyId === post.id}
             retryBusy={busyId === post.id}
+            deleteBusy={busyId === post.id}
             onApprove={() => void moderate(post, 'approved')}
             onReject={() => void moderate(post, 'rejected')}
             onRetry={() => void retry(post)}
+            onDelete={() => deletePostFromBoard(post)}
           />
         ))
       )}
@@ -1975,9 +2045,6 @@ export function PostsBoard({
           onRetry={(p) => void retry(p)}
           onDelete={(p) => {
             board.setRows((prev) => (prev ? prev.filter((r) => r.id !== p.id) : null));
-            if (p.id && !p.id.startsWith('ai_post_')) {
-              apiRequest(`/api/social/posts/${p.id}`, { method: 'DELETE' }).catch(() => {});
-            }
             setInspectPost(null);
           }}
           onEditSave={(updatedPost) => {

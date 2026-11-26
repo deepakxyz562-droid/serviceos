@@ -70,6 +70,8 @@ export function MediaPreviewModal({
 
   const isVideo = isVideoMediaAsset(item);
   const canManageQueue = item.source === 'queue' && Boolean(item.postId || item.id);
+  const isGoogleMedia = item.source === 'google' && Boolean(item.id);
+  const canDelete = canManageQueue || isGoogleMedia;
   const canEdit = canManageQueue && Boolean(onEdit);
   const queueItemId = item.postId || item.id;
   const isPendingReview = item.reviewStatus === 'in_review';
@@ -148,65 +150,72 @@ export function MediaPreviewModal({
               {item.category ? ` · ${item.category}` : ''}
             </Text>
           </View>
-          {canManageQueue ? (
+          {(canManageQueue || canDelete) ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Publish media now"
-                disabled={busyAction !== null}
-                onPress={() => void handlePublishNow()}
-                style={[styles.editTopBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
-              >
-                {busyAction === 'publish' ? (
-                  <ActivityIndicator size={12} color="#4338CA" />
-                ) : (
-                  <MaterialIcons name="bolt" size={14} color="#4338CA" />
-                )}
-                <Text style={[styles.editTopText, { color: '#4338CA' }]}>
-                  {item.status === 'failed' ? 'Retry' : 'Publish'}
-                </Text>
-              </Pressable>
+              {canManageQueue ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Publish media now"
+                  disabled={busyAction !== null}
+                  onPress={() => void handlePublishNow()}
+                  style={[styles.editTopBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
+                >
+                  {busyAction === 'publish' ? (
+                    <ActivityIndicator size={12} color="#4338CA" />
+                  ) : (
+                    <MaterialIcons name="bolt" size={14} color="#4338CA" />
+                  )}
+                  <Text style={[styles.editTopText, { color: '#4338CA' }]}>
+                    {item.status === 'failed' ? 'Retry' : 'Publish'}
+                  </Text>
+                </Pressable>
+              ) : null}
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Delete queued media"
-                disabled={busyAction !== null}
-                onPress={() => {
-                  Alert.alert(
-                    'Delete Media',
-                    'Remove this item from your BGOS media queue?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                          setBusyAction('delete');
-                          try {
-                            await apiRequest(`/api/social/photos?id=${encodeURIComponent(queueItemId)}`, {
-                              method: 'DELETE',
-                            });
-                            await onDeleted?.(item);
-                            onClose();
-                          } catch (err: unknown) {
-                            Alert.alert('Notice', err instanceof Error ? err.message : 'Could not delete item.');
-                          } finally {
-                            setBusyAction(null);
-                          }
+              {canDelete ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isGoogleMedia ? 'Delete from Google Maps' : 'Delete queued media'}
+                  disabled={busyAction !== null}
+                  onPress={() => {
+                    Alert.alert(
+                      isGoogleMedia ? 'Delete from Google Maps?' : 'Delete Media',
+                      isGoogleMedia
+                        ? 'This will permanently remove this media from your live Google Business Profile listing.'
+                        : 'Remove this item from your BGOS media queue?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            setBusyAction('delete');
+                            try {
+                              const sourceParam = isGoogleMedia ? '&source=google' : '';
+                              await apiRequest(`/api/social/photos?id=${encodeURIComponent(queueItemId)}${sourceParam}`, {
+                                method: 'DELETE',
+                              });
+                              await onDeleted?.(item);
+                              onClose();
+                            } catch (err: unknown) {
+                              Alert.alert('Notice', err instanceof Error ? err.message : 'Could not delete item.');
+                            } finally {
+                              setBusyAction(null);
+                            }
+                          },
                         },
-                      },
-                    ],
-                  );
-                }}
-                style={[styles.editTopBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
-              >
-                {busyAction === 'delete' ? (
-                  <ActivityIndicator size={12} color={colors.danger} />
-                ) : (
-                  <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
-                )}
-                <Text style={[styles.editTopText, { color: colors.danger }]}>Delete</Text>
-              </Pressable>
+                      ],
+                    );
+                  }}
+                  style={[styles.editTopBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                >
+                  {busyAction === 'delete' ? (
+                    <ActivityIndicator size={12} color={colors.danger} />
+                  ) : (
+                    <MaterialIcons name="delete-outline" size={14} color={colors.danger} />
+                  )}
+                  <Text style={[styles.editTopText, { color: colors.danger }]}>Delete</Text>
+                </Pressable>
+              ) : null}
 
               {canEdit ? (
                 <Pressable

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockGetAuthUser, tenantStore, brandProfileStore, socialAccountStore, servicesStore } = vi.hoisted(() => ({
+const { mockGetAuthUser, tenantStore, brandProfileStore, socialAccountStore, servicesStore, imageLibraryStore } = vi.hoisted(() => ({
   mockGetAuthUser: vi.fn(),
   tenantStore: {
     id: 'tenant-123',
@@ -18,6 +18,7 @@ const { mockGetAuthUser, tenantStore, brandProfileStore, socialAccountStore, ser
   },
   socialAccountStore: { value: null as any },
   servicesStore: { value: [] as any[] },
+  imageLibraryStore: { value: [] as any[] },
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -29,6 +30,12 @@ vi.mock('@/lib/db', () => ({
   db: {
     tenant: {
       findUnique: vi.fn(async () => tenantStore),
+      update: vi.fn(async ({ data }: any) => {
+        if (typeof data?.settingsJson === 'string') {
+          tenantStore.settingsJson = data.settingsJson;
+        }
+        return tenantStore;
+      }),
     },
     brandProfile: {
       findUnique: vi.fn(async () => brandProfileStore),
@@ -41,7 +48,7 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(async () => servicesStore.value),
     },
     imageLibrary: {
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async () => imageLibraryStore.value),
     },
     socialPost: {
       findMany: vi.fn(async () => []),
@@ -59,6 +66,7 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     brandProfileStore.industry = 'Dental Clinic';
     socialAccountStore.value = null;
     servicesStore.value = [];
+    imageLibraryStore.value = [];
   });
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -268,15 +276,17 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(res.status).toBe(200);
 
     const data = await res.json();
-    // Curated to focused, high-impact templates (not bloated to 100+ duplicates)
+    // Curated to focused, high-impact visual templates (no 100+ duplicate bloat, and no empty-image placeholders)
     expect(data.counts.for_business).toBeLessThanOrEqual(20);
-    expect(data.counts.for_business).toBeGreaterThanOrEqual(8);
+    expect(data.counts.for_business).toBeGreaterThanOrEqual(1);
     expect(data.templates.length).toBeLessThanOrEqual(20);
+    expect(data.templates.length).toBeGreaterThanOrEqual(1);
 
-    // Verify all items are for_business and cleanly adapted
+    // Verify all items are for_business, cleanly adapted, and strictly possess an image
     for (const item of data.templates) {
       expect(item.tab).toBe('for_business');
       expect(item.badge).toBeTruthy();
+      expect(item.photoUrl).toBeTruthy();
       // Ensure no artificial source tagging
       expect(item.badge).not.toContain('Pinterest');
       expect(item.badge).not.toContain('Behance');
@@ -398,6 +408,14 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
       }),
     };
 
+    imageLibraryStore.value = [
+      { id: 'img-1', name: 'Marble Texture Finish', url: 'https://cdn.example.com/texture-1.jpg', folder: 'work', mediaType: 'image/jpeg' },
+      { id: 'img-2', name: 'Royal Velvet Accent Wall', url: 'https://cdn.example.com/texture-2.jpg', folder: 'work', mediaType: 'image/jpeg' },
+      { id: 'img-3', name: 'Metallic Wall Art', url: 'https://cdn.example.com/texture-3.jpg', folder: 'work', mediaType: 'image/jpeg' },
+      { id: 'img-4', name: 'Exterior Texture Coat', url: 'https://cdn.example.com/texture-4.jpg', folder: 'work', mediaType: 'image/jpeg' },
+      { id: 'img-5', name: 'Geometric Stencil Wall', url: 'https://cdn.example.com/texture-5.jpg', folder: 'work', mediaType: 'image/jpeg' },
+    ];
+
     mockGetAuthUser.mockResolvedValueOnce({ id: 'user-texture', tenantId: 'tenant-texture' });
     const { GET } = await import('@/app/api/social/designs/templates/route');
     const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=all&limit=48');
@@ -438,9 +456,35 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     const bizRes = await GET(bizReq);
     const bizData = await bizRes.json();
     expect(bizData.templates.length).toBeLessThanOrEqual(16);
+    expect(bizData.templates.every((t: any) => Boolean(t.photoUrl && t.photoUrl.trim()))).toBe(true);
     const bizPhotos = bizData.templates
       .filter((t: any) => t.photoUrl && t.photoUrl.trim())
       .map((t: any) => t.photoUrl);
     expect(new Set(bizPhotos).size).toBe(bizPhotos.length);
   }, 20000);
+
+  it('persists creative deletion via DELETE /api/social/designs/templates and excludes dismissed designs from subsequent GET responses', async () => {
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1', tenantId: 'tenant-123' });
+    const { GET, DELETE } = await import('@/app/api/social/designs/templates/route');
+
+    const initialRes = await GET(new NextRequest('http://localhost:3000/api/social/designs/templates?tab=festivals&limit=12'));
+    expect(initialRes.status).toBe(200);
+    const initialData = await initialRes.json();
+    expect(initialData.templates.length).toBeGreaterThan(1);
+
+    const targetId = initialData.templates[0].id;
+    const delReq = new NextRequest(`http://localhost:3000/api/social/designs/templates?id=${encodeURIComponent(targetId)}`, {
+      method: 'DELETE',
+    });
+    const delRes = await DELETE(delReq);
+    expect(delRes.status).toBe(200);
+    const delData = await delRes.json();
+    expect(delData.success).toBe(true);
+    expect(delData.id).toBe(targetId);
+
+    const afterRes = await GET(new NextRequest('http://localhost:3000/api/social/designs/templates?tab=festivals&limit=12'));
+    expect(afterRes.status).toBe(200);
+    const afterData = await afterRes.json();
+    expect(afterData.templates.some((t: any) => t.id === targetId)).toBe(false);
+  });
 });

@@ -346,10 +346,13 @@ export function MediaMetadataSheet({
       );
       if (reqKey !== sessionKeyRef.current) return;
       if (Array.isArray(res?.templates)) {
-        setTemplates(res.templates);
+        const validTemplates = res.templates.filter((t) =>
+          Boolean(t?.photoUrl && resolveTemplateSource(t.photoUrl)),
+        );
+        setTemplates(validTemplates);
         // If no photo currently selected, no pending uploads, and in fresh create mode, select first template
-        if (!currentPhotoUrl && pendingAssets.length === 0 && !activeUploadItem && !editingItem && !selectedTemplate && res.templates.length > 0) {
-          applyTemplate(res.templates[0]);
+        if (!currentPhotoUrl && pendingAssets.length === 0 && !activeUploadItem && !editingItem && !selectedTemplate && validTemplates.length > 0) {
+          applyTemplate(validTemplates[0]);
         }
       }
     } catch (err) {
@@ -362,6 +365,34 @@ export function MediaMetadataSheet({
   function handleTabChange(tab: TemplateTabType) {
     setTemplateTab(tab);
     void loadTemplates(tab, sessionKeyRef.current);
+  }
+
+  function handleDeleteTemplate(tpl: BusinessTemplateItem) {
+    if (!tpl?.id) return;
+    Alert.alert(
+      'Delete Creative?',
+      'Remove this design from Ready Creatives and AI Creative Studio?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const prevTemplates = templates;
+            setTemplates((curr) => curr.filter((t) => t.id !== tpl.id));
+            if (selectedTemplateId === tpl.id) setSelectedTemplateId(null);
+            try {
+              await apiRequest(`/api/social/designs/templates?id=${encodeURIComponent(tpl.id)}`, {
+                method: 'DELETE',
+              });
+            } catch (err: unknown) {
+              setTemplates(prevTemplates);
+              Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not delete creative.');
+            }
+          },
+        },
+      ],
+    );
   }
 
   function applyTemplate(tpl: any) {
@@ -831,6 +862,8 @@ export function MediaMetadataSheet({
                   >
                     {templates.map((tpl) => {
                       const selected = selectedTemplateId === tpl.id;
+                      const resolvedImg = resolveTemplateSource(tpl.photoUrl);
+                      if (!resolvedImg) return null;
                       return (
                         <Pressable
                           key={tpl.id}
@@ -838,7 +871,7 @@ export function MediaMetadataSheet({
                           style={[styles.templateThumbCard, selected && styles.templateThumbCardSelected]}
                         >
                           <Image
-                            source={resolveTemplateSource(tpl.photoUrl)}
+                            source={resolvedImg}
                             style={styles.templateThumbImage}
                             resizeMode="cover"
                           />
@@ -850,6 +883,18 @@ export function MediaMetadataSheet({
                               {tpl.badge}
                             </Text>
                           </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Delete ${tpl.headline || 'creative'}`}
+                            hitSlop={8}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              handleDeleteTemplate(tpl);
+                            }}
+                            style={styles.templateDeleteBtn}
+                          >
+                            <MaterialIcons name="delete-outline" size={13} color="#FFFFFF" />
+                          </Pressable>
                           {selected ? (
                             <View style={styles.selectedCheckBadge}>
                               <MaterialIcons name="check" size={12} color="#FFFFFF" />
@@ -1630,6 +1675,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#009F50',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  templateDeleteBtn: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(220, 38, 38, 0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   descHeaderRow: {
     flexDirection: 'row',

@@ -718,6 +718,14 @@ export function PhotosBoard({
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         onEdit={openEditModal}
+        onDeleted={async () => {
+          setNotice('Media item deleted.');
+          await refresh();
+        }}
+        onPublished={async () => {
+          setNotice('Media published to Google Business Profile.');
+          await refresh();
+        }}
         businessName={businessName}
         logoUrl={logoUrl}
         phone={phone}

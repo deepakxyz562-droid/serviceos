@@ -619,6 +619,35 @@ function GrowthScreen() {
     }
   }
 
+  function deleteExistingPost(post: SocialPost) {
+    const isPublished = post.status === 'published' || post.status === 'partial';
+    Alert.alert(
+      'Delete Post',
+      isPublished
+        ? 'Are you sure you want to delete this post? It will also be removed from your Google Business Profile listing.'
+        : 'Are you sure you want to delete this post?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyPostId(post.id);
+            setError(null);
+            try {
+              await apiRequest(`/api/social/posts/${post.id}`, { method: 'DELETE' });
+              await postsRes.refresh();
+            } catch (e: unknown) {
+              setError(e instanceof Error ? e.message : 'Could not delete the post.');
+            } finally {
+              setBusyPostId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const refreshAll = useCallback(async () => {
     await Promise.all([
       workspace.refresh(),
@@ -1391,6 +1420,15 @@ function GrowthScreen() {
                     setError('Could not open the post viewer.'),
                   )
                 }
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Action
+                label={busyPostId === post.id ? 'Deleting…' : 'Delete'}
+                secondary
+                icon="delete-outline"
+                onPress={() => deleteExistingPost(post)}
+                disabled={busyPostId === post.id}
               />
             </View>
           </View>

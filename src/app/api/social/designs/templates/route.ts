@@ -228,7 +228,8 @@ export async function GET(request: NextRequest) {
 
   if (logoUrl) logoUrl = toAbsoluteUrl(logoUrl);
 
-  // Parse GBP / Brand Brain overrides from settingsJson if available
+  // Parse GBP / Brand Brain overrides and dismissed template IDs from settingsJson if available
+  const dismissedTemplateIds = new Set<string>();
   if (tenant?.settingsJson) {
     try {
       const parsed = JSON.parse(tenant.settingsJson);
@@ -239,6 +240,11 @@ export async function GET(request: NextRequest) {
       if (parsed?.activeGbpPhone) phone = parsed.activeGbpPhone;
       if (parsed?.activeGbpAddress) address = parsed.activeGbpAddress;
       if (parsed?.activeGbpCity) city = parsed.activeGbpCity;
+      if (Array.isArray(parsed?.dismissedTemplateIds)) {
+        for (const tid of parsed.dismissedTemplateIds) {
+          if (typeof tid === 'string' && tid.trim()) dismissedTemplateIds.add(tid.trim());
+        }
+      }
     } catch {}
   }
 
@@ -1196,30 +1202,37 @@ export async function GET(request: NextRequest) {
     8
   );
 
+  const isVisibleTemplate = (t: BusinessTemplateResponseItem) =>
+    Boolean(t.photoUrl && t.photoUrl.trim()) && !dismissedTemplateIds.has(t.id);
+
+  const visibleForBusiness = forBusinessTemplates.filter(isVisibleTemplate);
+  const visiblePromotions = promotionsTemplates.filter(isVisibleTemplate);
+  const visibleFestivals = festivalsTemplates.filter(isVisibleTemplate);
+  const visibleReviews = reviewsTemplates.filter(isVisibleTemplate);
+
   let selectedTemplates: BusinessTemplateResponseItem[] = [];
 
   if (requestedTab === 'for_business') {
-    selectedTemplates = forBusinessTemplates.slice(0, limit);
+    selectedTemplates = visibleForBusiness.slice(0, limit);
   } else if (requestedTab === 'promotions') {
-    selectedTemplates = promotionsTemplates.slice(0, limit);
+    selectedTemplates = visiblePromotions.slice(0, limit);
   } else if (requestedTab === 'festivals') {
-    selectedTemplates = festivalsTemplates.slice(0, limit);
+    selectedTemplates = visibleFestivals.slice(0, limit);
   } else if (requestedTab === 'reviews') {
-    selectedTemplates = reviewsTemplates.slice(0, limit);
+    selectedTemplates = visibleReviews.slice(0, limit);
   } else {
     // 'all': Balanced presentation across categories
     const perCategory = Math.max(8, Math.floor(limit / 4));
     selectedTemplates = [
-      ...forBusinessTemplates.slice(0, perCategory),
-      ...promotionsTemplates.slice(0, perCategory),
-      ...festivalsTemplates.slice(0, perCategory),
-      ...reviewsTemplates.slice(0, perCategory),
+      ...visibleForBusiness.slice(0, perCategory),
+      ...visiblePromotions.slice(0, perCategory),
+      ...visibleFestivals.slice(0, perCategory),
+      ...visibleReviews.slice(0, perCategory),
     ].slice(0, limit);
   }
 
   // Strict Zero-Duplicate Enforcement across non-festival cards:
   // Non-festival cards must never reuse an identical photo across the feed.
-  // If distinct authentic photos are exhausted, cards render clean graphic layouts.
   const seenNonFestivalPhotos = new Set<string>();
   for (const tpl of selectedTemplates) {
     if (tpl.tab === 'festivals') continue;
@@ -1233,6 +1246,16 @@ export async function GET(request: NextRequest) {
       }
     }
   }
+
+  // Visual-First Enforcement:
+  // A creative post without an image must never be presented as a photo creative.
+  // Filter out any templates where no authentic, category, or festival photo is available.
+  selectedTemplates = selectedTemplates.filter(isVisibleTemplate);
+
+  const validForBusiness = visibleForBusiness;
+  const validPromotions = visiblePromotions;
+  const validFestivals = visibleFestivals;
+  const validReviews = visibleReviews;
 
   // Calculate current AI image generation quota
   const isPaidSubscriber =
@@ -1281,17 +1304,77 @@ export async function GET(request: NextRequest) {
     },
     counts: {
       total:
-        forBusinessTemplates.length +
-        promotionsTemplates.length +
-        festivalsTemplates.length +
-        reviewsTemplates.length,
-      for_business: forBusinessTemplates.length,
-      promotions: promotionsTemplates.length,
-      festivals: festivalsTemplates.length,
-      reviews: reviewsTemplates.length,
+        validForBusiness.length +
+        validPromotions.length +
+        validFestivals.length +
+        validReviews.length,
+      for_business: validForBusiness.length,
+      promotions: validPromotions.length,
+      festivals: validFestivals.length,
+      reviews: validReviews.length,
     },
     buckets: TEMPLATE_BUCKETS,
     festivalGroups: getFestivalGroupsWithCounts(),
     templates: selectedTemplates,
   });
+}
+
+/**
+ * Dismiss / delete a curated creative template so it no longer appears
+ * in Ready Creatives for You or AI Creative Studio for this tenant.
+ */
+export async function DELETE(request: NextRequest) {
+  const user = await getAuthUser(request);
+  if (!user?.tenantId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  let templateId = searchParams.get('id')?.trim() || '';
+  if (!templateId) {
+    try {
+      const body = await request.json();
+      if (typeof body?.id === 'string') templateId = body.id.trim();
+    } catch {}
+  }
+
+  if (!templateId) {
+    return NextResponse.json({ error: 'Template id is required.' }, { status: 400 });
+  }
+
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { settingsJson: true },
+    });
+
+    let settingsObj: Record<string, any> = {};
+    if (tenant?.settingsJson) {
+      try {
+        settingsObj = JSON.parse(tenant.settingsJson);
+      } catch {
+        settingsObj = {};
+      }
+    }
+
+    const existingList: string[] = Array.isArray(settingsObj.dismissedTemplateIds)
+      ? settingsObj.dismissedTemplateIds.filter((v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+      : [];
+
+    if (!existingList.includes(templateId)) {
+      existingList.push(templateId);
+    }
+
+    settingsObj.dismissedTemplateIds = existingList.slice(-500);
+
+    await db.tenant.update({
+      where: { id: user.tenantId },
+      data: { settingsJson: JSON.stringify(settingsObj) },
+    });
+
+    return NextResponse.json({ success: true, id: templateId });
+  } catch (err) {
+    console.error('[designs/templates] DELETE error:', err);
+    return NextResponse.json({ error: 'Failed to delete creative template' }, { status: 500 });
+  }
 }

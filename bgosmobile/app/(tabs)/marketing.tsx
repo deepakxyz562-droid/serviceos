@@ -789,8 +789,9 @@ export default function MarketingScreen() {
   }, [aiPostsRes]);
 
   const filteredAiPosts = useMemo(() => {
-    if (aiPostCategoryFilter === 'ALL') return localAiPosts;
-    return localAiPosts.filter((p) => p.postType === aiPostCategoryFilter);
+    const visualPosts = localAiPosts.filter((p) => Boolean(p?.imageUrl && String(p.imageUrl).trim()));
+    if (aiPostCategoryFilter === 'ALL') return visualPosts;
+    return visualPosts.filter((p) => p.postType === aiPostCategoryFilter);
   }, [localAiPosts, aiPostCategoryFilter]);
 
   const handlePublishCardDirectly = useCallback(async (item: any, idx?: number) => {
@@ -3995,6 +3996,49 @@ export default function MarketingScreen() {
                                         >
                                           <MaterialIcons name="share" size={14} color="#475569" />
                                         </Pressable>
+
+                                        {/* Delete */}
+                                        <Pressable
+                                          accessibilityRole="button"
+                                          accessibilityLabel="Delete post"
+                                          onPress={() => {
+                                            const pid = String(item.id || '');
+                                            Alert.alert(
+                                              'Delete Post',
+                                              'Remove this post from your feed?',
+                                              [
+                                                { text: 'Cancel', style: 'cancel' },
+                                                {
+                                                  text: 'Delete',
+                                                  style: 'destructive',
+                                                  onPress: async () => {
+                                                    setLocalAiPosts((prev) => prev.filter((p) => p.id !== item.id));
+                                                    if (pid && !pid.startsWith('ai_post_') && !pid.startsWith('up-')) {
+                                                      try {
+                                                        await apiRequest(`/api/social/posts/${pid}`, { method: 'DELETE' });
+                                                      } catch (err) {
+                                                        console.warn('[marketing] AI post delete error:', err);
+                                                      }
+                                                    }
+                                                  },
+                                                },
+                                              ],
+                                            );
+                                          }}
+                                          hitSlop={6}
+                                          style={{
+                                            backgroundColor: '#FEF2F2',
+                                            borderWidth: 1,
+                                            borderColor: '#FECACA',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 7,
+                                            borderRadius: 8,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          <MaterialIcons name="delete-outline" size={14} color="#DC2626" />
+                                        </Pressable>
                                       </View>
                                     </View>
                                   </View>
@@ -6288,19 +6332,11 @@ export default function MarketingScreen() {
             setBoardRefresh((k) => k + 1);
             setSelectedAiPostForDetail(null);
           }}
-          onDelete={async (postToDelete) => {
+          onDelete={(postToDelete) => {
             const pid = postToDelete.id;
             setLocalAiPosts((prev) => prev.filter((p) => p.id !== pid));
             setSelectedAiPostForDetail(null);
             setBoardRefresh((k) => k + 1);
-
-            if (pid && !pid.startsWith('ai_post_') && !pid.startsWith('up-')) {
-              try {
-                await apiRequest(`/api/social/posts/${pid}`, { method: 'DELETE' });
-              } catch (err) {
-                console.warn('[marketing] Post delete API error:', err);
-              }
-            }
           }}
           onEditSave={(updated) => {
             setLocalAiPosts((prev) =>

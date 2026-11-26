@@ -1186,6 +1186,78 @@ export async function listGoogleBusinessMedia(
 }
 
 /**
+ * Permanently delete a media item (photo or video) from Google Business Profile.
+ *
+ * DELETE https://mybusiness.googleapis.com/v4/{name}
+ */
+export async function deleteGoogleBusinessMedia(
+  account: SocialAccountData,
+  mediaNameOrId: string,
+): Promise<boolean> {
+  if (!mediaNameOrId || !account?.accessToken) return false;
+  let cleanName = mediaNameOrId.trim().replace(/^\/+/, '');
+  // If only the media ID was passed (without accounts/... prefix), resolve full resource name
+  if (!cleanName.startsWith('accounts/')) {
+    const { accountName, locationId } = await extractLocationRef(account);
+    const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+    cleanName = `${normalizedAccount}/locations/${locationId}/media/${cleanName}`;
+  }
+
+  const url = `${GBP_V4_BASE}/${cleanName}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  // 404 means the media is already deleted on Google's side
+  if (res.status === 404 || res.ok) {
+    invalidateGoogleBusinessMediaCache(account.id);
+    return true;
+  }
+
+  await assertOk(res, 'delete media photo');
+  invalidateGoogleBusinessMediaCache(account.id);
+  return true;
+}
+
+/**
+ * Permanently delete a published local post from Google Business Profile.
+ *
+ * DELETE https://mybusiness.googleapis.com/v4/{name}
+ */
+export async function deleteGoogleBusinessPost(
+  account: SocialAccountData,
+  postNameOrId: string,
+): Promise<boolean> {
+  if (!postNameOrId || !account?.accessToken) return false;
+  let cleanName = postNameOrId.trim().replace(/^\/+/, '');
+  // If only the post ID was passed (without accounts/... prefix), resolve full resource name
+  if (!cleanName.startsWith('accounts/')) {
+    const { accountName, locationId } = await extractLocationRef(account);
+    const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+    cleanName = `${normalizedAccount}/locations/${locationId}/localPosts/${cleanName}`;
+  }
+
+  const url = `${GBP_V4_BASE}/${cleanName}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  // 404 means the post is already deleted on Google's side
+  if (res.status === 404 || res.ok) {
+    return true;
+  }
+
+  await assertOk(res, 'delete local post');
+  return true;
+}
+
+/**
  * Fetch Performance Telemetry metrics from Google Business Profile Performance API.
  *
  * GET https://businessprofileperformance.googleapis.com/v1/locations/{locationId}:fetchMultiDailyMetricsTimeSeries

@@ -89,18 +89,24 @@ export function ScheduledPhotosTimeline({
     [draftPhotos, deletedIds],
   );
 
-  // Ready templates state (Top 50 Matrix)
+  // Ready templates state
   const [readyTemplates, setReadyTemplates] = useState<any[]>([]);
+  const [studioTotalCount, setStudioTotalCount] = useState<number>(0);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [activeBucket, setActiveBucket] = useState<'all' | 'promotions' | 'for_business' | 'reviews' | 'festivals'>('all');
 
   useEffect(() => {
     let cancelled = false;
     setTemplatesLoading(true);
-    apiRequest<{ templates: any[] }>('/api/social/designs/templates?limit=24')
+    apiRequest<{ templates: any[]; counts?: { total?: number } }>('/api/social/designs/templates?limit=24')
       .then((res) => {
         if (!cancelled && Array.isArray(res?.templates)) {
           setReadyTemplates(res.templates);
+          if (typeof res?.counts?.total === 'number') {
+            setStudioTotalCount(res.counts.total);
+          } else {
+            setStudioTotalCount(res.templates.length);
+          }
         }
       })
       .catch(() => {})
@@ -112,9 +118,43 @@ export function ScheduledPhotosTimeline({
     };
   }, []);
 
+  const handleDeleteReadyCreative = (tpl: any) => {
+    if (!tpl?.id || busyActionId) return;
+    Alert.alert(
+      'Delete Creative?',
+      'Remove this design from Ready Creatives and AI Creative Studio?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const prevTemplates = readyTemplates;
+            const prevCount = studioTotalCount;
+            setReadyTemplates((curr) => curr.filter((t) => t.id !== tpl.id));
+            setStudioTotalCount((c) => Math.max(0, c - 1));
+            setBusyActionId(`tpl-del:${tpl.id}`);
+            try {
+              await apiRequest(`/api/social/designs/templates?id=${encodeURIComponent(tpl.id)}`, {
+                method: 'DELETE',
+              });
+            } catch (err: unknown) {
+              setReadyTemplates(prevTemplates);
+              setStudioTotalCount(prevCount);
+              Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not delete creative.');
+            } finally {
+              setBusyActionId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const filteredTemplates = useMemo(() => {
-    if (activeBucket === 'all') return readyTemplates;
-    return readyTemplates.filter((t) => t.tab === activeBucket);
+    const withVisuals = readyTemplates.filter((t) => Boolean(t?.photoUrl && resolveTemplateSource(t.photoUrl)));
+    if (activeBucket === 'all') return withVisuals;
+    return withVisuals.filter((t) => t.tab === activeBucket);
   }, [readyTemplates, activeBucket]);
 
   const handleQuickPublish = async (item: GbpPhoto) => {
@@ -138,32 +178,42 @@ export function ScheduledPhotosTimeline({
   const handleQuickDelete = (item: GbpPhoto) => {
     const targetId = item.postId || item.id;
     if (!targetId || busyActionId) return;
-    Alert.alert('Remove Media?', 'This deletes the item from your BGOS queue.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          // Optimistic deletion
-          setDeletedIds((prev) => new Set([...prev, targetId, item.id]));
-          setBusyActionId(`del:${targetId}`);
-          try {
-            await apiRequest(`/api/social/photos?id=${encodeURIComponent(targetId)}`, { method: 'DELETE' });
-            await onRefreshNeeded?.();
-          } catch (err: unknown) {
-            setDeletedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(targetId);
-              next.delete(item.id);
-              return next;
-            });
-            Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not remove item.');
-          } finally {
-            setBusyActionId(null);
-          }
+    const isGoogleMedia = item.source === 'google';
+    Alert.alert(
+      isGoogleMedia ? 'Delete from Google Maps?' : 'Remove Media?',
+      isGoogleMedia
+        ? 'This will permanently remove this media from your live Google Business Profile listing.'
+        : 'This deletes the item from your BGOS queue.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            // Optimistic deletion
+            setDeletedIds((prev) => new Set([...prev, targetId, item.id]));
+            setBusyActionId(`del:${targetId}`);
+            try {
+              const sourceParam = isGoogleMedia ? '&source=google' : '';
+              await apiRequest(`/api/social/photos?id=${encodeURIComponent(targetId)}${sourceParam}`, {
+                method: 'DELETE',
+              });
+              await onRefreshNeeded?.();
+            } catch (err: unknown) {
+              setDeletedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(targetId);
+                next.delete(item.id);
+                return next;
+              });
+              Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not remove item.');
+            } finally {
+              setBusyActionId(null);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   useEffect(() => {
@@ -436,7 +486,9 @@ export function ScheduledPhotosTimeline({
             onPress={onAiCreatePress}
             hitSlop={8}
           >
-            <Text style={styles.viewAllLink}>Studio (50) &gt;</Text>
+            <Text style={styles.viewAllLink}>
+              {studioTotalCount > 0 ? `Studio (${studioTotalCount}) >` : 'Open Studio >'}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -480,46 +532,52 @@ export function ScheduledPhotosTimeline({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.creativesTrack}
         >
-          {filteredTemplates.map((tpl) => (
-            <Pressable
-              key={tpl.id}
-              onPress={() => {
-                if (onSelectTemplate) {
-                  onSelectTemplate(tpl);
-                } else {
-                  onAiCreatePress?.();
-                }
-              }}
-              style={styles.creativeCard}
-            >
-              {tpl.photoUrl ? (
-                <Image source={resolveTemplateSource(tpl.photoUrl)} style={styles.creativeImage} resizeMode="cover" />
-              ) : (
-                <View style={styles.creativeGraphicFallback}>
-                  <View style={styles.creativeGraphicIconBox}>
-                    <MaterialIcons name="brush" size={24} color="#FFFFFF" />
-                  </View>
-                  <Text numberOfLines={2} style={styles.creativeGraphicSubtitle}>
-                    {tpl.subtitle || tpl.headline}
+          {filteredTemplates.map((tpl) => {
+            const resolvedImg = resolveTemplateSource(tpl.photoUrl);
+            if (!resolvedImg) return null;
+            return (
+              <Pressable
+                key={tpl.id}
+                onPress={() => {
+                  if (onSelectTemplate) {
+                    onSelectTemplate(tpl);
+                  } else {
+                    onAiCreatePress?.();
+                  }
+                }}
+                style={styles.creativeCard}
+              >
+                <Image source={resolvedImg} style={styles.creativeImage} resizeMode="cover" />
+                <View style={styles.creativeTopBadge}>
+                  <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
+                    {tpl.badge || 'Ready'}
                   </Text>
                 </View>
-              )}
-              <View style={styles.creativeTopBadge}>
-                <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
-                  {tpl.badge || 'Ready'}
-                </Text>
-              </View>
-              <View style={styles.creativeOverlay}>
-                <Text numberOfLines={2} style={styles.creativeTitle}>
-                  {tpl.headline}
-                </Text>
-                <View style={styles.creativeUseRow}>
-                  <Text style={styles.creativeUseText}>Use Design</Text>
-                  <MaterialIcons name="arrow-forward" size={13} color="#FFFFFF" />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete ${tpl.headline || 'creative'}`}
+                  hitSlop={8}
+                  disabled={busyActionId !== null}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    handleDeleteReadyCreative(tpl);
+                  }}
+                  style={styles.creativeDeleteBtn}
+                >
+                  <MaterialIcons name="delete-outline" size={14} color="#FFFFFF" />
+                </Pressable>
+                <View style={styles.creativeOverlay}>
+                  <Text numberOfLines={2} style={styles.creativeTitle}>
+                    {tpl.headline}
+                  </Text>
+                  <View style={styles.creativeUseRow}>
+                    <Text style={styles.creativeUseText}>Use Design</Text>
+                    <MaterialIcons name="arrow-forward" size={13} color="#FFFFFF" />
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-          ))}
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -711,9 +769,9 @@ export function ScheduledPhotosTimeline({
                   </View>
                 </Pressable>
 
-                {isQueueItem ? (
+                {(isQueueItem || (item.source === 'google' && Boolean(targetId))) ? (
                   <View style={styles.cardActionStrip}>
-                    {isEditable ? (
+                    {isQueueItem && isEditable ? (
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => onEditItem?.(item)}
@@ -723,21 +781,23 @@ export function ScheduledPhotosTimeline({
                         <Text style={[styles.cardActionText, { color: colors.brandDark }]}>Edit</Text>
                       </Pressable>
                     ) : null}
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={busyActionId !== null}
-                      onPress={() => void handleQuickPublish(item)}
-                      style={[styles.cardActionBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
-                    >
-                      {isPublishingThis ? (
-                        <ActivityIndicator size={12} color="#4338CA" />
-                      ) : (
-                        <MaterialIcons name="bolt" size={14} color="#4338CA" />
-                      )}
-                      <Text style={[styles.cardActionText, { color: '#4338CA' }]}>
-                        {item.status === 'failed' ? 'Retry' : 'Publish Now'}
-                      </Text>
-                    </Pressable>
+                    {isQueueItem ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={busyActionId !== null}
+                        onPress={() => void handleQuickPublish(item)}
+                        style={[styles.cardActionBtn, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}
+                      >
+                        {isPublishingThis ? (
+                          <ActivityIndicator size={12} color="#4338CA" />
+                        ) : (
+                          <MaterialIcons name="bolt" size={14} color="#4338CA" />
+                        )}
+                        <Text style={[styles.cardActionText, { color: '#4338CA' }]}>
+                          {item.status === 'failed' ? 'Retry' : 'Publish Now'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     <Pressable
                       accessibilityRole="button"
                       disabled={busyActionId !== null}
@@ -796,7 +856,9 @@ export function ScheduledPhotosTimeline({
         item={previewItem}
         onClose={() => setPreviewItem(null)}
         onEdit={onEditItem}
-        onDeleted={async () => {
+        onDeleted={async (deletedItem) => {
+          const delId = deletedItem.postId || deletedItem.id;
+          setDeletedIds((prev) => new Set([...prev, delId, deletedItem.id]));
           await onRefreshNeeded?.();
         }}
         onPublished={async () => {
@@ -1293,39 +1355,28 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  creativeGraphicFallback: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#064E3B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 48,
-  },
-  creativeGraphicIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  creativeGraphicSubtitle: {
-    fontSize: 10,
-    color: '#D1FAE5',
-    textAlign: 'center',
-    lineHeight: 14,
-    fontWeight: '500',
-  },
   creativeTopBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
+    maxWidth: 96,
     backgroundColor: 'rgba(15, 23, 42, 0.78)',
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 6,
+  },
+  creativeDeleteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(220, 38, 38, 0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   creativeTopBadgeText: {
     fontSize: 10,

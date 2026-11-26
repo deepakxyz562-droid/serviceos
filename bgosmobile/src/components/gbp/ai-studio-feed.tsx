@@ -72,27 +72,6 @@ const STYLE_CHIPS = [
   { id: 'premium', label: '🌟 Premium Showcase', promptSuffix: 'clean modern presentation, luxury aesthetic, ultra-sharp 8k resolution' },
 ];
 
-const GRAPHIC_BUSINESS_PALETTES = [
-  '#064E3B', // Emerald
-  '#0F172A', // Slate Dark
-  '#1E1B4B', // Deep Indigo
-  '#1E293B', // Charcoal Slate
-  '#312E81', // Sapphire
-  '#701A75', // Royal Plum
-  '#7C2D12', // Terracotta
-  '#14532D', // Forest Green
-];
-
-const GRAPHIC_BUSINESS_ICONS: Array<keyof typeof MaterialIcons.glyphMap> = [
-  'verified',
-  'format-paint',
-  'brush',
-  'palette',
-  'auto-awesome',
-  'workspace-premium',
-  'thumb-up',
-];
-
 export function AiStudioFeed({
   businessName,
   industry,
@@ -111,11 +90,11 @@ export function AiStudioFeed({
   const [quota, setQuota] = useState<AiStudioQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({
-    total: 250,
-    promotions: 40,
-    for_business: 140,
-    reviews: 50,
-    festivals: 40,
+    total: 0,
+    promotions: 0,
+    for_business: 0,
+    reviews: 0,
+    festivals: 0,
   });
 
   // ── Festival Search & Filter State ──
@@ -570,10 +549,44 @@ export function AiStudioFeed({
     { id: 'regional_cultural', label: 'Regional Fairs', emoji: '🏮' },
   ];
 
-  // Dynamic client-side search filtering for festivals
+  const handleDeleteTemplate = (item: StudioTemplateItem) => {
+    if (!item?.id) return;
+    Alert.alert(
+      'Delete Creative?',
+      'Remove this design from Ready Creatives and AI Creative Studio?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const prevTemplates = templates;
+            const prevCounts = counts;
+            setTemplates((curr) => curr.filter((t) => t.id !== item.id));
+            setCounts((curr) => ({
+              ...curr,
+              total: Math.max(0, curr.total - 1),
+              [item.tab]: Math.max(0, (curr[item.tab] ?? 1) - 1),
+            }));
+            try {
+              await apiRequest(`/api/social/designs/templates?id=${encodeURIComponent(item.id)}`, {
+                method: 'DELETE',
+              });
+            } catch (err: unknown) {
+              setTemplates(prevTemplates);
+              setCounts(prevCounts);
+              Alert.alert('Delete Failed', err instanceof Error ? err.message : 'Could not delete creative.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Dynamic client-side search filtering & strict visual-first filter (never render without an image)
   const visibleTemplates = useMemo(() => {
-    if (activeTab !== 'festivals') return templates;
-    let list = templates;
+    let list = templates.filter((t) => Boolean(t?.photoUrl && resolveTemplateSource(t.photoUrl)));
+    if (activeTab !== 'festivals') return list;
     if (selectedFestival !== 'all') {
       list = list.filter(
         (t) =>
@@ -596,11 +609,11 @@ export function AiStudioFeed({
   }, [templates, activeTab, selectedFestival, festivalSearch]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
-    { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total || 250 },
-    { id: 'for_business', label: 'Core Services', icon: 'inventory', count: counts.for_business || 140 },
-    { id: 'promotions', label: 'Special Offers', icon: 'local-offer', count: counts.promotions || 40 },
-    { id: 'reviews', label: 'Highlights', icon: 'verified', count: counts.reviews || 50 },
-    { id: 'festivals', label: 'Festivals', icon: 'celebration', count: counts.festivals || 40 },
+    { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total ?? 0 },
+    { id: 'for_business', label: 'Core Services', icon: 'inventory', count: counts.for_business ?? 0 },
+    { id: 'promotions', label: 'Special Offers', icon: 'local-offer', count: counts.promotions ?? 0 },
+    { id: 'reviews', label: 'Highlights', icon: 'verified', count: counts.reviews ?? 0 },
+    { id: 'festivals', label: 'Festivals', icon: 'celebration', count: counts.festivals ?? 0 },
   ];
 
   return (
@@ -1178,8 +1191,9 @@ export function AiStudioFeed({
               )}
             </View>
           }
-          renderItem={({ item, index }) => {
+          renderItem={({ item }) => {
             const resolvedImg = resolveTemplateSource(item.photoUrl);
+            if (!resolvedImg) return null;
             return (
               <Pressable
                 onPress={() => onSelectTemplate(item)}
@@ -1188,57 +1202,11 @@ export function AiStudioFeed({
                   pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] },
                 ]}
               >
-                {/* Visual Layer: Authentic Photo if present, else Clean Graphic Layout */}
-                {resolvedImg ? (
-                  <Image
-                    source={resolvedImg}
-                    style={styles.cardImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.graphicCardBg,
-                      item.tab === 'promotions'
-                        ? styles.graphicCardPromo
-                        : item.tab === 'reviews'
-                          ? styles.graphicCardReview
-                          : item.tab === 'festivals'
-                            ? styles.graphicCardFestival
-                            : { backgroundColor: GRAPHIC_BUSINESS_PALETTES[index % GRAPHIC_BUSINESS_PALETTES.length] },
-                    ]}
-                  >
-                    <View style={styles.graphicCardInner}>
-                      <View style={styles.graphicIconCircle}>
-                        <MaterialIcons
-                          name={
-                            item.tab === 'promotions'
-                              ? 'local-offer'
-                              : item.tab === 'reviews'
-                                ? 'star'
-                                : item.tab === 'festivals'
-                                  ? 'celebration'
-                                  : GRAPHIC_BUSINESS_ICONS[index % GRAPHIC_BUSINESS_ICONS.length]
-                          }
-                          size={24}
-                          color="#FFFFFF"
-                        />
-                      </View>
-                      {item.tab === 'reviews' && (
-                        <View style={styles.reviewStarsRow}>
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <MaterialIcons key={s} name="star" size={13} color="#FBBF24" />
-                          ))}
-                        </View>
-                      )}
-                      {item.subtitle ? (
-                        <Text numberOfLines={3} style={styles.graphicCardSubtitle}>
-                          {item.subtitle}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                )}
+                <Image
+                  source={resolvedImg}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
 
                 {/* Brand Frame: Top Monogram/Logo Strip */}
                 {brandFrame && (
@@ -1274,9 +1242,23 @@ export function AiStudioFeed({
                     <Text numberOfLines={1} style={styles.cardFormatTag}>
                       {item.aspectRatio === '9:16' ? '📱 Story' : item.aspectRatio === '1:1' ? '◾ Square' : '🖼️ Post'}
                     </Text>
-                    <View style={styles.useDesignBtn}>
-                      <Text style={styles.useDesignText}>Use</Text>
-                      <MaterialIcons name="arrow-forward" size={12} color="#FFFFFF" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete ${item.headline || 'creative'}`}
+                        hitSlop={6}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleDeleteTemplate(item);
+                        }}
+                        style={styles.cardDeleteBtn}
+                      >
+                        <MaterialIcons name="delete-outline" size={13} color="#FCA5A5" />
+                      </Pressable>
+                      <View style={styles.useDesignBtn}>
+                        <Text style={styles.useDesignText}>Use</Text>
+                        <MaterialIcons name="arrow-forward" size={12} color="#FFFFFF" />
+                      </View>
                     </View>
                   </View>
                 </View>
@@ -1854,54 +1836,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  graphicCardBg: {
-    width: '100%',
-    height: '100%',
-    padding: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  graphicCardPromo: {
-    backgroundColor: '#312E81',
-  },
-  graphicCardReview: {
-    backgroundColor: '#1E1B4B',
-  },
-  graphicCardFestival: {
-    backgroundColor: '#7F1D1D',
-  },
-  graphicCardBusiness: {
-    backgroundColor: '#064E3B',
-  },
-  graphicCardInner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 8,
-    marginTop: -28,
-  },
-  graphicIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reviewStarsRow: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 2,
-  },
-  graphicCardSubtitle: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-    textAlign: 'center',
-    lineHeight: 14,
-  },
   cardBadge: {
     position: 'absolute',
     top: 8,
@@ -1999,6 +1933,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  cardDeleteBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127, 29, 29, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(252, 165, 165, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   promptStudioCard: {
     backgroundColor: '#FFFFFF',
