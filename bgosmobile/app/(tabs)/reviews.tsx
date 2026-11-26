@@ -180,7 +180,7 @@ export default function ReviewRepliesScreen() {
   const pendingCount = useResource<{total:number}>(pendingCountPath,0,false);
   const [pendingPage,setPendingPage] = useState(1);
   const pendingFeed = useResource<ReviewsResponse>(`/api/reviews?source=google&needsReply=true&limit=250&page=${pendingPage}`,0,filter==='needs_reply');
-  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=500');
+  const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
   const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
   const autoReplyConfig = useResource<{

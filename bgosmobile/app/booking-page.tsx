@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,6 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Action, Badge, Card, ErrorNotice, Field, Loading, Screen, colors, ui } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { invalidateResourceScope } from '../src/lib/resource-cache';
 import { BGOS_PUBLIC_WEB_URL } from '../src/lib/constants';
 import { normalizePendingUpload, uploadFileToStorage } from '../src/lib/upload';
 import { BookingLinkModal } from '../src/components/gbp/booking-link-modal';
@@ -127,6 +129,7 @@ export default function BusinessPageSettingsScreen() {
   dirtyRef.current = dirty;
 
   const [busy, setBusy] = useState(false);
+  const [aiIdentityField, setAiIdentityField] = useState<'tagline' | 'headline' | null>(null);
   const [savingAutoConfirm, setSavingAutoConfirm] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState<'cover' | 'logo' | null>(null);
   const [coverLoadError, setCoverLoadError] = useState(false);
@@ -373,6 +376,7 @@ export default function BusinessPageSettingsScreen() {
         },
       });
       setDirty(false);
+      invalidateResourceScope();
       await workspace.refresh();
       showToast('Business Page settings saved live');
     } catch (e) {
@@ -528,6 +532,33 @@ export default function BusinessPageSettingsScreen() {
 
   const openLivePage = () => {
     void Linking.openURL(fullPublicUrl);
+  };
+
+  const generateIdentityField = async (field: 'tagline' | 'headline') => {
+    if (aiIdentityField) return;
+    setAiIdentityField(field);
+    setError(null);
+    try {
+      const res = await apiRequest<{ tagline?: string; headline?: string }>('/api/bgos/business-identity/ai', {
+        method: 'POST',
+        body: {
+          field,
+          businessName: config.businessName || workspace.data?.name || '',
+          description: config.seoDescription || '',
+          currentTagline: config.tagline || '',
+          currentHeadline: config.headline || '',
+        },
+      });
+      const generated = field === 'tagline' ? res?.tagline : res?.headline;
+      if (generated && generated.trim()) {
+        setField(field, generated.trim());
+        showToast(field === 'tagline' ? 'AI generated a fresh tagline' : 'AI generated a fresh headline');
+      }
+    } catch (e) {
+      setError((e as Error).message || 'Could not auto-fill with AI');
+    } finally {
+      setAiIdentityField(null);
+    }
   };
 
   const shareOnWhatsApp = () => {
@@ -837,11 +868,11 @@ export default function BusinessPageSettingsScreen() {
                 >
                   <MaterialIcons name="link" size={18} color="#009F50" style={{ marginRight: 8 }} />
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                      https://{slugCandidate}.bgos.site
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                      https://bgos.site/{slugCandidate}
                     </Text>
-                    <Text style={{ fontSize: 11.5, fontWeight: '600', color: '#0284C7' }} numberOfLines={1}>
-                      Alternate: https://bgos.site/{slugCandidate}
+                    <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }} numberOfLines={1}>
+                      Official public link shared across Home &amp; Business Page
                     </Text>
                   </View>
                 </View>
@@ -943,18 +974,85 @@ export default function BusinessPageSettingsScreen() {
                   onChangeText={(v) => setField('businessName', v)}
                   placeholder="Your Business Name"
                 />
-                <Field
-                  label="Tagline"
-                  value={config.tagline || ''}
-                  onChangeText={(v) => setField('tagline', v)}
-                  placeholder="Fast, reliable service in your city"
-                />
-                <Field
-                  label="Headline"
-                  value={config.headline || ''}
-                  onChangeText={(v) => setField('headline', v)}
-                  placeholder="Book an appointment or chat with our team"
-                />
+                <View style={{ gap: 6, marginBottom: 12 }}>
+                  <Text style={ui.label}>Tagline</Text>
+                  <View
+                    style={[
+                      ui.input,
+                      { flexDirection: 'row', alignItems: 'center', paddingVertical: 0, paddingRight: 6 },
+                    ]}
+                  >
+                    <TextInput
+                      style={{ flex: 1, fontSize: 15, color: colors.ink, paddingVertical: 11 }}
+                      value={config.tagline || ''}
+                      onChangeText={(v) => setField('tagline', v)}
+                      placeholder="Fast, reliable service in your city"
+                      placeholderTextColor={colors.muted}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Auto-fill tagline with AI"
+                      onPress={() => void generateIdentityField('tagline')}
+                      disabled={aiIdentityField !== null}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        backgroundColor: '#ECFDF5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: aiIdentityField === 'tagline' ? 0.6 : pressed ? 0.75 : 1,
+                      })}
+                    >
+                      {aiIdentityField === 'tagline' ? (
+                        <ActivityIndicator size="small" color="#059669" />
+                      ) : (
+                        <MaterialIcons name="auto-awesome" size={17} color="#059669" />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={{ gap: 6, marginBottom: 12 }}>
+                  <Text style={ui.label}>Headline</Text>
+                  <View
+                    style={[
+                      ui.input,
+                      { flexDirection: 'row', alignItems: 'center', paddingVertical: 0, paddingRight: 6 },
+                    ]}
+                  >
+                    <TextInput
+                      style={{ flex: 1, fontSize: 15, color: colors.ink, paddingVertical: 11 }}
+                      value={config.headline || ''}
+                      onChangeText={(v) => setField('headline', v)}
+                      placeholder="Book an appointment or chat with our team"
+                      placeholderTextColor={colors.muted}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Auto-fill headline with AI"
+                      onPress={() => void generateIdentityField('headline')}
+                      disabled={aiIdentityField !== null}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        backgroundColor: '#ECFDF5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: aiIdentityField === 'headline' ? 0.6 : pressed ? 0.75 : 1,
+                      })}
+                    >
+                      {aiIdentityField === 'headline' ? (
+                        <ActivityIndicator size="small" color="#059669" />
+                      ) : (
+                        <MaterialIcons name="auto-awesome" size={17} color="#059669" />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
                 <Field
                   label="About / Description"
                   value={config.seoDescription || ''}

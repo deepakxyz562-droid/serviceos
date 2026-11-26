@@ -74,7 +74,13 @@ interface FourTierReportResponse {
     websiteVisits: SummaryMetricItem;
   };
   actionReport: {
-    keywordsUsed: Array<{ keyword: string; volume: number; usedCount: number }>;
+    keywordsUsed: Array<{
+      keyword: string;
+      volume: number;
+      usedCount: number;
+      rank?: number | null;
+      rankChange?: number | null;
+    }>;
     seoPostPublished: {
       target: number;
       achieved: number;
@@ -112,7 +118,7 @@ interface FourTierReportResponse {
   rankedKeywords: Array<{
     keyword: string;
     rank: number | null;
-    rankChange: number;
+    rankChange: number | null;
   }>;
   geoGrid: {
     keyword: string;
@@ -635,47 +641,90 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
                     </CardContent>
                   </Card>
 
-                  {/* Keywords Used */}
+                  {/* Rank for Targeted Keywords */}
                   <Card className="rounded-xl shadow-none">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between gap-2">
-                        <CardTitle className="text-sm font-semibold">Keywords Used</CardTitle>
+                        <CardTitle
+                          className="text-sm font-semibold"
+                          title="Average Google Maps rank (1.0 is top). Green up arrow means improved vs previous scan."
+                        >
+                          Rank for Targeted Keywords
+                        </CardTitle>
                         <Badge variant="outline" className="rounded-full text-xs">
-                          {report.actionReport.keywordsUsed.length} keywords
+                          {(report.rankedKeywords?.length ? report.rankedKeywords : report.actionReport.keywordsUsed).slice(0, 10).length} keywords
                         </Badge>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {report.actionReport.keywordsUsed.length === 0 ? (
-                        <p className="py-4 text-center text-xs text-muted-foreground">
-                          No tracked or discovered keywords recorded yet.
-                        </p>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead>
-                              <tr className="border-b text-muted-foreground">
-                                <th className="py-2 font-semibold">Keyword</th>
-                                <th className="py-2 text-right font-semibold">Opportunity / Volume</th>
-                                <th className="py-2 text-right font-semibold">Injections Used</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {report.actionReport.keywordsUsed.map((kw) => (
-                                <tr key={kw.keyword} className="border-b last:border-0">
-                                  <td className="py-2.5 font-medium text-foreground">{kw.keyword}</td>
-                                  <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                                    {kw.volume}
-                                  </td>
-                                  <td className="py-2.5 text-right font-semibold tabular-nums text-primary">
-                                    {kw.usedCount}
-                                  </td>
+                      {(() => {
+                        const rows = (
+                          report.rankedKeywords && report.rankedKeywords.length > 0
+                            ? report.rankedKeywords
+                            : report.actionReport.keywordsUsed.map((kw) => ({
+                                keyword: kw.keyword,
+                                rank: kw.rank ?? null,
+                                rankChange: kw.rankChange ?? null,
+                              }))
+                        ).slice(0, 10);
+
+                        if (rows.length === 0) {
+                          return (
+                            <p className="py-4 text-center text-xs text-muted-foreground">
+                              No targeted keywords scanned yet. Add keywords in SEO Settings.
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="border-b text-muted-foreground">
+                                  <th className="py-2 font-semibold">Keywords</th>
+                                  <th className="py-2 text-center font-semibold">Rank</th>
+                                  <th className="py-2 text-right font-semibold">(Change)</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                              </thead>
+                              <tbody>
+                                {rows.map((kw, idx) => {
+                                  const hasChange = kw.rankChange != null && Number.isFinite(kw.rankChange);
+                                  const isUp = hasChange && (kw.rankChange as number) > 0;
+                                  const isDown = hasChange && (kw.rankChange as number) < 0;
+                                  return (
+                                    <tr key={kw.keyword + idx} className="border-b last:border-0">
+                                      <td className="py-2.5 font-medium text-foreground">
+                                        <span className="mr-2 text-muted-foreground tabular-nums">{idx + 1}</span>
+                                        {kw.keyword}
+                                      </td>
+                                      <td className="py-2.5 text-center font-semibold tabular-nums text-foreground">
+                                        {kw.rank != null ? Number(kw.rank).toFixed(1) : '—'}
+                                      </td>
+                                      <td className="py-2.5 text-right tabular-nums">
+                                        <span
+                                          className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                                            isUp
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : isDown
+                                                ? 'bg-rose-100 text-rose-700'
+                                                : 'bg-slate-100 text-slate-600'
+                                          }`}
+                                        >
+                                          {isUp
+                                            ? `▲ ${Math.abs(kw.rankChange as number).toFixed(1)}`
+                                            : isDown
+                                              ? `▼ ${Math.abs(kw.rankChange as number).toFixed(1)}`
+                                              : '~'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -876,7 +925,7 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
                                           : 'bg-slate-100 text-slate-700',
                                       )}
                                     >
-                                      {comp.rank ? `#${Math.round(comp.rank)}` : '—'}
+                                      {comp.rank != null ? Number(comp.rank).toFixed(1) : '—'}
                                     </span>
                                   </td>
                                   <td className="py-2.5">
@@ -888,10 +937,10 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
                                     )}
                                   </td>
                                   <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                                    {comp.rating && comp.rating > 0 ? `${comp.rating.toFixed(1)} ★` : '—'}
+                                    {comp.rating && comp.rating > 0 ? `${comp.rating.toFixed(1)} ★` : 'No rating'}
                                   </td>
                                   <td className="py-2.5 text-right tabular-nums text-foreground">
-                                    {comp.reviewCount ?? 0}
+                                    {comp.reviewCount ?? 'N/A'}
                                   </td>
                                 </tr>
                               ))}
@@ -915,19 +964,41 @@ export function GbpPerformanceReportDialog({ open, onOpenChange }: GbpPerformanc
                           </p>
                         ) : (
                           <div className="space-y-2">
-                            {report.rankedKeywords.map((kw, idx) => (
-                              <div
-                                key={kw.keyword}
-                                className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs"
-                              >
-                                <span className="font-medium text-foreground">
-                                  {idx + 1}. {kw.keyword}
-                                </span>
-                                <Badge variant="outline" className="rounded-full font-bold tabular-nums">
-                                  {kw.rank != null ? `#${kw.rank}` : 'Not tracked'}
-                                </Badge>
-                              </div>
-                            ))}
+                            {report.rankedKeywords.slice(0, 10).map((kw, idx) => {
+                              const hasChange = kw.rankChange != null && Number.isFinite(kw.rankChange);
+                              const isUp = hasChange && (kw.rankChange as number) > 0;
+                              const isDown = hasChange && (kw.rankChange as number) < 0;
+                              return (
+                                <div
+                                  key={kw.keyword}
+                                  className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs"
+                                >
+                                  <span className="font-medium text-foreground">
+                                    {idx + 1}. {kw.keyword}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="rounded-full font-bold tabular-nums">
+                                      {kw.rank != null ? Number(kw.rank).toFixed(1) : '—'}
+                                    </Badge>
+                                    <span
+                                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                                        isUp
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : isDown
+                                            ? 'bg-rose-100 text-rose-700'
+                                            : 'bg-slate-100 text-slate-600'
+                                      }`}
+                                    >
+                                      {isUp
+                                        ? `▲ ${Math.abs(kw.rankChange as number).toFixed(1)}`
+                                        : isDown
+                                          ? `▼ ${Math.abs(kw.rankChange as number).toFixed(1)}`
+                                          : '~'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </CardContent>

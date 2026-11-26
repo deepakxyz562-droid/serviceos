@@ -27,7 +27,6 @@ const ALLOWED_DIRECT_ROUTES = [
   '/leads',
   '/appointments',
   '/submissions',
-  '/outreach',
   '/agents',
   '/integrations',
   '/growth',

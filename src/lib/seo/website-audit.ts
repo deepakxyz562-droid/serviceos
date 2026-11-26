@@ -871,10 +871,25 @@ export async function computeWebsiteAndAiAudit(tenantId: string): Promise<Websit
       fixActionKey: 'hosted_seo_enrich',
     });
 
+    const inspectOrigin = (() => {
+      try {
+        return new URL(inspectUrl).origin;
+      } catch {
+        return 'https://bgos.site';
+      }
+    })();
+    const inspectHost = (() => {
+      try {
+        return new URL(inspectUrl).hostname.replace(/^www\./, '');
+      } catch {
+        return presence.domain || 'bgos.site';
+      }
+    })();
+
     const robotsAllowed = Boolean(tenant.publicProfileEnabled);
     robots = {
       fetched: true,
-      url: 'https://fieseros.com/robots.txt',
+      url: `${inspectOrigin}/robots.txt`,
       hasSitemap: true,
       crawlers: AI_CRAWLERS.map((agent) => ({
         agent,
@@ -882,7 +897,7 @@ export async function computeWebsiteAndAiAudit(tenantId: string): Promise<Websit
         rule: robotsAllowed
           ? hostedProfileTier === 'C'
             ? 'robots.txt Allow: / (page meta is Tier C noindex until enriched)'
-            : 'Allowed on canonical FieserOS page'
+            : `Allowed on canonical ${inspectHost} page`
           : 'Public profile disabled',
       })),
     };
@@ -931,11 +946,11 @@ export async function computeWebsiteAndAiAudit(tenantId: string): Promise<Websit
       scoreWeight: 20,
       currentValue:
         robotsAllowed && hostedProfileTier !== 'C'
-          ? 'Fieseros robots.txt & meta index allow search & AI crawlers'
+          ? `${inspectHost} robots.txt & meta index allow search & AI crawlers`
           : 'Tier C noindex restricts AI indexing until enriched',
       recommendation:
         robotsAllowed && hostedProfileTier !== 'C'
-          ? 'Crawl permissions verified on canonical host fieseros.com.'
+          ? `Crawl permissions verified on canonical host ${inspectHost}.`
           : 'Enrich your description and services above to promote from Tier C (noindex) to indexable Tier A/B.',
       autoFixable: hostedProfileTier === 'C',
       fixActionKey: hostedProfileTier === 'C' ? 'hosted_seo_enrich' : undefined,

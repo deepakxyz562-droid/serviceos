@@ -15,6 +15,7 @@ import {
   parseHourMinute,
 } from '@/lib/locale-timezone';
 import { toIsoStringSafe } from '@/lib/safe-date';
+import { cache } from '@/lib/cache';
 
 type GbpMediaCategory =
   | 'ADDITIONAL'
@@ -380,6 +381,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const overrideCountry = searchParams.get('country');
     const overrideTimeZone = searchParams.get('timeZone');
+    const forceRefresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
+    const photoCacheKey = `social_photos:${user.tenantId}:${overrideCountry || 'default'}`;
+
+    if (!forceRefresh) {
+      const cachedPhotos = cache.get<Record<string, unknown>>(photoCacheKey);
+      if (cachedPhotos) {
+        return NextResponse.json(cachedPhotos, {
+          headers: {
+            'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+            'X-Cache': 'HIT',
+          },
+        });
+      }
+    }
 
     const [tenant, googleAccount] = await Promise.all([
       db.tenant.findUnique({
@@ -413,7 +428,10 @@ export async function GET(request: NextRequest) {
 
     if (googleAccount) {
       try {
-        const mediaRes = await listGoogleBusinessMedia(googleAccount);
+        const mediaRes = await Promise.race([
+          listGoogleBusinessMedia(googleAccount),
+          new Promise<{ mediaItems: [] }>((resolve) => setTimeout(() => resolve({ mediaItems: [] }), 2500)),
+        ]);
         livePhotos = (mediaRes.mediaItems || []).map((m, idx) => {
           const mediaFormat =
             (m as { mediaFormat?: string }).mediaFormat || inferMediaFormat(m.googleUrl);
@@ -532,7 +550,7 @@ export async function GET(request: NextRequest) {
     const hasInReviewPhoto = livePhotos.some((p: any) => p.reviewStatus === 'in_review');
     const hasActivePublishing = candidatePosts.some((p) => p.status === 'publishing');
 
-    return NextResponse.json({
+    const responsePayload = {
       photos: [...livePhotos, ...queuedPhotos],
       liveCount: livePhotos.length,
       queuedCount: queuedPhotos.length,
@@ -543,6 +561,14 @@ export async function GET(request: NextRequest) {
       isConnected,
       connectionState,
       locale,
+    };
+    cache.set(photoCacheKey, responsePayload, 180_000);
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+        'X-Cache': 'MISS',
+      },
     });
   } catch (error: unknown) {
     console.error('Error fetching photos:', error);
@@ -568,6 +594,8 @@ export async function POST(request: NextRequest) {
     if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
+    cache.invalidateByPrefix(`social_photos:${user.tenantId}:`);
+    cache.invalidateByPrefix(`report_4tier:${user.tenantId}:`);
     const rawItems: PhotoInputItem[] = Array.isArray(body.items)
       ? body.items.filter((it: any) => it && typeof it.url === 'string' && it.url.trim())
       : [];
@@ -1140,6 +1168,8 @@ export async function PATCH(request: NextRequest) {
     if (!gate.ok) return gate.response;
 
     const body = await request.json().catch(() => ({}));
+    cache.invalidateByPrefix(`social_photos:${user.tenantId}:`);
+    cache.invalidateByPrefix(`report_4tier:${user.tenantId}:`);
     const rawId = typeof body.postId === 'string' ? body.postId : typeof body.id === 'string' ? body.id : '';
     const postId = rawId.trim();
     if (!postId) {
@@ -1463,6 +1493,8 @@ export async function DELETE(request: NextRequest) {
       } catch {}
 
       await db.socialPost.delete({ where: { id: existing.id } });
+      cache.invalidateByPrefix(`social_photos:${user.tenantId}:`);
+      cache.invalidateByPrefix(`report_4tier:${user.tenantId}:`);
       return NextResponse.json({ success: true, id: existing.id });
     }
 

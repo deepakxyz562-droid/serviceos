@@ -406,7 +406,7 @@ export function PerformancePanel({
   const keywordsList: KeywordRankItem[] = Array.isArray(rankingsRes.data?.rankedKeywords)
     ? rankingsRes.data.rankedKeywords
     : [];
-  const displayedKeywords = showAllKeywords ? keywordsList : keywordsList.slice(0, 4);
+  const displayedKeywords = showAllKeywords ? keywordsList.slice(0, 10) : keywordsList.slice(0, 5);
 
   // GeoGrid Data (supports switching among scanned keywords)
   const availableGridScans: Array<any> = Array.isArray(rankingsRes.data?.gridScans)
@@ -618,7 +618,9 @@ export function PerformancePanel({
           {selfCompEntry ? (
             <View style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#1D4ED8' }}>
-                Your Rank: #{Math.round(Number(selfCompEntry.mapsRank ?? selfCompEntry.rank ?? 1))}
+                {selfCompEntry.mapsRank != null || selfCompEntry.rank != null
+                  ? `Your Rank: ${Number(selfCompEntry.mapsRank ?? selfCompEntry.rank).toFixed(1)}`
+                  : 'Rank: Pending Scan'}
               </Text>
             </View>
           ) : null}
@@ -627,8 +629,8 @@ export function PerformancePanel({
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
           {/* Table Header */}
           <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Business</Text>
-            <Text style={{ width: 80, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'center' }}>Reviews</Text>
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Competitor</Text>
+            <Text style={{ width: 80, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'center' }}>Overall Reviews</Text>
             <Text style={{ width: 56, fontSize: 12, fontWeight: '700', color: '#64748B', textAlign: 'right' }}>Rank</Text>
           </View>
 
@@ -642,7 +644,8 @@ export function PerformancePanel({
           ) : (
             displayedCompetitors.map((comp, idx) => {
               const isSelf = Boolean(comp.isSelf);
-              const rankNum = comp.mapsRank ?? comp.rank ?? idx + 1;
+              const rawRank = comp.mapsRank ?? comp.rank;
+              const rankNum = rawRank != null && Number.isFinite(Number(rawRank)) ? Number(rawRank) : null;
               const isPinnedSelfAfterGap = isSelf && !showAllCompetitors && selfCompIndex >= 3;
               return (
                 <View
@@ -675,7 +678,7 @@ export function PerformancePanel({
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                         <MaterialIcons name="star" size={13} color="#F59E0B" />
                         <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>
-                          {comp.rating != null ? comp.rating.toFixed(1) : '—'}
+                          {comp.rating != null && comp.rating > 0 ? comp.rating.toFixed(1) : 'No rating'}
                         </Text>
                       </View>
                       {comp.primaryCategoryLabel ? (
@@ -690,7 +693,7 @@ export function PerformancePanel({
                   {/* Overall Reviews */}
                   <View style={{ width: 80, alignItems: 'center' }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: isSelf ? '#1D4ED8' : '#059669' }}>
-                      {comp.reviewCount ?? 0}
+                      {comp.reviewCount != null ? comp.reviewCount : 'N/A'}
                     </Text>
                   </View>
 
@@ -698,7 +701,11 @@ export function PerformancePanel({
                   <View style={{ width: 56, alignItems: 'flex-end' }}>
                     <View
                       style={{
-                        backgroundColor: isSelf ? '#2563EB' : rankNum <= 3 ? '#DCFCE7' : '#F1F5F9',
+                        backgroundColor: isSelf
+                          ? '#2563EB'
+                          : rankNum != null && rankNum <= 3
+                            ? '#DCFCE7'
+                            : '#F1F5F9',
                         paddingHorizontal: 8,
                         paddingVertical: 3,
                         borderRadius: 8,
@@ -708,10 +715,14 @@ export function PerformancePanel({
                         style={{
                           fontSize: 12.5,
                           fontWeight: '800',
-                          color: isSelf ? '#FFFFFF' : rankNum <= 3 ? '#15803D' : '#0F172A',
+                          color: isSelf
+                            ? '#FFFFFF'
+                            : rankNum != null && rankNum <= 3
+                              ? '#15803D'
+                              : '#0F172A',
                         }}
                       >
-                        #{Math.round(Number(rankNum))}
+                        {rankNum != null ? Number(rankNum).toFixed(1) : '—'}
                       </Text>
                     </View>
                   </View>
@@ -748,12 +759,21 @@ export function PerformancePanel({
           SECTION 4: RANK FOR TARGETED KEYWORDS (Screenshots 2 & 3)
       ════════════════════════════════════════════════════════════════════════ */}
       <View style={{ gap: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            Alert.alert(
+              'Rank for Targeted Keywords',
+              'Shows your average Google Maps rank (1.0 is top). Green ▲ means your rank improved compared to the previous scan; red ▼ means it dropped; ~ means no prior scan baseline.',
+            )
+          }
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}
+        >
           <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
             Rank for Targeted Keywords
           </Text>
-          <MaterialIcons name="info-outline" size={17} color="#94A3B8" />
-        </View>
+          <MaterialIcons name="info-outline" size={17} color="#64748B" />
+        </Pressable>
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
           {/* Table Header */}
@@ -829,7 +849,7 @@ export function PerformancePanel({
           )}
 
           {/* Expand / Collapse Button */}
-          {keywordsList.length > 4 && (
+          {keywordsList.length > 5 && (
             <Pressable
               onPress={() => setShowAllKeywords(!showAllKeywords)}
               style={{

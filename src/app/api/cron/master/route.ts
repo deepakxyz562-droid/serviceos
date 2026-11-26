@@ -135,6 +135,11 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     path: '/api/social/publish-due',
     description: 'Publishes due scheduled social media posts and delivers completion/failure push alerts',
   },
+  {
+    name: 'bgos-warmup',
+    path: '/api/cron/bgos-warmup',
+    description: 'Pre-warms BGOS score, audit, and competitor snapshots for active tenants',
+  },
 ]
 
 // ── Monthly cron (only runs on the 1st of each month) ────────────────────

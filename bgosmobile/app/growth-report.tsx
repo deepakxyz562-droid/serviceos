@@ -35,6 +35,8 @@ interface KeywordUsedItem {
   keyword: string;
   volume: number;
   usedCount: number;
+  rank?: number | null;
+  rankChange?: number | null;
 }
 
 interface PostWeekItem {
@@ -110,6 +112,11 @@ interface ReportData {
     calls: number[];
     directions: number[];
   };
+  rankedKeywords?: Array<{
+    keyword: string;
+    rank: number | null;
+    rankChange: number | null;
+  }>;
   aiExecutiveSummary: string;
 }
 
@@ -127,6 +134,7 @@ export default function GrowthReportScreen() {
   const [summaryPage, setSummaryPage] = useState(0);
   const [report, setReport] = useState<ReportData | null>(null);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [showRankInfo, setShowRankInfo] = useState(false);
 
   const analyticsData = useMemo(() => {
     if (!report) return undefined;
@@ -628,60 +636,139 @@ export default function GrowthReportScreen() {
           {/* ── TAB 1: Growth Action Report ── */}
           {activeTab === 'action' ? (
             <View style={{ paddingHorizontal: 16, gap: 18, marginTop: 14 }}>
-              {/* Keywords Used Section */}
-              <View style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.cardHeaderTitle}>Keywords Used</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setPeriod(period === 'last_month' ? 'this_month' : 'last_month')}
-                    style={styles.filterPill}
-                  >
-                    <MaterialIcons name="filter-list" size={14} color="#E11D48" />
-                    <Text style={styles.filterPillText}>
-                      {period === 'last_month' ? 'Last Month' : 'This Month'}
-                    </Text>
-                  </Pressable>
-                </View>
+              {/* Rank for Targeted Keywords Section */}
+              {(() => {
+                const targetedRows = (
+                  report?.rankedKeywords && report.rankedKeywords.length > 0
+                    ? report.rankedKeywords
+                    : (report?.actionReport.keywordsUsed || []).map((k) => ({
+                        keyword: k.keyword,
+                        rank: k.rank ?? null,
+                        rankChange: k.rankChange ?? null,
+                      }))
+                ).slice(0, 10);
 
-                {/* Keywords Table Header */}
-                <View style={styles.tableHeaderRow}>
-                  <Text style={[styles.tableColHeader, { flex: 1 }]}>Keywords</Text>
-                  <Text style={[styles.tableColHeader, { width: 70, textAlign: 'center' }]}>Volume</Text>
-                  <Text style={[styles.tableColHeader, { width: 50, textAlign: 'right' }]}>Used</Text>
-                </View>
+                return (
+                  <View style={styles.sectionCard}>
+                    <View style={styles.cardHeaderRow}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setShowRankInfo((prev) => !prev)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+                      >
+                        <Text style={styles.cardHeaderTitle}>Rank for Targeted Keywords</Text>
+                        <MaterialIcons name="info-outline" size={16} color="#64748B" />
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setPeriod(period === 'last_month' ? 'this_month' : 'last_month')}
+                        style={styles.filterPill}
+                      >
+                        <MaterialIcons name="filter-list" size={14} color="#E11D48" />
+                        <Text style={styles.filterPillText}>
+                          {period === 'last_month' ? 'Last Month' : 'This Month'}
+                        </Text>
+                      </Pressable>
+                    </View>
 
-                {/* Keywords Table Body */}
-                {(report?.actionReport.keywordsUsed || []).length === 0 ? (
-                  <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#94A3B8' }}>
-                      No tracked keywords configured. Add keywords in Keyword Planner.
-                    </Text>
-                  </View>
-                ) : (
-                  (report?.actionReport.keywordsUsed || []).slice(0, 10).map((k, idx) => (
-                    <View
-                      key={k.keyword + idx}
-                      style={[
-                        styles.tableRow,
-                        idx === (report?.actionReport.keywordsUsed || []).length - 1 ? { borderBottomWidth: 0 } : null,
-                      ]}
-                    >
-                      <Text style={styles.keywordNameText} numberOfLines={2}>
-                        {k.keyword}
-                      </Text>
-                      <View style={{ width: 70, alignItems: 'center' }}>
-                        <Text style={styles.keywordVolumeText}>
-                          {k.volume > 0 ? k.volume.toLocaleString() : '—'}
+                    {showRankInfo && (
+                      <View
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderRadius: 10,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          marginBottom: 10,
+                          borderWidth: 1,
+                          borderColor: '#E2E8F0',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, lineHeight: 16, color: '#475569' }}>
+                          Shows your average Google Maps rank (lower is better, 1.0 is top). Green ▲ indicates rank
+                          improvement from the previous scan, red ▼ indicates a drop, and ~ means no prior baseline.
                         </Text>
                       </View>
-                      <View style={{ width: 50, alignItems: 'flex-end' }}>
-                        <Text style={styles.keywordUsedText}>{k.usedCount}</Text>
-                      </View>
+                    )}
+
+                    {/* Keywords Table Header */}
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.tableColHeader, { flex: 1 }]}>Keywords</Text>
+                      <Text style={[styles.tableColHeader, { width: 56, textAlign: 'center' }]}>Rank</Text>
+                      <Text style={[styles.tableColHeader, { width: 72, textAlign: 'right' }]}>(Change)</Text>
                     </View>
-                  ))
-                )}
-              </View>
+
+                    {/* Keywords Table Body */}
+                    {targetedRows.length === 0 ? (
+                      <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: '#94A3B8' }}>
+                          No tracked keywords configured. Add keywords in Keyword Planner.
+                        </Text>
+                      </View>
+                    ) : (
+                      targetedRows.map((k, idx) => {
+                        const rankText = k.rank != null ? Number(k.rank).toFixed(1) : '—';
+                        const hasChange = k.rankChange != null && Number.isFinite(Number(k.rankChange));
+                        const changeVal = hasChange ? Number(k.rankChange) : null;
+                        const isUp = changeVal != null && changeVal > 0;
+                        const isDown = changeVal != null && changeVal < 0;
+
+                        return (
+                          <View
+                            key={k.keyword + idx}
+                            style={[
+                              styles.tableRow,
+                              {
+                                backgroundColor: idx % 2 === 0 ? '#F8FAFC' : '#FFFFFF',
+                                paddingHorizontal: 8,
+                                borderRadius: 6,
+                              },
+                              idx === targetedRows.length - 1 ? { borderBottomWidth: 0 } : null,
+                            ]}
+                          >
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#475569', width: 20 }}>
+                                {idx + 1}
+                              </Text>
+                              <Text style={[styles.keywordNameText, { flex: 1 }]} numberOfLines={1}>
+                                {k.keyword}
+                              </Text>
+                            </View>
+                            <View style={{ width: 56, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>
+                                {rankText}
+                              </Text>
+                            </View>
+                            <View style={{ width: 72, alignItems: 'flex-end' }}>
+                              <View
+                                style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                  backgroundColor: isUp ? '#DCFCE7' : isDown ? '#FEE2E2' : '#F1F5F9',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11.5,
+                                    fontWeight: '700',
+                                    color: isUp ? '#15803D' : isDown ? '#DC2626' : '#64748B',
+                                  }}
+                                >
+                                  {isUp
+                                    ? `▲ ${Math.abs(changeVal!).toFixed(1)}`
+                                    : isDown
+                                      ? `▼ ${Math.abs(changeVal!).toFixed(1)}`
+                                      : '~'}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* SEO Post Published Section */}
               <View style={styles.sectionCard}>

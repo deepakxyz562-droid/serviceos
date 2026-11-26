@@ -11,7 +11,7 @@ export function useResource<T>(path: string, interval = 0, enabled = true, maxAg
   const partition = useSyncExternalStore(subscribePartition, resourcePartition, resourcePartition);
   const entry = getResource<T>(JSON.stringify([sessionRevision(),user?.id,user?.tenantId,user?.workspaceId,partition,path]));
   const state = useSyncExternalStore(entry.subscribe, entry.snapshot, entry.snapshot);
-  const load = useCallback(() => apiRequest<T>(path), [path]);
+  const load = useCallback(() => apiRequest<T>(path, { retryTransient: 1 }), [path]);
   const refresh = useCallback(() => entry.read(load, 0, true), [entry, load]);
   useFocusEffect(useCallback(() => {
     if (!enabled || !user) return;
@@ -23,4 +23,14 @@ export function useResource<T>(path: string, interval = 0, enabled = true, maxAg
     return () => { if (timer) clearInterval(timer); subscription.remove(); };
   }, [entry, load, interval, enabled, user, maxAgeMs]));
   return {...state, refresh, setData:entry.setData};
+}
+
+export function seedResourceEntry<T>(
+  user: { id?: string; tenantId?: string; workspaceId?: string } | null | undefined,
+  path: string,
+  data: T | null | undefined,
+) {
+  if (!user || data == null) return;
+  const key = JSON.stringify([sessionRevision(), user.id, user.tenantId, user.workspaceId, resourcePartition(), path]);
+  getResource<T>(key).seedIfEmpty(data);
 }

@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
     const category = (body.category || '').trim() || 'Local Business';
     const businessName = (body.businessName || '').trim() || 'My Business';
     const query = (body.query || '').trim();
+    const refresh = body.refresh === true;
+    const exclude = Array.isArray(body.exclude)
+      ? body.exclude.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 40)
+      : [];
     const searchTerms = query ? [] : await resolveRelevantSearchTerms(user.tenantId, businessName, category);
 
     return await generateDynamicServices({
@@ -88,6 +92,8 @@ export async function POST(request: NextRequest) {
       businessName,
       query,
       searchTerms,
+      refresh,
+      exclude,
     });
   } catch (error: unknown) {
     console.error('[/api/gbp/services/suggest] POST error:', error);
@@ -109,6 +115,7 @@ export async function GET(request: NextRequest) {
     const category = (searchParams.get('category') || '').trim() || 'Local Business';
     const businessName = (searchParams.get('businessName') || '').trim() || 'My Business';
     const query = (searchParams.get('query') || '').trim();
+    const refresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
     const searchTerms = query ? [] : await resolveRelevantSearchTerms(user.tenantId, businessName, category);
 
     return await generateDynamicServices({
@@ -116,6 +123,8 @@ export async function GET(request: NextRequest) {
       businessName,
       query,
       searchTerms,
+      refresh,
+      exclude: [],
     });
   } catch (error: unknown) {
     console.error('[/api/gbp/services/suggest] GET error:', error);
@@ -131,15 +140,21 @@ async function generateDynamicServices({
   businessName,
   query,
   searchTerms = [],
+  refresh = false,
+  exclude = [],
 }: {
   category: string;
   businessName: string;
   query: string;
   searchTerms?: string[];
+  refresh?: boolean;
+  exclude?: string[];
 }) {
-  // 1. Check Master Category Catalog for instant (<1ms) trade-verified offerings
+  const excludeLower = new Set(exclude.map((e) => e.toLowerCase()));
+
+  // 1. Check Master Category Catalog for instant (<1ms) initial load (skip when user explicitly clicks Refresh AI Ideas)
   const masterCat = getGbpCategoryByNameOrAlias(category);
-  if (masterCat && masterCat.coreProducts.length > 0) {
+  if (!refresh && masterCat && masterCat.coreProducts.length > 0) {
     if (!query) {
       return NextResponse.json({
         services: masterCat.coreProducts,
@@ -167,10 +182,13 @@ async function generateDynamicServices({
     const searchHint = searchTerms.length > 0
       ? `\nTop Google Search Terms customers search for this business: ${searchTerms.join(', ')}\nPrioritize clean service offerings matching real customer search demand without stuffing city names into the service titles.`
       : '';
+    const excludeHint = exclude.length > 0
+      ? `\nDO NOT repeat any of these already-listed services: ${exclude.slice(0, 20).join(', ')}. Generate NEW complementary, specialty, or package service names.`
+      : '';
     const aiPrompt = `You are a local business marketing and Google Business Profile catalog specialist.
 Business Name: "${businessName}"
 Google Category: "${category}"
-${query ? `User is typing in service search: "${query}"` : 'Generate recommended offerings for this profile.'}${searchHint}
+${query ? `User is typing in service search: "${query}"` : refresh ? 'Generate 6 to 8 FRESH additional or specialized offerings for this business.' : 'Generate recommended offerings for this profile.'}${searchHint}${excludeHint}
 
 Task:
 Generate 6 to 8 realistic, authentic, and high-converting products and services that this specific business typically offers to local customers on Google Maps.
@@ -180,25 +198,25 @@ Rules:
    - For a Grocery / Supermarket: Generate supermarket offerings (e.g. "Fresh Produce", "Daily Groceries", "Packaged Foods", "Dairy Staples", "Household Essentials").
    - For a Resort / Pool: Generate hospitality offerings (e.g. "Private Villa Stay", "Swimming Pool Access", "Lawn Event Booking", "Day Outing Packages").
 2. NEVER include unrelated retail items like "In-Store Shopping" or "Home Delivery" unless it is specifically a physical retail store or delivery company.
-3. ${query ? `Each item should match or be related to the search term "${query}".` : 'Provide the top 6 to 8 core offerings.'}
+3. ${query ? `Each item should match or be related to the search term "${query}".` : 'Provide 6 to 8 distinct offerings.'}
 4. Return ONLY a valid JSON array of strings — no markdown formatting, no code fences, no commentary.
 Example output format:
 ["Service 1", "Service 2", "Service 3", "Service 4", "Service 5", "Service 6"]`;
 
     const aiRes = await callAI({
       messages: [{ role: 'user', content: aiPrompt }],
-      temperature: 0.3,
+      temperature: refresh ? 0.7 : 0.3,
     });
 
     const text = aiRes?.content || '';
-    const services = extractJsonArray(text);
+    const services = extractJsonArray(text).filter((s) => !excludeLower.has(s.toLowerCase()));
 
     if (services.length > 0) {
       return NextResponse.json({
         services,
         category,
         businessName,
-        source: 'ai_dynamic',
+        source: refresh ? 'ai_refresh' : 'ai_dynamic',
       });
     }
   } catch (err) {
@@ -207,13 +225,19 @@ Example output format:
 
   // Dynamic algorithmic fallback derived from the category title
   const cleanCategory = category.replace(/company|store|agency|services|shop/gi, '').trim() || 'Professional';
+  const fallbackPool = [
+    `${cleanCategory} Consultation`,
+    `Custom ${cleanCategory} Solutions`,
+    `Professional ${cleanCategory} Services`,
+    `${cleanCategory} Maintenance & Support`,
+    `${cleanCategory} Audit & Assessment`,
+    `${cleanCategory} Package Planning`,
+    `Express ${cleanCategory} Booking`,
+    `Premium ${cleanCategory} Care`,
+  ].filter((s) => !excludeLower.has(s.toLowerCase()));
+
   return NextResponse.json({
-    services: [
-      `${cleanCategory} Consultation`,
-      `Custom ${cleanCategory} Solutions`,
-      `Professional ${cleanCategory} Services`,
-      `${cleanCategory} Maintenance & Support`,
-    ],
+    services: fallbackPool.length > 0 ? fallbackPool : [`${cleanCategory} Specialty Service`],
     category,
     businessName,
     source: 'dynamic_fallback',

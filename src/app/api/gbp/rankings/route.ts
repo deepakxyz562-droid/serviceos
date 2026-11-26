@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { applyTenantRateLimit, rateLimitResponse, tenantScanLimiter } from '@/lib/rate-limit';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { normalizeBgosPlanCode } from '@/lib/bgos-billing';
 import { resolveTenantLocale } from '@/lib/locale-timezone';
@@ -328,47 +329,50 @@ export async function GET(request: NextRequest) {
       const r = typeof row.mapsRank === 'number' ? row.mapsRank : typeof row.organicRank === 'number' ? row.organicRank : null;
       measuredKeywordMap.set(key, {
         keyword: row.keyword,
-        rank: r != null ? Number(r.toFixed(1)) : 3.0,
+        rank: r != null && r > 0 ? Number(r.toFixed(1)) : null,
         rankChange: null,
       });
     }
   }
 
-  // Fallback 1: Google Discovery keywords from search impressions
-  if (measuredKeywordMap.size < 4 && Array.isArray(stored?.googleDiscovery?.keywords)) {
+  // Fallback 1: Google Discovery keywords from search impressions (null rank until scanned)
+  if (measuredKeywordMap.size < 10 && Array.isArray(stored?.googleDiscovery?.keywords)) {
     for (const dk of stored.googleDiscovery.keywords) {
       const key = String(dk?.keyword || '').trim().toLowerCase();
-      if (!key || measuredKeywordMap.has(key) || measuredKeywordMap.size >= 5) continue;
+      if (!key || measuredKeywordMap.has(key) || measuredKeywordMap.size >= 10) continue;
       measuredKeywordMap.set(key, {
         keyword: dk.keyword,
-        rank: 2.5,
-        rankChange: 0,
+        rank: typeof dk?.rank === 'number' && dk.rank > 0 ? Number(dk.rank.toFixed(1)) : null,
+        rankChange: null,
       });
     }
   }
 
-  // Fallback 2: Category and location terms so the targeted keywords section is never blank
-  if (measuredKeywordMap.size < 4) {
-    const cat = (tenant?.brandProfile?.businessName || tenant?.category || tenant?.name || 'Local Service').trim();
+  // Fallback 2: Real trade category & location terms (null rank until scanned — never fake numbers)
+  if (measuredKeywordMap.size < 6) {
+    const rawCat = (stored?.activeGbpCategory || tenant?.industry || tenant?.name || 'Local Service').trim();
+    const cat = /services|^other$/i.test(rawCat) ? (tenant?.name || rawCat) : rawCat;
     const city = tenant?.city ? ` in ${tenant.city}` : ' near me';
     const fallbackKws = [
       `${cat} near me`,
       `best ${cat}${city}`,
       `top rated ${cat} near me`,
+      `${cat}${city}`,
       `${cat} booking${city}`,
+      `affordable ${cat} near me`,
     ];
     for (const kw of fallbackKws) {
       const key = kw.toLowerCase();
-      if (!measuredKeywordMap.has(key) && measuredKeywordMap.size < 5) {
+      if (!measuredKeywordMap.has(key) && measuredKeywordMap.size < 10) {
         measuredKeywordMap.set(key, {
           keyword: kw,
-          rank: 3.0 + (measuredKeywordMap.size * 0.5),
-          rankChange: measuredKeywordMap.size % 2 === 0 ? 1.0 : null,
+          rank: null,
+          rankChange: null,
         });
       }
     }
   }
-  const rawKeywords = Array.from(measuredKeywordMap.values());
+  const rawKeywords = Array.from(measuredKeywordMap.values()).slice(0, 10);
 
   const latestGrid = gridScans[0] || null;
   const gridSize: 3 | 5 = latestGrid?.gridSize === 5 ? 5 : 3;
@@ -507,6 +511,11 @@ async function updateTrackedKeywordRanks(params: {
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.tenantId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+
+  const rl = await applyTenantRateLimit(tenantScanLimiter, user.tenantId, 'gbp-rankings-scan', 60_000, 15);
+  if (!rl.success) {
+    return rateLimitResponse(rl.resetAtMs);
+  }
 
   const body = await request.json().catch(() => ({}));
 
@@ -812,7 +821,7 @@ export async function POST(request: NextRequest) {
       await updateTrackedKeywordRanks({
         tenantId: user.tenantId,
         keyword: gridResult.keyword,
-        mapsRank: gridResult.avgRank != null ? Math.round(gridResult.avgRank) : null,
+        mapsRank: gridResult.avgRank != null ? Number(gridResult.avgRank.toFixed(1)) : null,
       });
 
       return NextResponse.json({

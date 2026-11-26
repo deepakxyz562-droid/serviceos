@@ -345,6 +345,9 @@ export async function fetchPlacesCompetitors(
     }
 
     computed.sort((a, b) => {
+      const rankA = typeof a.mapsRank === 'number' && a.mapsRank > 0 ? a.mapsRank : Number.POSITIVE_INFINITY;
+      const rankB = typeof b.mapsRank === 'number' && b.mapsRank > 0 ? b.mapsRank : Number.POSITIVE_INFINITY;
+      if (rankA !== rankB) return rankA - rankB;
       if (a.distanceKm != null && b.distanceKm != null) return a.distanceKm - b.distanceKm;
       if (a.distanceKm != null) return -1;
       if (b.distanceKm != null) return 1;

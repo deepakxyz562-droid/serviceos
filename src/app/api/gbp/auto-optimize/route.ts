@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const overview = await getAutoOptimizeOverview(user.tenantId, { syncCompetitors: true });
+    // Avoid blocking interactive GET requests with live Google Places competitor re-syncs
+    const overview = await getAutoOptimizeOverview(user.tenantId, { syncCompetitors: false });
     return NextResponse.json(overview);
   } catch (error: unknown) {
     console.error('[GET /api/gbp/auto-optimize] error:', error);

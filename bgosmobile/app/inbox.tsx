@@ -34,7 +34,7 @@ import { withProtectedRoute } from '../src/components/navigation/protected-route
 import type { BgosConversation, BgosMessage, BgosWorkspace } from '../src/types/bgos-contracts';
 
 function InboxScreen() {
-  const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 10000);
+  const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 25000);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
   const [activeTab, setActiveTab] = useState<'inbox' | 'engage' | 'tickets'>('inbox');
@@ -357,7 +357,7 @@ function InboxScreen() {
 }
 
 function Thread({ conversation, close }: { conversation: BgosConversation; close: () => void }) {
-  const thread = useResource<BgosMessage[]>(`/api/omnichannel/conversations/${conversation.id}/messages`, 5000);
+  const thread = useResource<BgosMessage[]>(`/api/omnichannel/conversations/${conversation.id}/messages`, 15000);
   const [paused, setPaused] = useState(conversation.aiPaused);
   const [mode, setMode] = useState<'reply' | 'ai_reply'>('reply');
   const [text, setText] = useState('');

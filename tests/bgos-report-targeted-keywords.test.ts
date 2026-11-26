@@ -21,6 +21,7 @@ const mockState = vi.hoisted(() => ({
     },
   },
   trackedKeywords: [] as Array<Record<string, any>>,
+  rankGridScans: [] as Array<Record<string, any>>,
   reviews: [{ rating: 5 }, { rating: 5 }, { rating: 4 }],
   competitors: [] as Array<Record<string, any>>,
 }));
@@ -63,8 +64,8 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(async () => []),
     },
     rankGridScan: {
-      findFirst: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => mockState.rankGridScans[0] ?? null),
+      findMany: vi.fn(async () => mockState.rankGridScans),
     },
   },
 }));
@@ -81,11 +82,12 @@ vi.mock('@/lib/social/adapters/googlebusiness', () => ({
 describe('Targeted Keywords Auto-Seeding when Tracked Keywords are Empty', () => {
   beforeEach(() => {
     mockState.trackedKeywords = [];
+    mockState.rankGridScans = [];
   });
 
-  it('GET /api/bgos/reports/4-tier returns populated rankedKeywords even when db.trackedKeyword is empty', async () => {
+  it('GET /api/bgos/reports/4-tier returns populated rankedKeywords with null rank when unmeasured', async () => {
     const { GET } = await import('@/app/api/bgos/reports/4-tier/route');
-    const req = new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=this_month');
+    const req = new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=this_month&refresh=1');
     const res = await GET(req);
     expect(res.status).toBe(200);
 
@@ -93,10 +95,47 @@ describe('Targeted Keywords Auto-Seeding when Tracked Keywords are Empty', () =>
     expect(Array.isArray(json.rankedKeywords)).toBe(true);
     expect(json.rankedKeywords.length).toBeGreaterThanOrEqual(1);
 
-    // Verify first keyword comes from discovery or category
+    // Verify first keyword comes from discovery or category and does not fabricate a fake rank
     expect(json.rankedKeywords[0].keyword).toBeTruthy();
-    expect(typeof json.rankedKeywords[0].rank).toBe('number');
-    expect(json.rankedKeywords[0].rank).toBeGreaterThan(0);
+    expect(json.rankedKeywords[0].rank).toBeNull();
+    expect(json.rankedKeywords[0].rankChange).toBeNull();
+  });
+
+  it('GET /api/bgos/reports/4-tier computes 1-decimal rank and rankChange from geo-grid scans for up to 10 keywords', async () => {
+    mockState.rankGridScans = [
+      { id: 'gs-new-1', keyword: 'private swimming pool near me', avgRank: 1.44 },
+      { id: 'gs-new-2', keyword: 'swimming pool near me', avgRank: 1.62 },
+      { id: 'gs-old-1', keyword: 'private swimming pool near me', avgRank: 2.11 },
+      { id: 'gs-old-2', keyword: 'swimming pool near me', avgRank: 1.42 },
+    ];
+    mockState.trackedKeywords = [
+      { keyword: 'private swimming pool near me', position: 2, mapsRank: 1.4 },
+      { keyword: 'swimming pool near me', position: 2, mapsRank: 1.6 },
+      ...Array.from({ length: 8 }, (_, idx) => ({
+        keyword: `keyword-${idx + 3}`,
+        position: idx + 3,
+        mapsRank: idx + 3.2,
+      })),
+    ];
+
+    const { GET } = await import('@/app/api/bgos/reports/4-tier/route');
+    const req = new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=this_month&refresh=1');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(json.rankedKeywords.length).toBe(10);
+
+    const improved = json.rankedKeywords.find((k: any) => k.keyword === 'private swimming pool near me');
+    const dropped = json.rankedKeywords.find((k: any) => k.keyword === 'swimming pool near me');
+    expect(improved).toEqual({ keyword: 'private swimming pool near me', rank: 1.4, rankChange: 0.7 });
+    expect(dropped).toEqual({ keyword: 'swimming pool near me', rank: 1.6, rankChange: -0.2 });
+
+    const actionMatch = json.actionReport.keywordsUsed.find(
+      (k: any) => k.keyword === 'private swimming pool near me',
+    );
+    expect(actionMatch?.rank).toBe(1.4);
+    expect(actionMatch?.rankChange).toBe(0.7);
   });
 
   it('GET /api/bgos/reports/4-tier?format=html renders targeted keywords table instead of empty message', async () => {

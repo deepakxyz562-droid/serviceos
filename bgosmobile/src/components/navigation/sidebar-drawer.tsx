@@ -246,12 +246,6 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 onPress={() => navigate('/inbox')}
               />
               <DrawerItem
-                icon="send"
-                title="Campaigns & Outreach"
-                subtitle="WhatsApp & email broadcasts"
-                onPress={() => navigate('/outreach')}
-              />
-              <DrawerItem
                 icon="grid-view"
                 title="All Operations & Tools"
                 subtitle="Complete business operations hub"

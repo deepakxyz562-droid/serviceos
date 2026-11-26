@@ -33,9 +33,9 @@ export default function SeoGrowthScreen() {
   }, [params.tab]);
 
   const auditRes = useResource<SeoAuditResponse>('/api/seo/audit');
-  const rankingsRes = useResource<RankingsResponse>('/api/gbp/rankings');
-  const aiGapRes = useResource<AiGapResponse>('/api/seo/ai-competitor-gap');
-  const autoOptRes = useResource<AutoOptimizePlan>('/api/gbp/auto-optimize');
+  const rankingsRes = useResource<RankingsResponse>('/api/gbp/rankings', 0, tab === 'grid' || tab === 'audit');
+  const aiGapRes = useResource<AiGapResponse>('/api/seo/ai-competitor-gap', 0, tab === 'gap');
+  const autoOptRes = useResource<AutoOptimizePlan>('/api/gbp/auto-optimize', 0, tab === 'audit');
 
   const [auditing, setAuditing] = useState(false);
   const [fixingKey, setFixingKey] = useState<string | null>(null);

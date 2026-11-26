@@ -39,6 +39,13 @@ export function createResource<T>() {
       });
       return pending;
     },
+    seedIfEmpty(data: T) {
+      if (snapshot.data == null && !pending) {
+        snapshot = { data, loading: false, error: null };
+        updated = Date.now();
+        notify();
+      }
+    },
   };
 }
 const entries = new Map<string, ReturnType<typeof createResource<unknown>>>();

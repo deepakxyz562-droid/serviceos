@@ -275,7 +275,7 @@ export async function getBgosPublicBusinessProfileUncached(
   const cleanSlug = decodeURIComponent(slugOrId || '').trim();
   if (!cleanSlug) return null;
 
-  const tenant = await db.tenant
+  let tenant = await db.tenant
     .findFirst({
       where: {
         OR: [{ slug: cleanSlug }, { publicSlug: cleanSlug }, { id: cleanSlug }],
@@ -333,16 +333,82 @@ export async function getBgosPublicBusinessProfileUncached(
       })
       .catch(() => null);
 
+    // Fallback: match Workspace.slug or bookingPageConfig.publicSlug stored inside settingsJson
+    if (!tenant) {
+      const ws = (db as any).workspace?.findFirst
+        ? await (db as any).workspace
+            .findFirst({ where: { slug: cleanSlug }, select: { tenantId: true } })
+            .catch(() => null)
+        : null;
+      const fallbackTenant = ws?.tenantId
+        ? await db.tenant
+            .findFirst({
+              where: { id: ws.tenantId, suspendedAt: null },
+              select: {
+                id: true, name: true, slug: true, publicSlug: true, publicProfileEnabled: true,
+                industry: true, logo: true, coverImage: true, tagline: true, description: true,
+                phone: true, whatsappPhone: true, email: true, website: true, address: true,
+                city: true, state: true, postalCode: true, country: true, currency: true,
+                latitude: true, longitude: true, googlePlaceId: true, googleBusinessVerified: true,
+                rating: true, reviewCount: true, businessHoursJson: true, galleryJson: true,
+                serviceAreasJson: true, socialLinksJson: true, faqsJson: true, seoTitle: true,
+                seoDescription: true, marketplaceOptIn: true, signupMode: true,
+                workspaces: { select: { productType: true } }, settingsJson: true,
+                brandProfile: {
+                  select: { businessName: true, industry: true, location: true, serviceArea: true, aiGeneratedSummary: true, usps: true },
+                },
+              },
+            })
+            .catch(() => null)
+        : await db.tenant
+            .findFirst({
+              where: { settingsJson: { contains: `"publicSlug":"${cleanSlug}"` }, suspendedAt: null },
+              select: {
+                id: true, name: true, slug: true, publicSlug: true, publicProfileEnabled: true,
+                industry: true, logo: true, coverImage: true, tagline: true, description: true,
+                phone: true, whatsappPhone: true, email: true, website: true, address: true,
+                city: true, state: true, postalCode: true, country: true, currency: true,
+                latitude: true, longitude: true, googlePlaceId: true, googleBusinessVerified: true,
+                rating: true, reviewCount: true, businessHoursJson: true, galleryJson: true,
+                serviceAreasJson: true, socialLinksJson: true, faqsJson: true, seoTitle: true,
+                seoDescription: true, marketplaceOptIn: true, signupMode: true,
+                workspaces: { select: { productType: true } }, settingsJson: true,
+                brandProfile: {
+                  select: { businessName: true, industry: true, location: true, serviceArea: true, aiGeneratedSummary: true, usps: true },
+                },
+              },
+            })
+            .catch(() => null);
+      if (fallbackTenant) {
+        tenant = fallbackTenant;
+      }
+    }
+
     if (!tenant) return null;
 
     const settings = safeJsonObject(tenant.settingsJson);
+    const bookingCfgRaw = safeJsonObject(
+      settings.bookingPageConfig ? JSON.stringify(settings.bookingPageConfig) : null,
+    );
     const hasGbpLinked = Boolean(
       tenant.googlePlaceId ||
       tenant.googleBusinessVerified ||
       settings?.activeGbpLocationId ||
       settings?.activeGbpPlaceId ||
-      settings?.bgosOnboardingCompleted
+      settings?.bgosOnboardingCompleted ||
+      settings?.bgos ||
+      bookingCfgRaw?.publicSlug ||
+      tenant.publicSlug
     );
+
+    const productWorkspaces =
+      Array.isArray(tenant.workspaces) && tenant.workspaces.length > 0
+        ? tenant.workspaces
+        : (db as any).productWorkspace?.findMany
+          ? await (db as any).productWorkspace
+              .findMany({ where: { tenantId: tenant.id }, select: { productType: true } })
+              .catch(() => [])
+          : [];
 
     // Strict product boundary:
     // A tenant is a genuine BGOS merchant if:
@@ -350,15 +416,13 @@ export async function getBgosPublicBusinessProfileUncached(
     // 2. They have connected a Google Business Profile or configured BGOS profile settings.
     const isBgosMerchant =
       tenant.signupMode === 'bgos' ||
-      tenant.workspaces?.some((w) => w.productType === 'bgos') ||
+      productWorkspaces?.some((w: any) => w.productType === 'bgos') ||
       hasGbpLinked;
 
     const isExplicitCrmOrBos =
       (tenant.signupMode === 'crm_trial' ||
-      tenant.signupMode === 'standalone' ||
-      tenant.signupMode === 'free' ||
-      tenant.workspaces?.some((w) => w.productType === 'crm' || w.productType === 'bos')) &&
-      !hasGbpLinked;
+      tenant.signupMode === 'standalone') &&
+      !isBgosMerchant;
 
     if (!isBgosMerchant && isExplicitCrmOrBos) {
       return null;

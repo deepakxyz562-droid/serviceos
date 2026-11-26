@@ -131,10 +131,32 @@ export function resolveBusinessPresenceMode(params: {
   customDomain?: { domain: string; status: string } | null;
 }): PresenceResolution {
   const { tenant, gbpWebsite, customDomain } = params;
-  const slug = normalizeSlugValue(tenant.publicSlug || tenant.slug || tenant.name, tenant.id);
+  let parsedSettings: Record<string, any> = {};
+  if (tenant.settingsJson) {
+    try {
+      const parsed = JSON.parse(tenant.settingsJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsedSettings = parsed;
+      }
+    } catch {}
+  }
+
+  const bookingPublicSlug =
+    typeof parsedSettings?.bookingPageConfig?.publicSlug === 'string' &&
+    parsedSettings.bookingPageConfig.publicSlug.trim()
+      ? parsedSettings.bookingPageConfig.publicSlug.trim()
+      : null;
+
+  const slug = normalizeSlugValue(bookingPublicSlug || tenant.publicSlug || tenant.slug || tenant.name, tenant.id);
   const industry = tenant.industry || tenant.brandProfile?.industry || null;
   const city = tenant.city || tenant.brandProfile?.location || null;
-  const isBgos = tenant.signupMode === 'bgos' || tenant.productType === 'bgos';
+  const hasBgosConfig = Boolean(
+    parsedSettings?.bgos ||
+      bookingPublicSlug ||
+      parsedSettings?.activeGbpPlaceId ||
+      parsedSettings?.bgosOnboardingCompleted,
+  );
+  const isBgos = tenant.signupMode === 'bgos' || tenant.productType === 'bgos' || hasBgosConfig;
 
   const shortHostedUrl = `https://bgos.site/${slug}`;
   const hostedCanonicalUrl = isBgos
@@ -143,15 +165,10 @@ export function resolveBusinessPresenceMode(params: {
   const publicProfileEnabled = Boolean(tenant.publicProfileEnabled);
   const claimed = Boolean(tenant.claimed);
 
-  let settingsWebsite: string | null = null;
-  if (tenant.settingsJson) {
-    try {
-      const parsed = JSON.parse(tenant.settingsJson);
-      if (typeof parsed?.bookingPageConfig?.website === 'string') {
-        settingsWebsite = parsed.bookingPageConfig.website;
-      }
-    } catch {}
-  }
+  const settingsWebsite =
+    typeof parsedSettings?.bookingPageConfig?.website === 'string'
+      ? parsedSettings.bookingPageConfig.website
+      : null;
 
   // Verified CustomDomain record takes highest precedence if it's not a fieseros subdomain
   if (customDomain?.domain && !customDomain.domain.endsWith('.fieseros.com')) {
@@ -202,8 +219,8 @@ export function resolveBusinessPresenceMode(params: {
   const hostedUrl = candidates.find((u) => isFieserosHostedUrl(u));
   if (publicProfileEnabled || hostedUrl) {
     const isBgosMerchant =
-      tenant.signupMode === 'bgos' ||
-      tenant.productType === 'bgos' ||
+      isBgos ||
+      hasBgosConfig ||
       Boolean(hostedUrl && /bgos\./i.test(hostedUrl));
 
     if (isBgosMerchant) {

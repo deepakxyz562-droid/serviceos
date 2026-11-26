@@ -919,3 +919,97 @@ export async function getBosCommerceContext(
   return (result as BosCommerceContextResult) || null;
 }
 
+export interface BgosDashboardSummaryRpcResult {
+  todayBookings: Array<{
+    id: string;
+    title: string;
+    customerName: string | null;
+    customerPhone: string | null;
+    scheduledAt: string;
+    status: string;
+  }>;
+  reviews: Array<{
+    id: string;
+    rating: number;
+    createdAt: string;
+    authorName: string | null;
+    comment: string | null;
+    responseJson: string;
+    source: string;
+  }>;
+  totalReviewsCount: number;
+  avgRating: number;
+  socialAccounts: Array<{
+    accountId: string;
+    accountName: string | null;
+    metadata: unknown;
+  }>;
+  totalLeadsCount: number;
+  totalSubmissionsCount: number;
+  publishedSocialPosts: number;
+  scheduledSocialPosts: number;
+  pendingInvites: number;
+  sentInvites: number;
+}
+
+/**
+ * getBgosDashboardSummary — Collapse ~12 BGOS bootstrap DB queries into 1 PostgREST RPC.
+ * Throws RpcFunctionNotFoundError if SQL migration has not yet been applied.
+ */
+export async function getBgosDashboardSummary(
+  tenantId: string,
+  dayStartIso: string,
+  dayEndIso: string,
+): Promise<BgosDashboardSummaryRpcResult> {
+  const client = getAdminClient();
+  const { data, error } = await client.rpc('get_bgos_dashboard_summary', {
+    p_tenant_id: tenantId,
+    p_day_start: dayStartIso,
+    p_day_end: dayEndIso,
+  });
+
+  if (error) {
+    const msg = error.message || '';
+    if (
+      error.code === 'PGRST202' ||
+      msg.includes('Could not find the function') ||
+      (msg.includes('function') && msg.includes('does not exist'))
+    ) {
+      throw new RpcFunctionNotFoundError('get_bgos_dashboard_summary');
+    }
+    throw new Error(`[supabase-rpc] get_bgos_dashboard_summary failed: ${msg}`);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as BgosDashboardSummaryRpcResult;
+}
+
+/**
+ * checkDbRateLimit — Distributed PostgreSQL rate limiting RPC (no Redis needed).
+ */
+export async function checkDbRateLimit(
+  key: string,
+  windowMs: number,
+  max: number,
+): Promise<{ success: boolean; remaining: number; resetAtMs: number } | null> {
+  try {
+    const client = getAdminClient();
+    const { data, error } = await client.rpc('check_bgos_rate_limit', {
+      p_key: key,
+      p_window_ms: windowMs,
+      p_max: max,
+    });
+    if (error || !data) return null;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (typeof row?.success !== 'boolean') return null;
+    return {
+      success: row.success,
+      remaining: Number(row.remaining ?? 0),
+      resetAtMs: Number(row.resetAtMs ?? Date.now() + windowMs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+

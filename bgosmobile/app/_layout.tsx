@@ -293,7 +293,6 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="gbp-callback" />
         <Stack.Screen name="inbox" />
-        <Stack.Screen name="outreach" />
         <Stack.Screen name="leads" />
         <Stack.Screen name="appointments" />
         <Stack.Screen name="submissions" />

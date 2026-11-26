@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { requireBgosEntitled } from '@/lib/bgos-entitlement';
 import { getLatestAiCompetitorGap, runAiCompetitorGapAnalysis } from '@/lib/seo/ai-visibility';
+import { applyTenantRateLimit, rateLimitResponse, tenantScanLimiter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -31,6 +32,11 @@ export async function POST(request: NextRequest) {
     }
     const gate = await requireBgosEntitled(user);
     if (!gate.ok) return gate.response;
+
+    const rl = await applyTenantRateLimit(tenantScanLimiter, user.tenantId, 'ai-gap-scan', 60_000, 15);
+    if (!rl.success) {
+      return rateLimitResponse(rl.resetAtMs);
+    }
 
     const body = await request.json().catch(() => ({}));
     const customPrompts = Array.isArray(body?.customPrompts)

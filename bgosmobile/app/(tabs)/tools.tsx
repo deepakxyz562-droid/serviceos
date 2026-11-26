@@ -267,12 +267,6 @@ export default function ToolsScreen() {
           onPress={() => router.push('/appointments')}
         />
         <MenuRow
-          title="Campaigns & Outreach"
-          detail="WhatsApp, email & SMS broadcasts"
-          icon="send"
-          onPress={() => router.push('/outreach')}
-        />
-        <MenuRow
           title="Form Responses & Surveys"
           detail="Customer inquiries, quote requests & feedback"
           icon="assignment"

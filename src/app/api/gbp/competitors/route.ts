@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { isMissingTableError } from '@/lib/gbp/marketing-score';
@@ -245,11 +245,14 @@ export async function GET(request: NextRequest) {
 
       const ranked = combined.map((item, idx) => ({
         ...item,
-        rank: typeof item.mapsRank === 'number' && item.mapsRank > 0 ? Math.round(item.mapsRank) : idx + 1,
+        rank:
+          typeof item.mapsRank === 'number' && item.mapsRank > 0
+            ? Number(item.mapsRank.toFixed(1))
+            : null,
         ordinalRank: idx + 1,
         isSelf: item.id === 'self',
       }));
-      const rankedSelf = ranked.find((r) => r.isSelf) || { ...selfWithRank, rank: ranked.length + 1, ordinalRank: ranked.length + 1, isSelf: true };
+      const rankedSelf = ranked.find((r) => r.isSelf) || { ...selfWithRank, rank: null, ordinalRank: ranked.length + 1, isSelf: true };
       return { ranked, rankedSelf };
     }
 
@@ -270,33 +273,52 @@ export async function GET(request: NextRequest) {
         competitors: rows,
       });
 
-    // If we have clean stored rows AND cached spy signals (unless user asked to refresh/filter by keyword), serve fast
+    // If we have clean stored rows (unless user asked to refresh/filter by keyword), serve fast;
+    // if spy signals are missing, enrich asynchronously post-response so GET never blocks on Google Places.
     const hasCachedSpy = storedRows.some((r) => Boolean(cachedSpyMap[(r.placeId || r.name).toLowerCase()]));
     if (
       storedRows.length > 0 &&
-      hasCachedSpy &&
       !refresh &&
       !cityParam &&
       !categoryParam &&
       !keywordParam &&
       !isLegacyCorrupt
     ) {
+      if (!hasCachedSpy) {
+        const bgTenantId = user.tenantId;
+        try {
+          after(async () => {
+            try {
+              await fetchPlacesCompetitors(bgTenantId, {});
+            } catch {}
+          });
+        } catch {
+          // Outside Next.js request scope (e.g. unit tests); cron/warmup handles background refresh
+        }
+      }
       const enriched = mergeCachedSpy(storedRows);
       const cachedMeta = parsedSettings.competitorSpyCache || {};
       const { ranked, rankedSelf } = buildRankedList(enriched, cachedMeta.selfMapsRank ?? null);
-      return NextResponse.json({
-        competitors: ranked,
-        selfBusiness: rankedSelf,
-        spyInsights: buildSpyResponse(
-          enriched,
-          cachedMeta.queryUsed || `${selfCategory} in ${tenant?.city || 'Local Area'}`,
-          cachedMeta.locationUsed || tenant?.city || 'Local Area',
-          cachedMeta.selfMapsRank ?? fallbackMeasuredSelfRank ?? null,
-        ),
-        source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
-        migrationRequired,
-        placesUnavailable: false,
-      });
+      return NextResponse.json(
+        {
+          competitors: ranked,
+          selfBusiness: rankedSelf,
+          spyInsights: buildSpyResponse(
+            enriched,
+            cachedMeta.queryUsed || `${selfCategory} in ${tenant?.city || 'Local Area'}`,
+            cachedMeta.locationUsed || tenant?.city || 'Local Area',
+            cachedMeta.selfMapsRank ?? fallbackMeasuredSelfRank ?? null,
+          ),
+          source: storedRows.some((r) => r.source === 'places') ? 'places' : 'manual',
+          migrationRequired,
+          placesUnavailable: false,
+        },
+        {
+          headers: {
+            'Cache-Control': 'private, max-age=60, stale-while-revalidate=180',
+          },
+        },
+      );
     }
 
     // If refreshing or clearing corrupt cache (and not a custom keyword probe), delete stale competitor records
@@ -316,12 +338,12 @@ export async function GET(request: NextRequest) {
     if (liveFetch.competitors.length > 0) {
       const shouldPersistDefault = !keywordParam && !cityParam && !categoryParam;
       if (!migrationRequired && shouldPersistDefault) {
-        for (const row of liveFetch.competitors) {
-          try {
-            await db.competitor.upsert({
-              where: { tenantId_name: { tenantId: user.tenantId, name: row.name } },
+        await Promise.allSettled(
+          liveFetch.competitors.map((row) =>
+            db.competitor.upsert({
+              where: { tenantId_name: { tenantId: user.tenantId!, name: row.name } },
               create: {
-                tenantId: user.tenantId,
+                tenantId: user.tenantId!,
                 name: row.name,
                 rating: row.rating,
                 reviewCount: row.reviewCount,
@@ -343,9 +365,9 @@ export async function GET(request: NextRequest) {
                 mapsUrl: row.mapsUrl,
                 websiteUrl: row.websiteUrl ?? null,
               } as any,
-            });
-          } catch {}
-        }
+            }),
+          ),
+        );
       }
 
       const computedSpy = buildSpyResponse(

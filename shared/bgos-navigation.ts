@@ -40,13 +40,13 @@ const allowed = new Set<string>([
   'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
   'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
-  'liveChat', 'billing', 'campaigns', 'aiReceptionist', 'callLogs',
+  'liveChat', 'billing', 'aiReceptionist', 'callLogs',
 ]);
 
 export function bgosView(view: string): string {
   if (view === 'workflowAutomations') return 'workflows';
   if (view === 'chatbotBuilder') return 'agentStudio';
-  if (view === 'formsDashboard') return 'dashboard';
+  if (view === 'formsDashboard' || view === 'campaigns') return 'dashboard';
   if (view === 'aiReceptionist' || view === 'callLogs') return 'callTracker';
   return allowed.has(view) ? view : 'dashboard';
 }

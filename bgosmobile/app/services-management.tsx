@@ -115,7 +115,7 @@ export default function ServicesManagementScreen() {
   }, [placeRes.loading, place, place?.services, place?.seoServices]);
 
   const fetchDynamicSuggestions = useCallback(
-    async (queryText = '', showErrorAlert = false) => {
+    async (queryText = '', showErrorAlert = false, isRefresh = false) => {
       const reqId = ++suggestReqIdRef.current;
       setSuggestingServices(true);
       try {
@@ -126,12 +126,13 @@ export default function ServicesManagementScreen() {
             category,
             businessName,
             ...(cleanQuery ? { query: cleanQuery } : {}),
+            ...(isRefresh ? { refresh: true, exclude: aiSuggested.slice(0, 30) } : {}),
           },
         });
         if (suggestReqIdRef.current !== reqId) return;
         if (Array.isArray(res.services) && res.services.length > 0) {
           setAiSuggested((prev) =>
-            cleanQuery ? Array.from(new Set([...res.services!, ...prev])) : res.services!,
+            cleanQuery || isRefresh ? Array.from(new Set([...res.services!, ...prev])) : res.services!,
           );
         }
       } catch (err: unknown) {
@@ -144,7 +145,7 @@ export default function ServicesManagementScreen() {
         }
       }
     },
-    [category, businessName],
+    [category, businessName, aiSuggested],
   );
 
   useEffect(() => {
@@ -606,7 +607,7 @@ export default function ServicesManagementScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                   <Pressable
-                    onPress={() => void fetchDynamicSuggestions(serviceQuery.trim(), true)}
+                    onPress={() => void fetchDynamicSuggestions(serviceQuery.trim(), true, !serviceQuery.trim())}
                     disabled={suggestingServices}
                     style={({ pressed }) => [styles.secondaryBtn, { opacity: pressed ? 0.8 : 1 }]}
                   >

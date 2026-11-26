@@ -144,20 +144,24 @@ export async function isTenantOnline(
  * was seen within `PRESENCE_THROTTLE_MS` (default 30s), reducing this
  * by ~97% while keeping the 2-minute presence window accurate.
  */
-const PRESENCE_THROTTLE_MS = 30 * 1000; // 30 seconds
+const PRESENCE_THROTTLE_MS = 90 * 1000; // 90 seconds (safely inside 2-min window, 3x fewer DB writes)
+const MAX_PRESENCE_TRACKED = 5000;
 const presenceLastFlush = new Map<string, number>(); // userId → lastFlushedAt (ms)
 
 export function recordUserActivity(userId: string, tenantId: string): void {
   if (!userId || !tenantId) return;
 
   // ── Throttle: skip if this user was recorded recently ──
-  // The presence window is 2 minutes (PRESENCE_THRESHOLD_MS). Updating
-  // lastActivityAt every 30s (instead of every request) keeps the signal
-  // fresh enough while cutting DB writes by ~97% at scale.
   const nowMs = Date.now();
   const lastFlush = presenceLastFlush.get(userId);
   if (lastFlush !== undefined && (nowMs - lastFlush) < PRESENCE_THROTTLE_MS) {
-    return; // Skip — presence was recorded <30s ago for this user
+    return;
+  }
+  if (presenceLastFlush.has(userId)) {
+    presenceLastFlush.delete(userId);
+  } else if (presenceLastFlush.size >= MAX_PRESENCE_TRACKED) {
+    const oldest = presenceLastFlush.keys().next().value;
+    if (oldest !== undefined) presenceLastFlush.delete(oldest);
   }
   presenceLastFlush.set(userId, nowMs);
 

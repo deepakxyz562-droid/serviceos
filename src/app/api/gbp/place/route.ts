@@ -854,14 +854,23 @@ export async function PATCH(request: NextRequest) {
         });
     }
 
+    let currentTenantForGeo: {
+      name?: string | null;
+      industry?: string | null;
+      city?: string | null;
+      address?: string | null;
+      brandProfile?: { businessName?: string | null; industry?: string | null; location?: string | null } | null;
+    } | null = null;
+
     if (resolvedSeoServices) {
-      const currentTenantForGeo = await db.tenant.findUnique({
+      currentTenantForGeo = await db.tenant.findUnique({
         where: { id: user.tenantId },
         select: {
           name: true,
+          industry: true,
           city: true,
           address: true,
-          brandProfile: { select: { businessName: true, location: true } },
+          brandProfile: { select: { businessName: true, industry: true, location: true } },
         },
       });
       const tCity =
@@ -888,15 +897,18 @@ export async function PATCH(request: NextRequest) {
       }));
     }
 
-    if (hasSettingsField) {
+    let currentSettings: Record<string, any> = {};
+    if (hasSettingsField || body.pushToGoogle === true) {
       const currentTenant = await db.tenant.findUnique({
         where: { id: user.tenantId },
         select: { settingsJson: true },
       });
-      let currentSettings: Record<string, any> = {};
       try {
         currentSettings = JSON.parse(currentTenant?.settingsJson || '{}');
       } catch {}
+    }
+
+    if (hasSettingsField) {
 
       if (typeof body.communicationPhone !== 'undefined') {
         currentSettings.communicationPhone = String(body.communicationPhone).trim();

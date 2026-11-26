@@ -35,7 +35,6 @@ import { useRealtime } from '@/hooks/use-realtime';
 // BGOS Workstations
 const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
 const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
-const BgosOutreach = lazy(() => import('@/components/bgos/outreach').then(m => ({ default: m.BgosOutreach })));
 const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
 const BgosReviewsWorkstation = lazy(() => import('@/components/bgos/reviews-workstation').then(m => ({ default: m.BgosReviewsWorkstation })));
 const BgosGbpAiHub = lazy(() => import('@/components/bgos/gbp-ai-hub').then(m => ({ default: m.GbpAiHub })));
@@ -669,7 +668,6 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
       if (viewId === 'helpCenter' || viewId === 'helpTicketDetail') return <BgosHelpdeskWorkstation />;
       if (viewId === 'socialMedia') return <BgosSocialMarketing isDemo={isDemo} initialCampaigns={isDemo ? undefined : []} />;
-      if (viewId === 'campaigns') return <BgosOutreach />;
       if (viewId === 'billing') return <BgosSettings initialTab="billing" />;
       if (viewId === 'settings') return <BgosSettings />;
       if (viewId === 'contacts') {

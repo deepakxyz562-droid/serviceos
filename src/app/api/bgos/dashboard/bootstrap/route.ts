@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
@@ -7,10 +8,17 @@ import { computeGbpAudit } from '@/lib/gbp/audit';
 import { googleReviewScope } from '@/lib/social/google-review-scope';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { fetchGoogleBusinessPerformanceMetrics } from '@/lib/social/adapters/googlebusiness';
+import { shouldUseSupabaseDB } from '@/lib/supabase-db';
+import { getBgosDashboardSummary } from '@/lib/supabase-rpc';
 
 export const dynamic = 'force-dynamic';
 
 import { getCachedBootstrap, setCachedBootstrap } from '@/lib/bgos/bootstrap-cache';
+
+function buildWeakEtag(payload: unknown): string {
+  const hash = createHash('sha1').update(JSON.stringify(payload)).digest('base64url');
+  return `W/"${hash}"`;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,12 +29,25 @@ export async function GET(request: NextRequest) {
 
     const tenantId = user.tenantId;
     const forceRefresh = request.nextUrl.searchParams.get('refresh') === 'true';
+    const ifNoneMatch = request.headers.get('if-none-match');
 
     if (!forceRefresh) {
       const cachedData = getCachedBootstrap(tenantId);
       if (cachedData) {
+        const etag = buildWeakEtag(cachedData);
+        if (ifNoneMatch && ifNoneMatch === etag) {
+          return new NextResponse(null, {
+            status: 304,
+            headers: {
+              ETag: etag,
+              'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+              'X-Cache': 'HIT',
+            },
+          });
+        }
         return NextResponse.json(cachedData, {
           headers: {
+            ETag: etag,
             'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
             'X-Cache': 'HIT',
           },
@@ -37,6 +58,10 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const rpcSummary = shouldUseSupabaseDB()
+      ? await getBgosDashboardSummary(tenantId, dayStart.toISOString(), dayEnd.toISOString()).catch(() => null)
+      : null;
 
     const [
       workspace,
@@ -51,35 +76,39 @@ export async function GET(request: NextRequest) {
       computeMarketingScore(tenantId).catch(() => null),
       computeGbpAudit(tenantId).catch(() => null),
       prepareGoogleAccount(tenantId).catch(() => null),
-      db.booking
-        .findMany({
-          where: {
-            tenantId,
-            scheduledAt: { gte: dayStart, lte: dayEnd },
-          },
-          orderBy: { scheduledAt: 'asc' },
-          take: 50,
-          select: {
-            id: true,
-            title: true,
-            customerName: true,
-            customerPhone: true,
-            scheduledAt: true,
-            status: true,
-          },
-        })
-        .catch(() => []),
+      rpcSummary
+        ? Promise.resolve(rpcSummary.todayBookings || [])
+        : db.booking
+            .findMany({
+              where: {
+                tenantId,
+                scheduledAt: { gte: dayStart, lte: dayEnd },
+              },
+              orderBy: { scheduledAt: 'asc' },
+              take: 50,
+              select: {
+                id: true,
+                title: true,
+                customerName: true,
+                customerPhone: true,
+                scheduledAt: true,
+                status: true,
+              },
+            })
+            .catch(() => []),
       googleReviewScope(tenantId).catch(() => ({})),
-      db.socialAccount
-        .findMany({
-          where: { tenantId, platform: 'googlebusiness', isActive: true },
-          select: { accountId: true, accountName: true, metadata: true },
-          take: 5,
-        })
-        .catch(() => []),
+      rpcSummary
+        ? Promise.resolve(rpcSummary.socialAccounts || [])
+        : db.socialAccount
+            .findMany({
+              where: { tenantId, platform: 'googlebusiness', isActive: true },
+              select: { accountId: true, accountName: true, metadata: true },
+              take: 5,
+            })
+            .catch(() => []),
     ]);
 
-    // Fast batch query for dashboard stats
+    // Fast batch query for dashboard stats (skipped when Postgres RPC already aggregated them in 1 call)
     const [
       reviews,
       totalReviewsCount,
@@ -91,29 +120,37 @@ export async function GET(request: NextRequest) {
       sentInvites,
       tenantDetails,
     ] = await Promise.all([
-      db.review
-        .findMany({
-          where: { tenantId, ...reviewScope },
-          orderBy: { createdAt: 'desc' },
-          take: 30,
-          select: {
-            id: true,
-            rating: true,
-            createdAt: true,
-            authorName: true,
-            comment: true,
-            responseJson: true,
-            source: true,
-          },
-        })
-        .catch(() => []),
-      db.review.count({ where: { tenantId, ...reviewScope } }).catch(() => 0),
-      db.lead.count({ where: { tenantId } }).catch(() => 0),
-      db.formResponse.count({ where: { tenantId } }).catch(() => 0),
-      db.socialPost.count({ where: { tenantId, status: 'published' } }).catch(() => 0),
-      db.socialPost.count({ where: { tenantId, status: 'scheduled' } }).catch(() => 0),
-      db.scheduledMessage.count({ where: { tenantId, messageType: 'review_request', status: 'pending' } }).catch(() => 0),
-      db.scheduledMessage.count({ where: { tenantId, messageType: 'review_request', status: 'sent' } }).catch(() => 0),
+      rpcSummary && !Object.keys(reviewScope || {}).length
+        ? Promise.resolve(rpcSummary.reviews || [])
+        : db.review
+            .findMany({
+              where: { tenantId, ...reviewScope },
+              orderBy: { createdAt: 'desc' },
+              take: 30,
+              select: {
+                id: true,
+                rating: true,
+                createdAt: true,
+                authorName: true,
+                comment: true,
+                responseJson: true,
+                source: true,
+              },
+            })
+            .catch(() => []),
+      rpcSummary && !Object.keys(reviewScope || {}).length
+        ? Promise.resolve(rpcSummary.totalReviewsCount ?? 0)
+        : db.review.count({ where: { tenantId, ...reviewScope } }).catch(() => 0),
+      rpcSummary ? Promise.resolve(rpcSummary.totalLeadsCount ?? 0) : db.lead.count({ where: { tenantId } }).catch(() => 0),
+      rpcSummary ? Promise.resolve(rpcSummary.totalSubmissionsCount ?? 0) : db.formResponse.count({ where: { tenantId } }).catch(() => 0),
+      rpcSummary ? Promise.resolve(rpcSummary.publishedSocialPosts ?? 0) : db.socialPost.count({ where: { tenantId, status: 'published' } }).catch(() => 0),
+      rpcSummary ? Promise.resolve(rpcSummary.scheduledSocialPosts ?? 0) : db.socialPost.count({ where: { tenantId, status: 'scheduled' } }).catch(() => 0),
+      rpcSummary
+        ? Promise.resolve(rpcSummary.pendingInvites ?? 0)
+        : db.scheduledMessage.count({ where: { tenantId, messageType: 'review_request', status: 'pending' } }).catch(() => 0),
+      rpcSummary
+        ? Promise.resolve(rpcSummary.sentInvites ?? 0)
+        : db.scheduledMessage.count({ where: { tenantId, messageType: 'review_request', status: 'sent' } }).catch(() => 0),
       db.tenant.findUnique({
         where: { id: tenantId },
         select: {
@@ -189,7 +226,10 @@ export async function GET(request: NextRequest) {
 
     if (googleAccount) {
       try {
-        const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount);
+        const perf = await Promise.race([
+          fetchGoogleBusinessPerformanceMetrics(googleAccount),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+        ]);
         if (perf) {
           const sViews = perf.searchImpressions || 0;
           const mViews = perf.mapsImpressions || 0;
@@ -398,9 +438,21 @@ export async function GET(request: NextRequest) {
     };
 
     setCachedBootstrap(tenantId, payload);
+    const etag = buildWeakEtag(payload);
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+          'X-Cache': 'MISS',
+        },
+      });
+    }
 
     return NextResponse.json(payload, {
       headers: {
+        ETag: etag,
         'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
         'X-Cache': 'MISS',
       },

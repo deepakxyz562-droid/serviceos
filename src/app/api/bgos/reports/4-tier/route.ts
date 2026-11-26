@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { getOrGenerateAiBusinessProfile } from '@/lib/gbp/ai-business-profiler';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
+import { cache } from '@/lib/cache';
+import { rankingSummary, type RankScan } from '@/lib/social/ranking-data';
 import {
   fetchGoogleBusinessPerformanceMetrics,
   listGoogleBusinessMedia,
@@ -137,6 +139,23 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const periodParam = searchParams.get('period') || 'last_month';
+    const formatParam = searchParams.get('format');
+    const forceRefresh = searchParams.get('refresh') === '1' || searchParams.get('refresh') === 'true';
+    const reportCacheKey = `report_4tier:${tenantId}:${periodParam}`;
+    const isJsonRequest = formatParam !== 'html' && formatParam !== 'print';
+
+    if (isJsonRequest && !forceRefresh) {
+      const cachedReport = cache.get<Record<string, unknown>>(reportCacheKey);
+      if (cachedReport) {
+        return NextResponse.json(cachedReport, {
+          headers: {
+            'Cache-Control': 'private, max-age=120, stale-while-revalidate=300',
+            'X-Cache': 'HIT',
+          },
+        });
+      }
+    }
+
     const boundaries = getMonthBoundaries(periodParam);
 
     const [
@@ -151,7 +170,7 @@ export async function GET(request: NextRequest) {
       trackedKeywords,
       prevSnapshots,
       tenantServices,
-      latestDbGridScan,
+      latestDbGridScanOrList,
     ] = await Promise.all([
       db.tenant.findUnique({
         where: { id: tenantId },
@@ -197,18 +216,36 @@ export async function GET(request: NextRequest) {
         where: { tenantId, snapshotDate: { gte: boundaries.prevStart, lte: boundaries.prevEnd } },
         take: 10,
       }).catch(() => []),
-      db.service.findMany({
+      (db as any).service?.findMany ? db.service.findMany({
         where: { tenantId, isActive: true },
         select: { name: true, category: true },
         take: 10,
-      }).catch(() => []),
-      (db as any).rankGridScan
-        ?.findFirst?.({
-          where: { tenantId, scanType: 'maps_grid' },
-          orderBy: { createdAt: 'desc' },
-        })
-        .catch(() => null) ?? Promise.resolve(null),
+      }).catch(() => []) : Promise.resolve([]),
+      (db as any).rankGridScan?.findMany
+        ? (db as any).rankGridScan
+            .findMany({
+              where: { tenantId, scanType: 'maps_grid' },
+              orderBy: { createdAt: 'desc' },
+              take: 25,
+            })
+            .catch(() => [])
+        : (db as any).rankGridScan?.findFirst
+          ? (db as any).rankGridScan
+              .findFirst({
+                where: { tenantId, scanType: 'maps_grid' },
+                orderBy: { createdAt: 'desc' },
+              })
+              .then((row: any) => (row ? [row] : []))
+              .catch(() => [])
+          : Promise.resolve([]),
     ]);
+
+    const dbGridScans: any[] = Array.isArray(latestDbGridScanOrList)
+      ? latestDbGridScanOrList
+      : latestDbGridScanOrList
+        ? [latestDbGridScanOrList]
+        : [];
+    const latestDbGridScan = dbGridScans[0] ?? null;
 
     const rawPhone = (tenant as any)?.phone || (tenant?.brandProfile as any)?.contactPhone || user?.phone || null;
     const businessPhone = rawPhone ? String(rawPhone) : '';
@@ -242,15 +279,18 @@ export async function GET(request: NextRequest) {
       const prevStartStr = boundaries.prevStart.toISOString().slice(0, 10);
       const prevEndStr = new Date(Math.min(boundaries.prevEnd.getTime(), fourDaysAgo.getTime())).toISOString().slice(0, 10);
 
+      const capTimeout = <T,>(promise: Promise<T>, fallback: T, ms = 3000): Promise<T> =>
+        Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+
       const [rollingRes, curRes, prevRes, mediaRes] = await Promise.allSettled([
-        fetchGoogleBusinessPerformanceMetrics(googleAccount),
+        capTimeout(fetchGoogleBusinessPerformanceMetrics(googleAccount), null),
         boundaries.curStart <= clampedCurEnd
-          ? fetchGoogleBusinessPerformanceMetrics(googleAccount, curStartStr, curEndStr)
+          ? capTimeout(fetchGoogleBusinessPerformanceMetrics(googleAccount, curStartStr, curEndStr), null)
           : Promise.resolve(null),
         boundaries.prevStart <= new Date(prevEndStr)
-          ? fetchGoogleBusinessPerformanceMetrics(googleAccount, prevStartStr, prevEndStr)
+          ? capTimeout(fetchGoogleBusinessPerformanceMetrics(googleAccount, prevStartStr, prevEndStr), null)
           : Promise.resolve(null),
-        listGoogleBusinessMedia(googleAccount),
+        capTimeout(listGoogleBusinessMedia(googleAccount), { mediaItems: [] as any[] }),
       ]);
 
       if (rollingRes.status === 'fulfilled' && rollingRes.value) {
@@ -809,44 +849,100 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
       });
       competitorsList = combinedComps.map((item, idx) => ({
         ...item,
-        rank: typeof item.mapsRank === 'number' && item.mapsRank > 0 ? Math.round(item.mapsRank) : idx + 1,
-      }));
-    }
-
-    const measuredFromTracked = trackedKeywords
-      .filter((k) => k?.keyword)
-      .map((k) => ({
-        keyword: k.keyword,
         rank:
-          typeof k.mapsRank === 'number' && k.mapsRank > 0
-            ? k.mapsRank
-            : typeof k.position === 'number' && k.position > 0
-              ? Number(k.position)
-              : null,
-        rankChange: 0,
+          typeof item.mapsRank === 'number' && item.mapsRank > 0
+            ? Number(item.mapsRank.toFixed(1))
+            : idx + 1,
       }));
-
-    const keywordMap = new Map<string, { keyword: string; rank: number | null; rankChange: number }>();
-    for (const mk of measuredFromTracked) {
-      keywordMap.set(mk.keyword.toLowerCase(), mk);
     }
 
-    // Auto-populate from candidateKeywords if trackedKeywords is empty or has fewer than 4 items
-    if (keywordMap.size < 4 && Array.isArray(candidateKeywords) && candidateKeywords.length > 0) {
+    // Build real measured ranked keywords (up to 10) matching Performance "Rank for Targeted Keywords"
+    const keywordMap = new Map<string, { keyword: string; rank: number | null; rankChange: number | null }>();
+
+    const storedRankScans: RankScan[] = Array.isArray(parsedReportSettings?.measuredRankScans)
+      ? parsedReportSettings.measuredRankScans
+      : [];
+    const scanSummary = rankingSummary(storedRankScans);
+    const prevRankScan = storedRankScans.length >= 2 ? storedRankScans[storedRankScans.length - 2] : null;
+    for (const k of scanSummary.keywords) {
+      if (!k?.keyword) continue;
+      const key = k.keyword.trim().toLowerCase();
+      const curr = typeof k.currentRank === 'number' && k.currentRank > 0 ? Number(k.currentRank.toFixed(1)) : null;
+      const prevKw = prevRankScan?.keywords?.find((pk) => pk.keyword?.toLowerCase() === key);
+      const delta =
+        curr != null && typeof prevKw?.rank === 'number' && prevKw.rank > 0
+          ? Number((prevKw.rank - curr).toFixed(1))
+          : null;
+      keywordMap.set(key, {
+        keyword: k.keyword,
+        rank: curr,
+        rankChange: delta,
+      });
+    }
+
+    for (const gs of dbGridScans) {
+      const key = String(gs?.keyword || '').trim().toLowerCase();
+      if (!key || keywordMap.has(key)) continue;
+      const earlier = dbGridScans.find(
+        (other: any) =>
+          other.id !== gs.id &&
+          String(other.keyword || '').trim().toLowerCase() === key &&
+          typeof other.avgRank === 'number' &&
+          other.avgRank > 0,
+      );
+      const curr = typeof gs?.avgRank === 'number' && gs.avgRank > 0 ? Number(gs.avgRank.toFixed(1)) : null;
+      const delta =
+        curr != null && typeof earlier?.avgRank === 'number' && earlier.avgRank > 0
+          ? Number((earlier.avgRank - curr).toFixed(1))
+          : null;
+      keywordMap.set(key, {
+        keyword: gs.keyword,
+        rank: curr,
+        rankChange: delta,
+      });
+    }
+
+    for (const k of trackedKeywords) {
+      const key = String(k?.keyword || '').trim().toLowerCase();
+      if (!key || keywordMap.has(key)) continue;
+      const rawR =
+        typeof k.mapsRank === 'number' && k.mapsRank > 0
+          ? k.mapsRank
+          : typeof k.position === 'number' && k.position > 0
+            ? Number(k.position)
+            : null;
+      keywordMap.set(key, {
+        keyword: k.keyword,
+        rank: rawR != null ? Number(rawR.toFixed(1)) : null,
+        rankChange: null,
+      });
+    }
+
+    // Fill remaining targeted keyword slots up to 10 from candidateKeywords (unmeasured = null rank)
+    if (keywordMap.size < 10 && Array.isArray(candidateKeywords) && candidateKeywords.length > 0) {
       candidateKeywords.forEach((ck) => {
         const key = ck.keyword.trim().toLowerCase();
-        if (!keywordMap.has(key) && keywordMap.size < 5) {
-          // Authentic representation: unmeasured keywords show null rank and 0 rankChange until scanned
+        if (!keywordMap.has(key) && keywordMap.size < 10) {
           keywordMap.set(key, {
             keyword: ck.keyword,
-            rank: typeof (ck as any).rank === 'number' ? (ck as any).rank : null,
-            rankChange: typeof (ck as any).rankChange === 'number' ? (ck as any).rankChange : 0,
+            rank: typeof (ck as any).rank === 'number' ? Number((ck as any).rank.toFixed(1)) : null,
+            rankChange: typeof (ck as any).rankChange === 'number' ? (ck as any).rankChange : null,
           });
         }
       });
     }
 
-    const rankedKeywords = Array.from(keywordMap.values()).slice(0, 5);
+    const rankedKeywords = Array.from(keywordMap.values()).slice(0, 10);
+
+    // Enrich actionReport.keywordsUsed with rank & rankChange so Keywords Used and Rank for Targeted Keywords stay unified
+    actionReport.keywordsUsed = actionReport.keywordsUsed.map((ku) => {
+      const ranked = keywordMap.get(ku.keyword.trim().toLowerCase());
+      return {
+        ...ku,
+        rank: ranked?.rank ?? null,
+        rankChange: ranked?.rankChange ?? null,
+      };
+    });
 
     const normalizeGridPoints = (rawPoints: unknown, gSize: 3 | 5) => {
       if (!Array.isArray(rawPoints)) return [];
@@ -939,7 +1035,7 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
       });
     }
 
-    return NextResponse.json({
+    const reportJsonPayload = {
       businessName,
       businessPhone,
       businessSlug: tenant?.publicSlug || tenant?.slug || tenantId || '',
@@ -988,6 +1084,13 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
         },
       },
       monthlyCurves,
+    };
+    cache.set(reportCacheKey, reportJsonPayload, 10 * 60 * 1000);
+    return NextResponse.json(reportJsonPayload, {
+      headers: {
+        'Cache-Control': 'private, max-age=120, stale-while-revalidate=300',
+        'X-Cache': 'MISS',
+      },
     });
   } catch (error: unknown) {
     console.error('[reports/4-tier] GET failed:', error);
@@ -1005,7 +1108,13 @@ function generatePrintableReportHtml(data: {
   comparisonLabel: string;
   summary: Record<string, MetricDelta>;
   actionReport: {
-    keywordsUsed: Array<{ keyword: string; volume: number; usedCount: number }>;
+    keywordsUsed: Array<{
+      keyword: string;
+      volume: number;
+      usedCount: number;
+      rank?: number | null;
+      rankChange?: number | null;
+    }>;
     seoPostPublished: { target: number; achieved: number; weeks: Array<{ label: string; target: number; achieved: number }> };
     mediaUploaded: { target: number; achieved: number };
     reviewReplies: { target: number; achieved: number };
@@ -1035,7 +1144,7 @@ function generatePrintableReportHtml(data: {
   rankedKeywords?: Array<{
     keyword: string;
     rank: number | null;
-    rankChange: number;
+    rankChange: number | null;
   }>;
   geoGrid?: {
     keyword: string;
@@ -1264,14 +1373,15 @@ function generatePrintableReportHtml(data: {
         ? `<tr><td colspan="3" style="text-align: center; color: #64748B; padding: 14px;">No local competitor benchmark recorded yet.</td></tr>`
         : comps.map((c) => {
             const isSelf = c.isSelf;
-            const ratingLabel = typeof c.rating === 'number' && c.rating > 0 ? `${c.rating.toFixed(1)} ★` : '—';
-            const rankLabel = typeof c.rank === 'number' && c.rank > 0 ? `#${Math.round(c.rank)}` : '—';
+            const ratingLabel = typeof c.rating === 'number' && c.rating > 0 ? `${c.rating.toFixed(1)} ★` : 'No rating';
+            const rankLabel =
+              typeof c.rank === 'number' && c.rank > 0 ? c.rank.toFixed(1) : '—';
             return `<tr class="${isSelf ? 'row-self' : ''}">
           <td>
             <div style="font-weight: 700;">${c.name} ${isSelf ? '(Your Business)' : ''}</div>
             <div style="font-size: 11px; color: #64748B;">${ratingLabel}</div>
           </td>
-          <td style="text-align: center; font-weight: 800; color: ${isSelf ? '#B45309' : '#059669'};">${c.reviewCount ?? 0}</td>
+          <td style="text-align: center; font-weight: 800; color: ${isSelf ? '#B45309' : '#059669'};">${c.reviewCount != null ? c.reviewCount : 'N/A'}</td>
           <td style="text-align: right; font-weight: 800; color: ${isSelf ? '#B45309' : '#0F172A'};">${rankLabel}</td>
         </tr>`;
           }).join('')}
@@ -1296,11 +1406,12 @@ function generatePrintableReportHtml(data: {
       ${kwList.length === 0
         ? `<tr><td colspan="3" style="text-align: center; color: #64748B; padding: 14px;">No keyword rank checks recorded yet.</td></tr>`
         : kwList.map((k, idx) => {
-            const isNeutral = k.rankChange === 0;
-            const isDown = k.rankChange < 0;
+            const deltaVal = typeof k.rankChange === 'number' ? k.rankChange : 0;
+            const isNeutral = k.rankChange == null || deltaVal === 0;
+            const isDown = deltaVal < 0;
             const changeHtml = isNeutral
               ? '<span style="background:#F1F5F9;padding:2px 8px;border-radius:4px;font-weight:700;color:#64748B;">~</span>'
-              : `<span class="delta-badge ${isDown ? 'delta-down' : 'delta-up'}">${isDown ? '▼' : '▲'} ${Math.abs(k.rankChange).toFixed(1)}</span>`;
+              : `<span class="delta-badge ${isDown ? 'delta-down' : 'delta-up'}">${isDown ? '▼' : '▲'} ${Math.abs(deltaVal).toFixed(1)}</span>`;
             const rankStr = typeof k.rank === 'number' && k.rank > 0 ? k.rank.toFixed(1) : '—';
             return `<tr>
           <td style="font-weight: 600;">${idx + 1} ${k.keyword}</td>
@@ -1349,29 +1460,8 @@ function generatePrintableReportHtml(data: {
         })()}
   </div>
 
-  <!-- SECTION 6: ACTIONS & KEYWORDS SUMMARY -->
-  <div class="section-title">
-    <span>Keywords Used</span>
-    <span class="section-sub">SEO Injections</span>
-  </div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Keywords</th>
-        <th style="width: 120px;">Volume</th>
-        <th style="width: 100px; text-align: right;">Used</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${data.actionReport.keywordsUsed.slice(0, 10).map((k) => `<tr>
-        <td style="font-weight: 600;">${k.keyword}</td>
-        <td><span class="vol-badge">${k.volume}</span></td>
-        <td style="text-align: right;"><span class="used-badge">${k.usedCount}</span></td>
-      </tr>`).join('')}
-    </tbody>
-  </table>
-
-  <div class="section-title" style="margin-top: 24px;">
+  <!-- SECTION 6: SEO POST PUBLISHED -->
+  <div class="section-title" style="margin-top: 8px;">
     <span>SEO Post Published</span>
     <span class="section-sub">Target: ${data.actionReport.seoPostPublished.target} • Achieved: ${data.actionReport.seoPostPublished.achieved}</span>
   </div>

@@ -778,6 +778,7 @@ model ScheduledMessage {
   @@index([invoiceId])
   @@index([quoteId])
   @@index([status, dueAt])
+  @@index([tenantId, messageType, status])
 }
 
 // ── Scheduled Executions (delayed workflow automations) ─────────────────────
@@ -1232,6 +1233,7 @@ model Review {
   // ORDER BY createdAt DESC LIMIT 25. This composite index lets SQLite use the
   // index for both the WHERE filter and the ORDER BY (no filesort).
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, source, createdAt])
 }
 
 // ==========================================
@@ -7988,6 +7990,7 @@ model SocialPost {
   @@index([tenantId, status])
   @@index([scheduledAt])
   @@index([tenantId, createdAt])
+  @@index([tenantId, status, scheduledAt, createdAt])
 }
 
 // Normalized metrics across platforms. One row per (post, platform, fetch).
@@ -8039,6 +8042,7 @@ model Competitor {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([tenantId, distanceKm, rating])
 }
 
 // User-tracked SEO keywords in the Keyword Planner (ranked list with score + city).
@@ -9668,6 +9672,7 @@ model RankGridScan {
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, scanType, createdAt])
+  @@index([tenantId, scanType, keyword, createdAt])
 }
 
 model AiVisibilityScan {

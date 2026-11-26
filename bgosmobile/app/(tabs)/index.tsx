@@ -10,7 +10,7 @@ import { BGOS_PUBLIC_WEB_URL } from '../../src/lib/constants';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const brandMark = require('../../assets/brand-mark.png');
-import { useResource } from '../../src/hooks/use-resource';
+import { useResource, seedResourceEntry } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { Speedometer, WeekScoreBars, scoreBandColor } from '../../src/components/gbp/speedometer';
@@ -171,7 +171,6 @@ const MORE_TOOLS: {
   { label: 'Inbox', route: '/inbox', icon: 'chat-bubble-outline' },
   { label: 'Leads Pipeline', route: '/leads', icon: 'people-outline' },
   { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
-  { label: 'Outreach', route: '/outreach', icon: 'send' },
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
   { label: 'GBP Hub', route: '/growth', icon: 'hub' },
   { label: 'Page Settings', route: '/booking-page', icon: 'tune' },
@@ -457,11 +456,18 @@ export default function HomeScreen() {
   const [activeTutorialVideoId, setActiveTutorialVideoId] = useState<TutorialVideoId>('boost_ranking');
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [expandedCompetitor, setExpandedCompetitor] = useState<string | null>(null);
+  const [showAllCompetitors, setShowAllCompetitors] = useState(false);
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const [logoLoadError, setLogoLoadError] = useState(false);
   // ── Consolidated Dashboard Bootstrap (1 single network call replacing 14 waterfalls) ──
   const bootstrap = useResource<HomeBootstrapResponse>('/api/bgos/dashboard/bootstrap');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
+
+  useEffect(() => {
+    if (bootstrap.data?.workspace) {
+      seedResourceEntry(user, '/api/bgos/workspace', bootstrap.data.workspace);
+    }
+  }, [bootstrap.data?.workspace, user]);
 
   const workspace = {
     data: bootstrap.data?.workspace ?? null,
@@ -607,11 +613,12 @@ export default function HomeScreen() {
     [competitorList, competitors.data?.selfBusiness],
   );
   const displayedHomeCompetitors = useMemo(() => {
-    const top8 = competitorList.slice(0, 8);
-    if (!selfCompetitor) return top8;
-    if (top8.some((c) => c.isSelf || c.id === selfCompetitor.id)) return top8;
-    return [...competitorList.slice(0, 7), { ...selfCompetitor, isSelf: true }];
-  }, [competitorList, selfCompetitor]);
+    if (showAllCompetitors) return competitorList;
+    const top5 = competitorList.slice(0, 5);
+    if (!selfCompetitor) return top5;
+    if (top5.some((c) => c.isSelf || c.id === selfCompetitor.id)) return top5;
+    return [...competitorList.slice(0, 4), { ...selfCompetitor, isSelf: true }];
+  }, [competitorList, selfCompetitor, showAllCompetitors]);
   const actions = (growthActions.data?.actions || []).filter((a) => !a.dismissed);
   const totalDone = growthActions.data?.totalDone ?? 0;
   const totalTarget = growthActions.data?.totalTarget ?? 10;
@@ -1787,15 +1794,19 @@ export default function HomeScreen() {
         </View>
         <View style={[ui.row, { justifyContent: 'space-between', marginTop: -4 }]}>
           <Text style={[ui.caption, { fontWeight: '700', letterSpacing: 0.4 }]}>
-            LOCAL COMPETITORS • WITHIN 5 KM
+            COMPETITORS AHEAD OF YOU • WITHIN 5 KM
           </Text>
-          {selfCompetitor ? (
-            <View style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8' }}>
-                Your Rank: #{Math.round(Number(selfCompetitor.mapsRank ?? selfCompetitor.rank ?? 1))}
-              </Text>
-            </View>
-          ) : null}
+          {(() => {
+            const rawSelfRank = selfCompetitor?.mapsRank ?? selfCompetitor?.rank;
+            const hasSelfRank = typeof rawSelfRank === 'number' && rawSelfRank > 0;
+            return (
+              <View style={{ backgroundColor: hasSelfRank ? '#FFF7ED' : '#F1F5F9', borderWidth: 1, borderColor: hasSelfRank ? '#FDBA74' : '#E2E8F0', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: hasSelfRank ? '#C2410C' : '#64748B' }}>
+                  {hasSelfRank ? `Your Rank: ${Number(rawSelfRank).toFixed(1)}` : 'Rank: Pending Scan'}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
 
         {competitors.loading && !competitors.data ? (
@@ -1815,94 +1826,84 @@ export default function HomeScreen() {
           </Text>
         ) : (
           <>
-            <View style={[ui.row, { justifyContent: 'space-between', paddingHorizontal: 4 }]}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.muted, letterSpacing: 0.6, width: 42 }}>
-                RANK
+            <View style={[ui.row, { justifyContent: 'space-between', paddingHorizontal: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted, flex: 1 }}>
+                Competitor
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.muted, letterSpacing: 0.6, flex: 1 }}>
-                BUSINESS
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted, width: 72, textAlign: 'center' }}>
+                Overall Reviews
               </Text>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.muted, letterSpacing: 0.6 }}>
-                RATING
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted, width: 56, textAlign: 'right' }}>
+                Rank
               </Text>
-              <View style={{ width: 20 }} />
             </View>
             {displayedHomeCompetitors.map((comp, idx) => {
               const expanded = expandedCompetitor === comp.id;
               const isSelf = Boolean(comp.isSelf);
-              const rawRank = comp.mapsRank ?? comp.rank ?? idx + 1;
-              const rankVal = Math.max(1, Math.round(Number(rawRank)));
-              const rankStyle = isSelf
-                ? { bg: '#2563EB', fg: '#FFFFFF' }
-                : rankVal <= 3
-                  ? { bg: '#DCFCE7', fg: '#15803D' }
-                  : rankVal <= 10
-                    ? { bg: '#FEF3C7', fg: '#B45309' }
-                    : { bg: '#F1F5F9', fg: '#475569' };
+              const rawRank = comp.mapsRank ?? comp.rank ?? null;
+              const rankVal = typeof rawRank === 'number' && rawRank > 0 ? Number(rawRank) : null;
+              const hasRating = typeof comp.rating === 'number' && comp.rating > 0;
               return (
                 <View
                   key={comp.id}
                   style={{
                     borderBottomWidth: idx < displayedHomeCompetitors.length - 1 ? 1 : 0,
-                    borderBottomColor: isSelf ? '#BFDBFE' : colors.line,
-                    backgroundColor: isSelf ? '#EFF6FF' : 'transparent',
+                    borderBottomColor: isSelf ? '#FDE68A' : colors.line,
+                    backgroundColor: isSelf ? '#FFF4E5' : 'transparent',
                     borderRadius: isSelf ? 10 : 0,
-                    paddingHorizontal: isSelf ? 6 : 0,
+                    paddingHorizontal: 6,
                   }}
                 >
                   <Pressable
                     accessibilityRole="button"
                     accessibilityState={{ expanded }}
-                    accessibilityLabel={`${isSelf ? 'Your business' : 'Competitor'} ${comp.name}, rank ${rankVal}${expanded ? ', hide details' : ', show details'}`}
+                    accessibilityLabel={`${isSelf ? 'Your business' : 'Competitor'} ${comp.name}, rank ${rankVal != null ? rankVal.toFixed(1) : 'unranked'}${expanded ? ', hide details' : ', show details'}`}
                     onPress={() => setExpandedCompetitor(expanded ? null : comp.id)}
-                    style={[ui.row, { justifyContent: 'space-between', paddingVertical: 9 }]}
+                    style={[ui.row, { justifyContent: 'space-between', paddingVertical: 11, alignItems: 'center' }]}
                   >
-                    <View style={{ width: 42, alignItems: 'flex-start' }}>
-                      <View style={{ backgroundColor: rankStyle.bg, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: rankStyle.fg }}>
-                          #{rankVal}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flex: 1, paddingRight: 8, gap: 2 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: isSelf ? '#1E3A8A' : colors.ink, flexShrink: 1 }} numberOfLines={1}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '700', color: isSelf ? '#9A3412' : colors.ink, flexShrink: 1 }} numberOfLines={1}>
                           {comp.name}
                         </Text>
                         {isSelf ? (
-                          <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
+                          <View style={{ backgroundColor: '#EA580C', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
                             <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF' }}>YOU</Text>
                           </View>
                         ) : null}
                       </View>
-                      <Text style={{ fontSize: 10, color: colors.muted }}>
-                        {isSelf ? 'Your Google Business Profile' : comp.distanceKm != null ? `${comp.distanceKm} km away` : 'Nearby'}
-                        {comp.reviewCount != null ? ` · ${comp.reviewCount} reviews` : ''}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialIcons name="star" size={13} color="#F59E0B" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '600', color: colors.muted }}>
+                          {hasRating ? comp.rating!.toFixed(1) : 'No rating'}
+                        </Text>
+                        {!isSelf && comp.distanceKm != null ? (
+                          <Text style={{ fontSize: 10.5, color: colors.muted }}>
+                            · {comp.distanceKm} km
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <View style={{ width: 72, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: isSelf ? '#C2410C' : '#059669' }}>
+                        {comp.reviewCount != null ? comp.reviewCount : 'N/A'}
                       </Text>
                     </View>
-                    <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#B45309' }}>
-                        {comp.rating != null ? `★ ${comp.rating.toFixed(1)}` : '★ —'}
+                    <View style={{ width: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: isSelf ? '#C2410C' : colors.ink }}>
+                        {rankVal != null ? rankVal.toFixed(1) : '—'}
                       </Text>
+                      <MaterialIcons
+                        name={expanded ? 'expand-less' : 'expand-more'}
+                        size={16}
+                        color={colors.muted}
+                      />
                     </View>
-                    <MaterialIcons
-                      name={expanded ? 'expand-less' : 'expand-more'}
-                      size={18}
-                      color={colors.muted}
-                      style={{ marginLeft: 6 }}
-                    />
                   </Pressable>
                   {expanded ? (
                     <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 10, marginBottom: 8, gap: 4 }}>
                       {comp.category ? <Text style={ui.caption}>Category: {comp.category}</Text> : null}
                       {comp.address ? <Text style={ui.caption}>{comp.address}</Text> : null}
-                      {comp.websiteUrl ? (
-                        <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(comp.websiteUrl!)}>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>
-                            Visit Competitor Website ↗
-                          </Text>
-                        </Pressable>
-                      ) : null}
                       {comp.mapsUrl ? (
                         <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(comp.mapsUrl!)}>
                           <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>
@@ -1915,6 +1916,28 @@ export default function HomeScreen() {
                 </View>
               );
             })}
+            {competitorList.length > 5 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowAllCompetitors((prev) => !prev)}
+                style={{
+                  paddingTop: 8,
+                  paddingBottom: 2,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>
+                  {showAllCompetitors ? 'Show less' : 'Show more'}
+                </Text>
+                <MaterialIcons
+                  name={showAllCompetitors ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                  size={18}
+                  color="#2563EB"
+                />
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Launch AI Growth Autopilot"

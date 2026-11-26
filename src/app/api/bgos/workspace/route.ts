@@ -11,6 +11,7 @@ import {
   parseSocialProfiles,
 } from '@/lib/bgos-store-catalog';
 import { checkBgosSlugAvailability, normalizeBgosSlug } from '@/lib/bgos-slug-service';
+import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 import type { BgosPageVisibility, BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const pageVisibilityPatchSchema = z.object({
@@ -454,6 +455,7 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await db.tenant.updateMany({ where: { id: user.tenantId, settingsJson: tenant.settingsJson }, data: updateData });
     if (!updated.count) return NextResponse.json({ error: 'Settings changed in another session. Refresh and retry.' }, { status: 409 });
+    invalidateBootstrapCache(user.tenantId);
 
     let removedDummyCount = 0;
     if (input.data.clearSeededDummyServices && db.service?.findMany && db.service?.deleteMany) {

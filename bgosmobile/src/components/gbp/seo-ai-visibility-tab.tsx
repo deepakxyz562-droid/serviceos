@@ -187,45 +187,62 @@ export function SeoAiVisibilityTab({
         />
       ) : (
         <>
-          {/* 2x2 Engine Scoreboard */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {report.engineSummaries.map((eng) => {
-              const measured = eng.status === 'measured';
-              const rate = eng.visibilityRate ?? 0;
-              return (
-                <View
-                  key={eng.platform}
-                  style={{
-                    width: '48.6%',
-                    backgroundColor: colors.surface,
-                    borderRadius: 13,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    gap: 4,
-                  }}
-                >
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }} numberOfLines={1}>
-                    {eng.label}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: measured ? 20 : 12.5,
-                      fontWeight: '900',
-                      color: measured ? (rate >= 50 ? colors.brand : rate > 0 ? '#D97706' : colors.ink) : colors.muted,
-                    }}
-                  >
-                    {measured ? `${rate}%` : eng.status === 'error' ? 'Error' : 'Not Configured'}
-                  </Text>
-                  <Text style={{ fontSize: 10.5, color: colors.muted, lineHeight: 14 }} numberOfLines={2}>
-                    {measured
-                      ? `${eng.mentionsCount}/${eng.promptsCount} mentions · ${eng.citationsCount} cited`
-                      : eng.note || 'Add API key or scan SERP'}
-                  </Text>
+          {/* Configured Engine Scoreboard */}
+          {(() => {
+            const visibleEngines = report.engineSummaries.filter((eng) => eng.status !== 'not_configured');
+            const unconfiguredLabels = report.engineSummaries
+              .filter((eng) => eng.status === 'not_configured')
+              .map((eng) => eng.label);
+            const listToRender = visibleEngines.length > 0 ? visibleEngines : report.engineSummaries;
+
+            return (
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {listToRender.map((eng) => {
+                    const measured = eng.status === 'measured';
+                    const rate = eng.visibilityRate ?? 0;
+                    return (
+                      <View
+                        key={eng.platform}
+                        style={{
+                          width: listToRender.length === 1 ? '100%' : '48.6%',
+                          backgroundColor: colors.surface,
+                          borderRadius: 13,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: colors.line,
+                          gap: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.ink }} numberOfLines={1}>
+                          {eng.label}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: measured ? 20 : 12.5,
+                            fontWeight: '900',
+                            color: measured ? (rate >= 50 ? colors.brand : rate > 0 ? '#D97706' : colors.ink) : colors.muted,
+                          }}
+                        >
+                          {measured ? `${rate}%` : eng.status === 'error' ? 'Unavailable' : 'Not Active'}
+                        </Text>
+                        <Text style={{ fontSize: 10.5, color: colors.muted, lineHeight: 14 }} numberOfLines={2}>
+                          {measured
+                            ? `${eng.mentionsCount}/${eng.promptsCount} mentions · ${eng.citationsCount} cited`
+                            : eng.note || 'Enable engine or run SERP scan'}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
-              );
-            })}
-          </View>
+                {unconfiguredLabels.length > 0 && visibleEngines.length > 0 ? (
+                  <Text style={{ fontSize: 11, color: colors.muted }}>
+                    Additional engines not yet enabled on this workspace: {unconfiguredLabels.join(', ')}.
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })()}
 
           {/* Local Competitor Comparison Matrix (Previously Omitted on Mobile!) */}
           <Card style={{ gap: 10 }}>
