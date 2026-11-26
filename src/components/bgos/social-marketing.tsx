@@ -5680,7 +5680,7 @@ export function SocialMediaView({
                     <Search className="size-4" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">Keyword Planner &amp; Local Search Ranking</h2>
+                    <h2 className="text-sm font-bold text-foreground">Target Keywords &amp; Local Search Ranking</h2>
                     <p className="text-[11px] text-muted-foreground">
                       {keywordsLoading ? (
                         <Skeleton className="h-3 w-28 inline-block" />
@@ -6001,9 +6001,11 @@ export function SocialMediaView({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-[10px] font-bold">
-                          {kw.score ?? '—'}
-                        </span>
+                        {kw.winnability ? (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                            {kw.winnability.winnabilityTier} · {kw.winnability.winnabilityScore}
+                          </span>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => handleRemoveKeyword(kw.id)}

@@ -170,7 +170,6 @@ const MORE_TOOLS: {
 }[] = [
   { label: 'Inbox', route: '/inbox', icon: 'chat-bubble-outline' },
   { label: 'Leads Pipeline', route: '/leads', icon: 'people-outline' },
-  { label: 'Keyword Planner', route: '/keyword-planner', icon: 'travel-explore' },
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
   { label: 'GBP Hub', route: '/growth', icon: 'hub' },
   { label: 'Page Settings', route: '/booking-page', icon: 'tune' },

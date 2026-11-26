@@ -225,14 +225,8 @@ export default function ToolsScreen() {
           onPress={() => router.push('/qr-standee')}
         />
         <MenuRow
-          title="Keyword Planner"
-          detail="Local SEO ranking discovery for your city"
-          icon="travel-explore"
-          onPress={() => router.push('/keyword-planner')}
-        />
-        <MenuRow
           title="AI Search & SEO Audit"
-          detail="Website audit, Maps Geo-Grid & ChatGPT/Gemini visibility"
+          detail="Target keywords, Website audit, Maps Geo-Grid & AI visibility"
           icon="query-stats"
           onPress={() => router.push('/seo-growth')}
         />

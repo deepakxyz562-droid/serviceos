@@ -6,6 +6,7 @@ import { ErrorNotice, Loading, Screen, colors, ui } from '../src/components/ui';
 import { SeoAuditTab, type AutoOptimizePlan, type PresenceSummary } from '../src/components/gbp/seo-audit-tab';
 import { SeoGridTab, type RankingsResponse } from '../src/components/gbp/seo-grid-tab';
 import { SeoAiVisibilityTab, type AiGapReport } from '../src/components/gbp/seo-ai-visibility-tab';
+import { SeoKeywordsTab, type KeywordPlanResponse } from '../src/components/gbp/seo-keywords-tab';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 
@@ -20,19 +21,26 @@ type AiGapResponse = {
   report?: AiGapReport | null;
 };
 
+type SeoTab = 'audit' | 'keywords' | 'grid' | 'gap';
+
+function resolveSeoTabParam(tab?: string): SeoTab {
+  if (tab === 'keywords' || tab === 'grid' || tab === 'gap') return tab;
+  return 'audit';
+}
+
 export default function SeoGrowthScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const resolvedParamTab = params.tab === 'grid' || params.tab === 'gap' ? params.tab : 'audit';
-  const [tab, setTab] = useState<'audit' | 'grid' | 'gap'>(resolvedParamTab);
+  const [tab, setTab] = useState<SeoTab>(resolveSeoTabParam(params.tab));
 
   useEffect(() => {
-    if (params.tab === 'audit' || params.tab === 'grid' || params.tab === 'gap') {
-      setTab(params.tab);
+    if (params.tab) {
+      setTab(resolveSeoTabParam(params.tab));
     }
   }, [params.tab]);
 
   const auditRes = useResource<SeoAuditResponse>('/api/seo/audit');
+  const keywordsRes = useResource<KeywordPlanResponse>('/api/gbp/keyword-plan', 0, tab === 'keywords');
   const rankingsRes = useResource<RankingsResponse>('/api/gbp/rankings', 0, tab === 'grid' || tab === 'audit');
   const aiGapRes = useResource<AiGapResponse>('/api/seo/ai-competitor-gap', 0, tab === 'gap');
   const autoOptRes = useResource<AutoOptimizePlan>('/api/gbp/auto-optimize', 0, tab === 'audit');
@@ -295,7 +303,7 @@ export default function SeoGrowthScreen() {
   return (
     <Screen
       title="AI Search & SEO"
-      subtitle="Audit · Geo-Grid · AI Visibility"
+      subtitle="Audit · Keywords · Geo-Grid · AI Visibility"
       headerIcon="travel-explore"
       showBack={true}
       onBack={() => {
@@ -305,6 +313,7 @@ export default function SeoGrowthScreen() {
       onRefresh={() =>
         Promise.all([
           auditRes.refresh(),
+          keywordsRes.refresh(),
           rankingsRes.refresh(),
           aiGapRes.refresh(),
           autoOptRes.refresh(),
@@ -410,7 +419,7 @@ export default function SeoGrowthScreen() {
         </View>
       </View>
 
-      {/* Segmented 3-Tab Switcher */}
+      {/* Segmented 4-Tab Switcher */}
       <View
         style={{
           flexDirection: 'row',
@@ -419,17 +428,18 @@ export default function SeoGrowthScreen() {
           padding: 4,
           borderWidth: 1,
           borderColor: colors.line,
-          gap: 4,
+          gap: 3,
         }}
       >
         {[
           {
             id: 'audit' as const,
-            label: 'SEO Audit',
+            label: 'Audit',
             badge: openTasksCount > 0 ? openTasksCount : undefined,
           },
-          { id: 'grid' as const, label: 'Geo-Grid & SERP' },
-          { id: 'gap' as const, label: 'AI Visibility' },
+          { id: 'keywords' as const, label: 'Keywords' },
+          { id: 'grid' as const, label: 'Geo-Grid' },
+          { id: 'gap' as const, label: 'AI Search' },
         ].map((item) => {
           const active = tab === item.id;
           return (
@@ -439,18 +449,18 @@ export default function SeoGrowthScreen() {
               style={{
                 flex: 1,
                 paddingVertical: 9,
-                paddingHorizontal: 6,
+                paddingHorizontal: 4,
                 borderRadius: 10,
                 backgroundColor: active ? colors.brand : 'transparent',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 5,
+                gap: 4,
               }}
             >
               <Text
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 11,
                   fontWeight: '800',
                   color: active ? '#FFFFFF' : colors.ink,
                 }}
@@ -461,9 +471,9 @@ export default function SeoGrowthScreen() {
               {item.badge ? (
                 <View
                   style={{
-                    minWidth: 17,
-                    height: 17,
-                    borderRadius: 9,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
                     paddingHorizontal: 4,
                     backgroundColor: active ? '#FFFFFF' : '#FEF3C7',
                     alignItems: 'center',
@@ -472,7 +482,7 @@ export default function SeoGrowthScreen() {
                 >
                   <Text
                     style={{
-                      fontSize: 9.5,
+                      fontSize: 9,
                       fontWeight: '900',
                       color: active ? colors.brandDark : '#B45309',
                     }}
@@ -509,6 +519,22 @@ export default function SeoGrowthScreen() {
             />
           )}
         </View>
+      )}
+
+      {tab === 'keywords' && (
+        <SeoKeywordsTab
+          planData={keywordsRes.data}
+          loading={keywordsRes.loading}
+          error={keywordsRes.error}
+          onRefresh={keywordsRes.refresh}
+          onScanKeywordOnGrid={(kw) => {
+            setGridKeyword(kw);
+            setTab('grid');
+          }}
+          onServicesUpdated={() => {
+            void auditRes.refresh();
+          }}
+        />
       )}
 
       {tab === 'grid' && (
