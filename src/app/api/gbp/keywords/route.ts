@@ -40,20 +40,32 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
     if (tenant.brandProfile) {
-      await db.brandProfile.update({
-        where: { tenantId: user.tenantId },
-        data: { aiGeneratedSummary: description },
-      });
+      await Promise.all([
+        db.brandProfile.update({
+          where: { tenantId: user.tenantId },
+          data: { aiGeneratedSummary: description },
+        }),
+        db.tenant.update({
+          where: { id: user.tenantId },
+          data: { description },
+        }),
+      ]);
     } else {
-      await db.brandProfile.create({
-        data: {
-          tenantId: user.tenantId,
-          businessName: tenant.name,
-          industry: tenant.brandProfile?.industry || 'Local Services',
-          location: tenant.brandProfile?.location || '',
-          aiGeneratedSummary: description,
-        },
-      });
+      await Promise.all([
+        db.brandProfile.create({
+          data: {
+            tenantId: user.tenantId,
+            businessName: tenant.name,
+            industry: tenant.brandProfile?.industry || 'Local Services',
+            location: tenant.brandProfile?.location || '',
+            aiGeneratedSummary: description,
+          },
+        }),
+        db.tenant.update({
+          where: { id: user.tenantId },
+          data: { description },
+        }),
+      ]);
     }
 
     // 2) Push to the live Google profile when requested + connected

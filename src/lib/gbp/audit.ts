@@ -141,9 +141,36 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
     optimizedServiceDescCount = healed.filter((s) => s.description.length >= 300).length;
     void upsertTenantStructuredServices(tenantId, healed).catch(() => {});
   }
-  const longDescValue =
-    (brand?.aiGeneratedSummary && brand.aiGeneratedSummary.trim()) ||
-    (typeof tenant.description === 'string' ? tenant.description.trim() : '');
+  const descCandidates = [
+    typeof tenant.description === 'string' ? tenant.description.trim() : '',
+    brand?.aiGeneratedSummary && typeof brand.aiGeneratedSummary === 'string' ? brand.aiGeneratedSummary.trim() : '',
+    typeof settings.activeGbpDescription === 'string' ? settings.activeGbpDescription.trim() : '',
+    typeof settings.aboutBusiness === 'string' ? settings.aboutBusiness.trim() : '',
+    typeof settings.description === 'string' ? settings.description.trim() : '',
+    typeof (tenant as any).seoDescription === 'string' ? (tenant as any).seoDescription.trim() : '',
+  ].filter(Boolean);
+
+  // Pick the best / longest populated candidate so a short stub never shadows a valid description
+  descCandidates.sort((a, b) => b.length - a.length);
+  const longDescValue = descCandidates[0] || '';
+
+  // Auto-heal: if we have a valid description candidate and tenant.description is missing or too short, sync it
+  if (longDescValue.length >= 120 && (!tenant.description || tenant.description.trim().length < 100)) {
+    void db.tenant
+      .update({
+        where: { id: tenantId },
+        data: { description: longDescValue },
+      })
+      .catch(() => {});
+    if (brand?.id) {
+      void db.brandProfile
+        .update({
+          where: { id: brand.id },
+          data: { aiGeneratedSummary: longDescValue },
+        })
+        .catch(() => {});
+    }
+  }
 
   const effectivePhone = (
     tenant.phone ||
@@ -228,7 +255,7 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       id: 'optimized_description',
       category: 'SEO Content',
       label: 'SEO-Rich Long Description (Up to 750 Chars)',
-      passed: longDescValue.length >= 250,
+      passed: longDescValue.length >= 150,
       scoreWeight: 15,
       currentValue: longDescValue ? `${longDescValue.length} characters` : 'Empty or too short',
       recommendation: 'Google GBP descriptions support up to 750 characters. Include your city name, Search Terms, and service specialties.',

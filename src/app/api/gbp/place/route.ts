@@ -273,7 +273,16 @@ export async function GET(request: NextRequest) {
       null;
     const fallbackPhone = tenant?.phone || '';
     const fallbackWebsite = tenant?.website || '';
-    const fallbackDescription = tenant?.brandProfile?.aiGeneratedSummary || (tenant as any)?.description || '';
+    const fallbackDescription =
+      [
+        (tenant as any)?.description,
+        tenant?.brandProfile?.aiGeneratedSummary,
+        tenantSettings.activeGbpDescription,
+        tenantSettings.aboutBusiness,
+        tenantSettings.description,
+      ]
+        .filter((d): d is string => typeof d === 'string' && d.trim().length > 0)
+        .sort((a, b) => b.trim().length - a.trim().length)[0] || '';
 
     let regularHours: any = null;
     if ((tenant as any)?.businessHoursJson) {
@@ -959,7 +968,7 @@ export async function PATCH(request: NextRequest) {
             ...(updateData.industry ? { industry: updateData.industry as string } : {}),
             ...(updateData.website !== undefined ? { website: updateData.website as string } : {}),
             ...(updateData.address ? { location: updateData.address as string } : {}),
-            ...(updateData.description !== undefined ? { summary: updateData.description as string } : {}),
+            ...(updateData.description !== undefined ? { aiGeneratedSummary: updateData.description as string } : {}),
           },
         });
       }

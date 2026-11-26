@@ -313,7 +313,15 @@ export async function GET(request: NextRequest) {
 
     // Build consolidated Growth Actions summary
     const checks = auditResult?.checks || [];
-    const missingChecks = checks.filter((c) => !c.passed);
+    const dismissedIds: string[] = Array.isArray(tenantSettings?.gbpGrowthActions?.dismissed)
+      ? tenantSettings.gbpGrowthActions.dismissed
+      : [];
+    const missingChecks = checks.filter(
+      (c) =>
+        !c.passed &&
+        !dismissedIds.includes(c.id) &&
+        !(c.id === 'optimized_description' && (dismissedIds.includes('business_description') || dismissedIds.includes('optimized_description'))),
+    );
     const growthActions = {
       readinessScore: auditResult?.score ?? 78,
       readinessGrade: auditResult?.grade ?? 'B',

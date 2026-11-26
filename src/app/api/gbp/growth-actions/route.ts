@@ -411,7 +411,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. 750-Char Local SEO Description
-    if (!hasDesc) {
+    if (!hasDesc && !state.dismissed.includes('business_description') && !state.dismissed.includes('optimized_description')) {
       autopilotActions.push({
         id: 'business_description',
         category: 'P0_foundation',
@@ -646,7 +646,7 @@ export async function GET(request: NextRequest) {
           { id: 't_svc', label: '300-500 char localized service descriptions', done: !autopilotActions.some((a) => a.id === 'categories_and_services'), cta: 'Auto-Write', actionType: 'add_services' },
           { id: 't_kw', label: 'Target top nearby search queries in profile', done: !autopilotActions.some((a) => a.id === 'local_keywords'), cta: 'Optimize', actionType: 'add_services' },
           { id: 't_grid', label: '5km Geo-Grid rank & competitor spy scan', done: false, cta: 'Scan Grid', actionType: 'scan_grid' },
-          { id: 't_desc', label: '750-char SEO description with city name', done: hasDesc, cta: 'AI Description', actionType: 'auto_optimize_seo' },
+          { id: 't_desc', label: '750-char SEO description with city name', done: hasDesc || state.dismissed.includes('business_description') || state.dismissed.includes('optimized_description'), cta: 'AI Description', actionType: 'auto_optimize_seo' },
           { id: 't_nap', label: 'Website NAP (Name, Address, Phone) consistency', done: true },
         ],
       },
@@ -1391,9 +1391,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── 8. Legacy Task Dismiss / Undismiss ───────────────────────────────────
-    const id = String(body?.id || '');
-    const VALID_IDS = ['complete_profile', 'upload_media', 'approve_post'];
-    if (!VALID_IDS.includes(id)) {
+    const id = String(body?.id || '').trim();
+    if (!id || id.length > 80) {
       return NextResponse.json({ error: 'invalid action id' }, { status: 400 });
     }
     if (!['dismiss', 'undismiss', 'done', 'undone'].includes(action)) {

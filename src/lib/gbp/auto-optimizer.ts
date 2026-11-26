@@ -289,13 +289,21 @@ export async function buildAutoOptimizePlan(
   const keywords = seoCtx?.priorityKeywords || [];
   const services = seoCtx?.seoServices || [];
 
-  const currentDescription =
-    (tenant.brandProfile?.aiGeneratedSummary && tenant.brandProfile.aiGeneratedSummary.trim()) ||
-    (tenant.description && tenant.description.trim()) ||
-    '';
+  const descCandidates = [
+    typeof tenant.description === 'string' ? tenant.description.trim() : '',
+    tenant.brandProfile?.aiGeneratedSummary && typeof tenant.brandProfile.aiGeneratedSummary === 'string'
+      ? tenant.brandProfile.aiGeneratedSummary.trim()
+      : '',
+    typeof settings.activeGbpDescription === 'string' ? settings.activeGbpDescription.trim() : '',
+    typeof settings.aboutBusiness === 'string' ? settings.aboutBusiness.trim() : '',
+    typeof settings.description === 'string' ? settings.description.trim() : '',
+    typeof (tenant as any).seoDescription === 'string' ? (tenant as any).seoDescription.trim() : '',
+  ].filter(Boolean);
+  descCandidates.sort((a, b) => b.length - a.length);
+  const currentDescription = descCandidates[0] || '';
   const descOptimal =
-    currentDescription.length >= 300 &&
-    (!city || currentDescription.toLowerCase().includes(city.toLowerCase()));
+    currentDescription.length >= 200 ||
+    (currentDescription.length >= 150 && (!city || currentDescription.toLowerCase().includes(city.toLowerCase())));
 
   // Extract competitor intelligence behind the scenes (auto-sync silently from Google Places when missing/stale)
   const spyCache = settings.competitorSpyCache;
