@@ -14,7 +14,7 @@ import { getCategoryStorageFolder } from './category-image-engine';
 
 function buildCategoryVisualUrls(folder: string, verifiedList: string[], count = 30): string[] {
   const list = verifiedList.length > 0 ? verifiedList : ['/images/industry/industry.webp'];
-  return Array.from({ length: count }, (_, i) => list[i % list.length]);
+  return Array.from(new Set(list.filter(Boolean)));
 }
 
 const LOCAL_CATEGORY_TEMPLATES: Record<string, string[]> = {
@@ -164,7 +164,7 @@ export function getCategoryVisualPool(industryOrQuery: string): string[] {
   }
   const key = scoreIndustryMatch(industryOrQuery);
   const pool = CURATED_SMB_IMAGE_REGISTRY[key] || CURATED_SMB_IMAGE_REGISTRY.it_software;
-  return [...pool];
+  return Array.from(new Set(pool || []));
 }
 
 export function getFestivalVisualPool(occasionId: string): string[] {

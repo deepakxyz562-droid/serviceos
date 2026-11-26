@@ -71,7 +71,7 @@ export function composeBusinessEdition(input:StudioPosterInput) {
   const safeLogo = isEligibleImage(input.logoUrl) ? input.logoUrl!.trim() : undefined;
   const safePhoto = isEligibleImage(input.photo)
     ? input.photo!.trim()
-    : 'https://serviceos-assets-prod.s3.ap-south-1.amazonaws.com/bgos-business-images/category_library/it_software/it_software-001.webp';
+    : undefined;
 
   function image(id:string,x:number,y:number,width:number,height:number) {
     if(safePhoto) layers.push({...base(id,'image',x,y,width,height),src:safePhoto,photoFit:'cover',cropX:50,cropY:50});

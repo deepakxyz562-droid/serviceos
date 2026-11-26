@@ -260,7 +260,7 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(secShowcase.headline.toLowerCase()).toContain('security');
   }, 25000);
 
-  it('expands core services feed to 100+ category-adapted templates without static 8-item bottleneck', async () => {
+  it('curates core services feed to distinct high-quality templates without 100+ duplicate image bloat', async () => {
     mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
     const { GET } = await import('@/app/api/social/designs/templates/route');
     const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=150');
@@ -268,22 +268,28 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(res.status).toBe(200);
 
     const data = await res.json();
-    expect(data.counts.for_business).toBeGreaterThanOrEqual(100);
-    expect(data.counts.total).toBeGreaterThanOrEqual(200);
-    expect(data.templates.length).toBeGreaterThanOrEqual(100);
+    // Curated to focused, high-impact templates (not bloated to 100+ duplicates)
+    expect(data.counts.for_business).toBeLessThanOrEqual(20);
+    expect(data.counts.for_business).toBeGreaterThanOrEqual(8);
+    expect(data.templates.length).toBeLessThanOrEqual(20);
 
     // Verify all items are for_business and cleanly adapted
     for (const item of data.templates) {
       expect(item.tab).toBe('for_business');
-      expect(item.photoUrl).toBeTruthy();
       expect(item.badge).toBeTruthy();
       // Ensure no artificial source tagging
       expect(item.badge).not.toContain('Pinterest');
       expect(item.badge).not.toContain('Behance');
     }
+
+    // Zero-duplicate invariant: distinct non-empty photos must never repeat
+    const nonFestPhotos = data.templates
+      .filter((t: any) => t.photoUrl && t.photoUrl.trim())
+      .map((t: any) => t.photoUrl);
+    expect(new Set(nonFestPhotos).size).toBe(nonFestPhotos.length);
   });
 
-  it('sources authentic imagery across verified templates with high reliability', async () => {
+  it('sources authentic imagery without repeating images to fill empty spaces', async () => {
     mockGetAuthUser.mockResolvedValueOnce({ id: 'user-1', tenantId: 'tenant-123' });
     const { GET } = await import('@/app/api/social/designs/templates/route');
     const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=50');
@@ -291,10 +297,12 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     expect(res.status).toBe(200);
 
     const data = await res.json();
-    const photos = data.templates.map((t: any) => t.photoUrl);
-    const uniquePhotos = new Set(photos);
-    expect(uniquePhotos.size).toBeGreaterThanOrEqual(1);
-    expect(photos.every((p: string) => typeof p === 'string' && p.length > 0)).toBe(true);
+    const photosWithUrl = data.templates
+      .map((t: any) => t.photoUrl)
+      .filter((p: string) => typeof p === 'string' && p.length > 0);
+    const uniquePhotos = new Set(photosWithUrl);
+    // Every visual must be unique - zero duplicates!
+    expect(uniquePhotos.size).toBe(photosWithUrl.length);
   });
 
   it('supports Fieseros IT & Software merchant: reads GBP account, integrates real added services, uses Unsplash first, and eliminates party/rent/cleaning junk flyers', async () => {
@@ -358,7 +366,66 @@ describe('Business Templates Feed API (/api/social/designs/templates)', () => {
     const validTemplates = data.templates.filter((t: any) =>
       t.photoUrl.includes('/images/bgos/festivals/') || t.photoUrl.includes('/images/bgos/templates/') || t.photoUrl.includes('bgos-business-images') || t.photoUrl.startsWith('https://'),
     );
-    expect(validTemplates.length).toBeGreaterThanOrEqual(15);
+    expect(validTemplates.length).toBeGreaterThanOrEqual(10);
+    // Guarantee zero duplicates among non-festival photos
+    const nonFestPhotos = data.templates
+      .filter((t: any) => t.tab !== 'festivals' && t.photoUrl && t.photoUrl.trim())
+      .map((t: any) => t.photoUrl);
+    expect(new Set(nonFestPhotos).size).toBe(nonFestPhotos.length);
     expect(data.templates.every((t: any) => !t.photoUrl.includes('unsplash.com'))).toBe(true);
+  }, 20000);
+
+  it('guarantees Texture Paint Wala has ZERO duplicate images and curated card counts (no 343 or 121 duplicates)', async () => {
+    tenantStore.name = 'Ne Tech Solution (Texture Paint Wala)';
+    tenantStore.industry = 'Texture Paint Wala';
+    tenantStore.settingsJson = JSON.stringify({
+      activeGbpTitle: 'Ne Tech Solution (Texture Paint Wala)',
+      activeGbpCategory: 'Texture Paint Wala',
+    });
+    brandProfileStore.businessName = 'Ne Tech Solution (Texture Paint Wala)';
+    brandProfileStore.industry = 'Texture Paint Wala';
+    socialAccountStore.value = {
+      id: 'acc-gbp-texture',
+      tenantId: 'tenant-texture',
+      platform: 'googlebusiness',
+      accountName: 'Ne Tech Solution (Texture Paint Wala)',
+      isActive: true,
+      metadata: JSON.stringify({
+        primaryCategory: 'Painting contractor',
+        locationTitle: 'Ne Tech Solution (Texture Paint Wala)',
+        city: 'Patna',
+        phone: '+91 99999 22222',
+      }),
+    };
+
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-texture', tenantId: 'tenant-texture' });
+    const { GET } = await import('@/app/api/social/designs/templates/route');
+    const req = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=all&limit=48');
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+
+    const data = await res.json();
+    // 1. Curated counts: no 121 bloat or 343 bloat
+    expect(data.counts.for_business).toBeLessThanOrEqual(16);
+    expect(data.counts.promotions).toBeLessThanOrEqual(12);
+    expect(data.counts.reviews).toBeLessThanOrEqual(8);
+    expect(data.counts.total).toBeLessThan(200);
+
+    // 2. ZERO duplicate images across non-festival templates
+    const nonFestPhotos = data.templates
+      .filter((t: any) => t.tab !== 'festivals' && t.photoUrl && t.photoUrl.trim())
+      .map((t: any) => t.photoUrl);
+    expect(new Set(nonFestPhotos).size).toBe(nonFestPhotos.length);
+
+    // 3. In for_business tab directly:
+    mockGetAuthUser.mockResolvedValueOnce({ id: 'user-texture', tenantId: 'tenant-texture' });
+    const bizReq = new NextRequest('http://localhost:3000/api/social/designs/templates?tab=for_business&limit=50');
+    const bizRes = await GET(bizReq);
+    const bizData = await bizRes.json();
+    expect(bizData.templates.length).toBeLessThanOrEqual(16);
+    const bizPhotos = bizData.templates
+      .filter((t: any) => t.photoUrl && t.photoUrl.trim())
+      .map((t: any) => t.photoUrl);
+    expect(new Set(bizPhotos).size).toBe(bizPhotos.length);
   }, 20000);
 });

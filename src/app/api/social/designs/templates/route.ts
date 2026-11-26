@@ -477,6 +477,16 @@ export async function GET(request: NextRequest) {
   }
   const visuals = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : getCategoryVisualPool(effectiveCategoryText);
 
+  // Pool of truly distinct photos (never repeat a photo across multiple cards)
+  const distinctVisualPool = Array.from(
+    new Set([
+      ...(userPhotos || []),
+      ...s3CategoryVisuals,
+      ...visuals,
+    ].filter((u): u is string => typeof u === 'string' && u.trim().length > 0))
+  );
+  const usedTemplatePhotos = new Set<string>();
+
   // Find business group in BUSINESS_GROUPS with word boundaries
   const groupNames = Object.keys(BUSINESS_GROUPS) as (keyof typeof BUSINESS_GROUPS)[];
   let matchedGroup: string = groupNames[0];
@@ -531,7 +541,248 @@ export async function GET(request: NextRequest) {
 
   const tradeRelevantPosterTemplates = POSTER_TEMPLATES.filter((tpl) => !isConflictingTemplateForNonFood(tpl));
 
-  // 4. Adapt POSTER_TEMPLATES with strict merchant trade relevance & S3 category photography
+  function curateTabTemplates(
+    items: BusinessTemplateResponseItem[],
+    maxCount: number
+  ): BusinessTemplateResponseItem[] {
+    const curated: BusinessTemplateResponseItem[] = [];
+    const seenIds = new Set<string>();
+
+    for (const item of items) {
+      if (curated.length >= maxCount) break;
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        curated.push(item);
+      }
+    }
+
+    return curated;
+  }
+
+  // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade & real services)
+  const categoryBlueprints = generateCategoryBlueprints({
+    categoryOrTitle: effectiveCategoryText,
+    businessName,
+    city,
+    phone,
+    realServices: realServiceNames,
+  });
+
+  const blueprintResponseItems: BusinessTemplateResponseItem[] = categoryBlueprints
+    .filter((bp) => {
+      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
+        if (bp.aspect !== requestedAspect) return false;
+      }
+      if (requestedTab === 'all') return true;
+      return bp.tab === requestedTab;
+    })
+    .map((bp) => {
+      let cleanPhoto = bp.photoUrl;
+      if (cleanPhoto && !usedTemplatePhotos.has(cleanPhoto)) {
+        usedTemplatePhotos.add(cleanPhoto);
+      } else {
+        const nextUnused = distinctVisualPool.find((u) => !usedTemplatePhotos.has(u));
+        if (nextUnused) {
+          cleanPhoto = nextUnused;
+          usedTemplatePhotos.add(nextUnused);
+        } else {
+          cleanPhoto = '';
+        }
+      }
+      const photoUrl = cleanPhoto ? toAbsoluteUrl(cleanPhoto) : '';
+      let composedDesign: any = null;
+      if (includeDesign) {
+        try {
+          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
+          composedDesign = composeBusinessEdition({
+            layout: fallbackLayout,
+            ratio: '4:5',
+            brand: businessName,
+            headline: bp.headline,
+            subtitle: bp.subtitle,
+            badge: bp.badge,
+            cta: bp.cta,
+            phone,
+            website: website ? website.replace(/^https?:\/\//, '') : undefined,
+            logoUrl: logoUrl || undefined,
+            photo: photoUrl,
+            theme: bp.theme as any,
+          });
+        } catch {}
+      }
+
+      const matchingMsVisual = multiSourceVisuals.find((v) => v.url === cleanPhoto);
+
+      return {
+        id: bp.id,
+        layout: bp.layout,
+        name: bp.headline,
+        headline: bp.headline,
+        subtitle: bp.subtitle,
+        badge: bp.badge,
+        cta: bp.cta,
+        tab: bp.tab,
+        purpose: bp.purpose,
+        theme: bp.theme,
+        aspectRatio: '4:5',
+        photoUrl,
+        photoSource: cleanPhoto ? (matchingMsVisual ? getCreativeSourceLabel(matchingMsVisual.source) : 'Curated') : 'none',
+        photoCredit: cleanPhoto ? (matchingMsVisual?.credit || 'Verified Photo') : undefined,
+        bgPrompt: bp.headline,
+        design: composedDesign,
+        defaultBullets: bp.bullets,
+        targetKeywords: bp.targetKeywords,
+        estimatedViews: 90,
+        defaultCaption: bp.defaultCaption,
+      };
+    });
+
+  // 3c. Fetch curated trade references
+  const curatedList = getCuratedTemplatesForBusiness({
+    categoryOrTitle: effectiveCategoryText,
+    limit: 25,
+  });
+
+  let filteredCuratedList = curatedList;
+  if (searchQuery.trim()) {
+    const qTokens = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    const matchedCurated = curatedList.filter((tpl) => {
+      const text = `${tpl.title} ${tpl.headlinePattern} ${tpl.subtitle || ''} ${tpl.categoryId} ${(tpl.targetKeywords || []).map((k) => k.keyword).join(' ')}`.toLowerCase();
+      return qTokens.some((tok) => text.includes(tok));
+    });
+    if (matchedCurated.length > 0) {
+      filteredCuratedList = matchedCurated;
+    }
+  }
+
+  const curatedResponseItems: BusinessTemplateResponseItem[] = filteredCuratedList
+    .filter((tpl) => {
+      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
+        if (tpl.aspectRatio !== requestedAspect) return false;
+      }
+      if (requestedTab === 'all') return true;
+      if (requestedTab === 'promotions') return tpl.bucketKey === 'special_offers';
+      if (requestedTab === 'festivals') return tpl.bucketKey === 'festivals';
+      if (requestedTab === 'reviews') return tpl.bucketKey === 'new_highlights';
+      if (requestedTab === 'for_business') return tpl.bucketKey === 'services_products';
+      return true;
+    })
+    .map((tpl) => {
+      const formattedHeadline = tpl.headlinePattern
+        .replace(/\{businessName\}/g, businessName)
+        .replace(/\{city\}/g, city);
+      const formattedCaption = tpl.defaultCaption
+        .replace(/\{businessName\}/g, businessName)
+        .replace(/\{city\}/g, city);
+
+      const tab =
+        tpl.bucketKey === 'special_offers'
+          ? 'promotions'
+          : tpl.bucketKey === 'festivals'
+            ? 'festivals'
+            : tpl.bucketKey === 'new_highlights'
+              ? 'reviews'
+              : 'for_business';
+
+      let photoUrl = '';
+      let photoSource: string = 'none';
+      let photoCredit: string | undefined;
+
+      if (tab === 'festivals') {
+        const festText = `${tpl.title} ${tpl.headlinePattern} ${tpl.categoryId}`.toLowerCase();
+        let festOccasion = '';
+        if (/diwali|deepavali/.test(festText)) festOccasion = 'diwali';
+        else if (/holi|gulal/.test(festText)) festOccasion = 'holi';
+        else if (/christmas|xmas/.test(festText)) festOccasion = 'christmas';
+        else if (/new year|nye/.test(festText)) festOccasion = 'new_year';
+        else if (/eid|mubarak/.test(festText)) festOccasion = 'eid';
+        else if (/navratri|durga/.test(festText)) festOccasion = 'navratri';
+        else if (/rakhi|raksha/.test(festText)) festOccasion = 'rakhi';
+        else if (/valentine/.test(festText)) festOccasion = 'valentine';
+        else if (/independence|republic/.test(festText)) festOccasion = 'independence_day';
+        const curatedFestivalPool = festOccasion
+          ? festivalVisualsByOccasion.get(festOccasion)
+          : undefined;
+        if (curatedFestivalPool && curatedFestivalPool.length > 0) {
+          const festivalCounter = (festivalCursor.get(festOccasion) || 0) + 1;
+          festivalCursor.set(festOccasion, festivalCounter);
+          const festivalItem = curatedFestivalPool[(festivalCounter - 1) % curatedFestivalPool.length];
+          if (festivalItem?.url) {
+            photoUrl = toAbsoluteUrl(festivalItem.url);
+            photoSource = getCreativeSourceLabel(festivalItem.source);
+            photoCredit = festivalItem.credit;
+          }
+        }
+      } else {
+        const unusedCurated = distinctVisualPool.find((u) => !usedTemplatePhotos.has(u));
+        if (unusedCurated) {
+          photoUrl = toAbsoluteUrl(unusedCurated);
+          usedTemplatePhotos.add(unusedCurated);
+          photoSource = 'Curated Library';
+          photoCredit = 'Verified Photo';
+        }
+      }
+
+      let composedCuratedDesign: any = null;
+      if (includeDesign) {
+        try {
+          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
+          composedCuratedDesign = composeBusinessEdition({
+            layout: fallbackLayout,
+            ratio: (tpl.aspectRatio as any) || '4:5',
+            brand: businessName,
+            headline: formattedHeadline,
+            subtitle: tpl.subtitle,
+            badge:
+              tpl.bucketKey === 'special_offers'
+                ? 'Special Offer'
+                : tpl.bucketKey === 'festivals'
+                  ? 'Festival'
+                  : 'Featured',
+            cta: tpl.ctaText,
+            phone,
+            website: website ? website.replace(/^https?:\/\//, '') : undefined,
+            logoUrl: logoUrl || undefined,
+            photo: photoUrl,
+            theme: 'emerald',
+          });
+        } catch {}
+      }
+
+      return {
+        id: tpl.id,
+        layout: 'curated_commercial',
+        name: tpl.title,
+        headline: formattedHeadline,
+        subtitle: tpl.subtitle,
+        badge:
+          tpl.bucketKey === 'special_offers'
+            ? 'Special Offer'
+            : tpl.bucketKey === 'festivals'
+              ? 'Festival'
+              : 'Featured',
+        cta: tpl.ctaText,
+        tab,
+        purpose: (tpl.bucketKey === 'special_offers'
+          ? 'Promotion'
+          : tpl.bucketKey === 'festivals'
+            ? 'Festival'
+            : 'Business profile') as Purpose,
+        theme: 'emerald',
+        aspectRatio: tpl.aspectRatio,
+        photoUrl,
+        photoSource,
+        photoCredit,
+        bgPrompt: tpl.title,
+        design: composedCuratedDesign,
+        defaultBullets: tpl.defaultBullets,
+        targetKeywords: tpl.targetKeywords,
+        estimatedViews: tpl.estimatedViews,
+        defaultCaption: formattedCaption,
+      };
+    });
+
+  // 3d. Adapt POSTER_TEMPLATES with strict merchant trade relevance & S3 category photography
   const allAdaptedPosterItems: BusinessTemplateResponseItem[] = tradeRelevantPosterTemplates.map((tpl, idx) => {
     const isFestival =
       tpl.category === 'festival' ||
@@ -594,9 +845,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let assignedPhoto = tpl.photo;
-    let photoSourceKey: string = 'curated';
+    let assignedPhoto = '';
+    let photoSourceKey: string = 'none';
     let photoCredit: string | undefined;
+
     if (isFestival) {
       const textToInspect = `${tpl.occasionId || ''} ${headline} ${tpl.name || ''}`.toLowerCase();
       let occasion = 'diwali';
@@ -616,54 +868,30 @@ export async function GET(request: NextRequest) {
 
       const dynamicFestival = festivalVisualsByOccasion.get(occasion);
       if (dynamicFestival && dynamicFestival.length > 0) {
-          const festivalCounter = (festivalCursor.get(occasion) || 0) + 1;
-          festivalCursor.set(occasion, festivalCounter);
-          const festivalItem = dynamicFestival[(festivalCounter - 1) % dynamicFestival.length];
-          assignedPhoto = festivalItem?.url || assignedPhoto;
-          photoSourceKey = festivalItem?.source || 'curated';
-          photoCredit = festivalItem?.credit;
-        } else if (tpl.photo && (tpl.photo.startsWith('/images/bgos/festivals/') || tpl.photo.startsWith('https://'))) {
-          // Dynamic pool or curated festival catalog asset
-          assignedPhoto = tpl.photo;
-        } else {
-          assignedPhoto = getFestivalFallbackPhoto(occasion, idx);
-        }
+        const festivalCounter = (festivalCursor.get(occasion) || 0) + 1;
+        festivalCursor.set(occasion, festivalCounter);
+        const festivalItem = dynamicFestival[(festivalCounter - 1) % dynamicFestival.length];
+        assignedPhoto = festivalItem?.url || '';
+        photoSourceKey = festivalItem?.source || 'curated';
+        photoCredit = festivalItem?.credit;
+      } else if (tpl.photo && (tpl.photo.startsWith('/images/bgos/festivals/') || tpl.photo.startsWith('https://'))) {
+        assignedPhoto = tpl.photo;
+        photoSourceKey = 'curated';
+      } else {
+        assignedPhoto = getFestivalFallbackPhoto(occasion, idx);
+        photoSourceKey = 'curated';
+      }
     } else {
-      const s3Photo = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)];
-      const multiSourceItem = multiSourceVisuals[idx % multiSourceVisuals.length];
-      assignedPhoto =
-        s3Photo ||
-        multiSourceItem?.url ||
-        visuals[idx % visuals.length] ||
-        tpl.photo;
-      photoSourceKey = s3Photo ? 's3_category_library' : (multiSourceItem?.source || 'curated');
-      photoCredit = s3Photo ? 'Cloudflare AI S3 Library' : multiSourceItem?.credit;
-    }
-
-    // Never allow Unsplash anywhere in creative studio
-    if (assignedPhoto.includes('unsplash.com')) {
-      const s3Fallback = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)] || visuals[idx % Math.max(1, visuals.length)];
-      if (s3Fallback) {
-        assignedPhoto = s3Fallback;
-        photoSourceKey = 's3_category_library';
-        photoCredit = 'Cloudflare AI S3 Library';
+      const unusedPhoto = distinctVisualPool.find((u) => !usedTemplatePhotos.has(u));
+      if (unusedPhoto) {
+        assignedPhoto = unusedPhoto;
+        usedTemplatePhotos.add(unusedPhoto);
+        photoSourceKey = 'curated';
+        photoCredit = 'Verified Photo';
       }
     }
 
-    // Never allow Unsplash or grocery/produce/food photos to leak to non-food / tech merchants
-    if (!isExplicitFoodOrGrocery || isMerchantTech) {
-      const lowerPhoto = assignedPhoto.toLowerCase();
-      if (
-        lowerPhoto.includes('unsplash.com') ||
-        lowerPhoto.includes('1542838132-92c53300491e') ||
-        lowerPhoto.includes('1533900298318-6b8da08a523e') ||
-        /grocery|vegetable|fruit|supermarket|produce|mandi|retail-local-services|food|sweets|mithai|dining|restaurant|cafe|bakery|cake/.test(lowerPhoto)
-      ) {
-        assignedPhoto = s3CategoryVisuals[idx % Math.max(1, s3CategoryVisuals.length)] || visuals[idx % Math.max(1, visuals.length)] || assignedPhoto;
-      }
-    }
-
-    assignedPhoto = toAbsoluteUrl(assignedPhoto);
+    assignedPhoto = assignedPhoto ? toAbsoluteUrl(assignedPhoto) : '';
 
     let badge = tpl.badge || '';
     if (isConflictingBadge || isConflictingIndustry || !badge || badge.length > 20) {
@@ -748,226 +976,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3b. Synthesize First-Class Category Blueprints (Tailored specifically to the GBP trade & real services)
-  const categoryBlueprints = generateCategoryBlueprints({
-    categoryOrTitle: effectiveCategoryText,
-    businessName,
-    city,
-    phone,
-    realServices: realServiceNames,
-  });
-
-  const blueprintResponseItems: BusinessTemplateResponseItem[] = categoryBlueprints
-    .filter((bp) => {
-      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
-        if (bp.aspect !== requestedAspect) return false;
-      }
-      if (requestedTab === 'all') return true;
-      return bp.tab === requestedTab;
-    })
-    .map((bp, bpIdx) => {
-      const s3Photo = s3CategoryVisuals[bpIdx % Math.max(1, s3CategoryVisuals.length)];
-      const msVisual = multiSourceVisuals[bpIdx % multiSourceVisuals.length];
-      let cleanPhoto = s3Photo || msVisual?.url || bp.photoUrl;
-      if (cleanPhoto && cleanPhoto.includes('unsplash.com')) {
-        cleanPhoto = s3Photo || visuals[bpIdx % Math.max(1, visuals.length)] || cleanPhoto;
-      }
-      const photoUrl = toAbsoluteUrl(cleanPhoto);
-      let composedDesign: any = null;
-      if (includeDesign) {
-        try {
-          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
-          composedDesign = composeBusinessEdition({
-            layout: fallbackLayout,
-            ratio: '4:5',
-            brand: businessName,
-            headline: bp.headline,
-            subtitle: bp.subtitle,
-            badge: bp.badge,
-            cta: bp.cta,
-            phone,
-            website: website ? website.replace(/^https?:\/\//, '') : undefined,
-            logoUrl: logoUrl || undefined,
-            photo: photoUrl,
-            theme: bp.theme as any,
-          });
-        } catch {}
-      }
-
-      return {
-        id: bp.id,
-        layout: bp.layout,
-        name: bp.headline,
-        headline: bp.headline,
-        subtitle: bp.subtitle,
-        badge: bp.badge,
-        cta: bp.cta,
-        tab: bp.tab,
-        purpose: bp.purpose,
-        theme: bp.theme,
-        aspectRatio: '4:5',
-        photoUrl,
-        photoSource: getCreativeSourceLabel(msVisual?.source),
-        photoCredit: msVisual?.credit,
-        bgPrompt: bp.headline,
-        design: composedDesign,
-        defaultBullets: bp.bullets,
-        targetKeywords: bp.targetKeywords,
-        estimatedViews: 90,
-        defaultCaption: bp.defaultCaption,
-      };
-    });
-
-  // 3c. Fetch curated trade references
-  const curatedList = getCuratedTemplatesForBusiness({
-    categoryOrTitle: effectiveCategoryText,
-    limit: 25,
-  });
-
-  let filteredCuratedList = curatedList;
-  if (searchQuery.trim()) {
-    const qTokens = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
-    const matchedCurated = curatedList.filter((tpl) => {
-      const text = `${tpl.title} ${tpl.headlinePattern} ${tpl.subtitle || ''} ${tpl.categoryId} ${(tpl.targetKeywords || []).map((k) => k.keyword).join(' ')}`.toLowerCase();
-      return qTokens.some((tok) => text.includes(tok));
-    });
-    if (matchedCurated.length > 0) {
-      filteredCuratedList = matchedCurated;
-    }
-  }
-
-  const curatedResponseItems: BusinessTemplateResponseItem[] = filteredCuratedList
-    .filter((tpl) => {
-      if (requestedAspect && ['1:1', '4:5', '9:16'].includes(requestedAspect)) {
-        if (tpl.aspectRatio !== requestedAspect) return false;
-      }
-      if (requestedTab === 'all') return true;
-      if (requestedTab === 'promotions') return tpl.bucketKey === 'special_offers';
-      if (requestedTab === 'festivals') return tpl.bucketKey === 'festivals';
-      if (requestedTab === 'reviews') return tpl.bucketKey === 'new_highlights';
-      if (requestedTab === 'for_business') return tpl.bucketKey === 'services_products';
-      return true;
-    })
-    .map((tpl) => {
-      const formattedHeadline = tpl.headlinePattern
-        .replace(/\{businessName\}/g, businessName)
-        .replace(/\{city\}/g, city);
-      const formattedCaption = tpl.defaultCaption
-        .replace(/\{businessName\}/g, businessName)
-        .replace(/\{city\}/g, city);
-
-      const tab =
-        tpl.bucketKey === 'special_offers'
-          ? 'promotions'
-          : tpl.bucketKey === 'festivals'
-            ? 'festivals'
-            : tpl.bucketKey === 'new_highlights'
-              ? 'reviews'
-              : 'for_business';
-
-      // Hydrate festival curated references from dynamic festival pools or S3 category visuals
-      let photoUrl = toAbsoluteUrl(tpl.referenceUrl);
-      let photoSource: string = 'Curated';
-      let photoCredit: string | undefined;
-
-      // Replace any Unsplash references with verified S3 Category Library images
-      if (photoUrl.includes('unsplash.com') || (tab !== 'festivals' && s3CategoryVisuals.length > 0)) {
-        const s3Photo =
-          s3CategoryVisuals[filteredCuratedList.indexOf(tpl) % Math.max(1, s3CategoryVisuals.length)] ||
-          visuals[filteredCuratedList.indexOf(tpl) % Math.max(1, visuals.length)];
-        if (s3Photo) {
-          photoUrl = toAbsoluteUrl(s3Photo);
-          photoSource = 'S3 Category Library';
-          photoCredit = 'Cloudflare AI Photorealistic Commercial';
-        }
-      }
-
-      if (tab === 'festivals') {
-        const festText = `${tpl.title} ${tpl.headlinePattern} ${tpl.categoryId}`.toLowerCase();
-        let festOccasion = '';
-        if (/diwali|deepavali/.test(festText)) festOccasion = 'diwali';
-        else if (/holi|gulal/.test(festText)) festOccasion = 'holi';
-        else if (/christmas|xmas/.test(festText)) festOccasion = 'christmas';
-        else if (/new year|nye/.test(festText)) festOccasion = 'new_year';
-        else if (/eid|mubarak/.test(festText)) festOccasion = 'eid';
-        else if (/navratri|durga/.test(festText)) festOccasion = 'navratri';
-        else if (/rakhi|raksha/.test(festText)) festOccasion = 'rakhi';
-        else if (/valentine/.test(festText)) festOccasion = 'valentine';
-        else if (/independence|republic/.test(festText)) festOccasion = 'independence_day';
-        const curatedFestivalPool = festOccasion
-          ? festivalVisualsByOccasion.get(festOccasion)
-          : undefined;
-        if (curatedFestivalPool && curatedFestivalPool.length > 0) {
-          const festivalCounter = (festivalCursor.get(festOccasion) || 0) + 1;
-          festivalCursor.set(festOccasion, festivalCounter);
-          const festivalItem = curatedFestivalPool[(festivalCounter - 1) % curatedFestivalPool.length];
-          if (festivalItem?.url) {
-            photoUrl = toAbsoluteUrl(festivalItem.url);
-            photoSource = getCreativeSourceLabel(festivalItem.source);
-            photoCredit = festivalItem.credit;
-          }
-        }
-      }
-      let composedCuratedDesign: any = null;
-      if (includeDesign) {
-        try {
-          const fallbackLayout = String(BUSINESS_EDITIONS[0]?.layout || 'business_0');
-          composedCuratedDesign = composeBusinessEdition({
-            layout: fallbackLayout,
-            ratio: (tpl.aspectRatio as any) || '4:5',
-            brand: businessName,
-            headline: formattedHeadline,
-            subtitle: tpl.subtitle,
-            badge:
-              tpl.bucketKey === 'special_offers'
-                ? 'Special Offer'
-                : tpl.bucketKey === 'festivals'
-                  ? 'Festival'
-                  : 'Featured',
-            cta: tpl.ctaText,
-            phone,
-            website: website ? website.replace(/^https?:\/\//, '') : undefined,
-            logoUrl: logoUrl || undefined,
-            photo: photoUrl,
-            theme: 'emerald',
-          });
-        } catch {}
-      }
-
-      return {
-        id: tpl.id,
-        layout: 'curated_commercial',
-        name: tpl.title,
-        headline: formattedHeadline,
-        subtitle: tpl.subtitle,
-        badge:
-          tpl.bucketKey === 'special_offers'
-            ? 'Special Offer'
-            : tpl.bucketKey === 'festivals'
-              ? 'Festival'
-              : 'Featured',
-        cta: tpl.ctaText,
-        tab,
-        purpose: (tpl.bucketKey === 'special_offers'
-          ? 'Promotion'
-          : tpl.bucketKey === 'festivals'
-            ? 'Festival'
-            : 'Business profile') as Purpose,
-        theme: 'emerald',
-        aspectRatio: tpl.aspectRatio,
-        photoUrl,
-        photoSource,
-        photoCredit,
-        bgPrompt: tpl.title,
-        design: composedCuratedDesign,
-        defaultBullets: tpl.defaultBullets,
-        targetKeywords: tpl.targetKeywords,
-        estimatedViews: tpl.estimatedViews,
-        defaultCaption: formattedCaption,
-      };
-    });
-
-  // Group all collections by tab with priority sorting for trade matches
+  // Group and curate collections by tab with priority sorting for trade matches
   const isTradeMatch = (item: BusinessTemplateResponseItem): boolean => {
     return isMerchantTrade(item.name) || isMerchantTrade(item.headline);
   };
@@ -976,17 +985,23 @@ export async function GET(request: NextRequest) {
     .filter((t) => t.tab === 'for_business')
     .sort((a, b) => Number(isTradeMatch(b)) - Number(isTradeMatch(a)));
 
-  const forBusinessTemplates: BusinessTemplateResponseItem[] = [
-    ...blueprintResponseItems.filter((bp) => bp.tab === 'for_business'),
-    ...curatedResponseItems.filter((cr) => cr.tab === 'for_business'),
-    ...adaptedForBusiness,
-  ];
+  const forBusinessTemplates: BusinessTemplateResponseItem[] = curateTabTemplates(
+    [
+      ...blueprintResponseItems.filter((bp) => bp.tab === 'for_business'),
+      ...curatedResponseItems.filter((cr) => cr.tab === 'for_business'),
+      ...adaptedForBusiness,
+    ],
+    16
+  );
 
-  const promotionsTemplates: BusinessTemplateResponseItem[] = [
-    ...blueprintResponseItems.filter((bp) => bp.tab === 'promotions'),
-    ...curatedResponseItems.filter((cr) => cr.tab === 'promotions'),
-    ...filteredPosterItems.filter((t) => t.tab === 'promotions'),
-  ];
+  const promotionsTemplates: BusinessTemplateResponseItem[] = curateTabTemplates(
+    [
+      ...blueprintResponseItems.filter((bp) => bp.tab === 'promotions'),
+      ...curatedResponseItems.filter((cr) => cr.tab === 'promotions'),
+      ...filteredPosterItems.filter((t) => t.tab === 'promotions'),
+    ],
+    12
+  );
 
   const requestedFestival = searchParams.get('festival') || 'all';
 
@@ -1048,11 +1063,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const reviewsTemplates: BusinessTemplateResponseItem[] = [
-    ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
-    ...curatedResponseItems.filter((cr) => cr.tab === 'reviews'),
-    ...filteredPosterItems.filter((t) => t.tab === 'reviews'),
-  ];
+  const reviewsTemplates: BusinessTemplateResponseItem[] = curateTabTemplates(
+    [
+      ...blueprintResponseItems.filter((bp) => bp.tab === 'reviews'),
+      ...curatedResponseItems.filter((cr) => cr.tab === 'reviews'),
+      ...filteredPosterItems.filter((t) => t.tab === 'reviews'),
+    ],
+    8
+  );
 
   let selectedTemplates: BusinessTemplateResponseItem[] = [];
 
@@ -1066,7 +1084,7 @@ export async function GET(request: NextRequest) {
     selectedTemplates = reviewsTemplates.slice(0, limit);
   } else {
     // 'all': Balanced presentation across categories
-    const perCategory = Math.max(10, Math.floor(limit / 4));
+    const perCategory = Math.max(8, Math.floor(limit / 4));
     selectedTemplates = [
       ...forBusinessTemplates.slice(0, perCategory),
       ...promotionsTemplates.slice(0, perCategory),
@@ -1075,32 +1093,19 @@ export async function GET(request: NextRequest) {
     ].slice(0, limit);
   }
 
-  // Multi-card window deduplication:
-  // Ensure cards within a 10-card distance never display the identical photoUrl.
-  // Instead of dropping templates, rotate distinct photos across the templates!
-  const distinctPool = s3CategoryVisuals.length > 0 ? s3CategoryVisuals : visuals;
-  if (distinctPool.length > 0) {
-    const windowSize = Math.min(10, Math.floor(distinctPool.length / 2));
-    const recentWindow: string[] = [];
-    let poolCursor = 0;
-
-    for (let i = 0; i < selectedTemplates.length; i++) {
-      let currentPhoto = selectedTemplates[i].photoUrl;
-      if (recentWindow.includes(currentPhoto)) {
-        let replacement = distinctPool[poolCursor % distinctPool.length];
-        let attempts = 0;
-        while (recentWindow.includes(replacement) && attempts < distinctPool.length) {
-          poolCursor++;
-          replacement = distinctPool[poolCursor % distinctPool.length];
-          attempts++;
-        }
-        poolCursor++;
-        selectedTemplates[i].photoUrl = replacement;
-        currentPhoto = replacement;
-      }
-      recentWindow.push(currentPhoto);
-      if (recentWindow.length > windowSize) {
-        recentWindow.shift();
+  // Strict Zero-Duplicate Enforcement across non-festival cards:
+  // Non-festival cards must never reuse an identical photo across the feed.
+  // If distinct authentic photos are exhausted, cards render clean graphic layouts.
+  const seenNonFestivalPhotos = new Set<string>();
+  for (const tpl of selectedTemplates) {
+    if (tpl.tab === 'festivals') continue;
+    if (tpl.photoUrl) {
+      if (seenNonFestivalPhotos.has(tpl.photoUrl)) {
+        tpl.photoUrl = '';
+        tpl.photoSource = 'none';
+        tpl.photoCredit = undefined;
+      } else {
+        seenNonFestivalPhotos.add(tpl.photoUrl);
       }
     }
   }

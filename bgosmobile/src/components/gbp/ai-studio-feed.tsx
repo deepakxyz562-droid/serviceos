@@ -1157,63 +1157,111 @@ export function AiStudioFeed({
               )}
             </View>
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => onSelectTemplate(item)}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] },
-              ]}
-            >
-              {/* Background Photo */}
-              <Image
-                source={resolveTemplateSource(item.photoUrl)}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-
-              {/* Brand Frame: Top Monogram/Logo Strip */}
-              {brandFrame && (
-                <View style={styles.cardBrandBanner}>
-                  <View style={styles.cardMonogramBox}>
-                    {logoUrl ? (
-                      <Image source={{ uri: logoUrl }} style={styles.cardLogoImg} resizeMode="contain" />
-                    ) : (
-                      <Text style={styles.cardMonogramChar}>
-                        {(businessName || 'B').charAt(0).toUpperCase()}
-                      </Text>
-                    )}
+          renderItem={({ item }) => {
+            const resolvedImg = resolveTemplateSource(item.photoUrl);
+            return (
+              <Pressable
+                onPress={() => onSelectTemplate(item)}
+                style={({ pressed }) => [
+                  styles.card,
+                  pressed && { opacity: 0.92, transform: [{ scale: 0.985 }] },
+                ]}
+              >
+                {/* Visual Layer: Authentic Photo if present, else Clean Graphic Layout */}
+                {resolvedImg ? (
+                  <Image
+                    source={resolvedImg}
+                    style={styles.cardImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.graphicCardBg,
+                      item.tab === 'promotions'
+                        ? styles.graphicCardPromo
+                        : item.tab === 'reviews'
+                          ? styles.graphicCardReview
+                          : item.tab === 'festivals'
+                            ? styles.graphicCardFestival
+                            : styles.graphicCardBusiness,
+                    ]}
+                  >
+                    <View style={styles.graphicCardInner}>
+                      <View style={styles.graphicIconCircle}>
+                        <MaterialIcons
+                          name={
+                            item.tab === 'promotions'
+                              ? 'local-offer'
+                              : item.tab === 'reviews'
+                                ? 'star'
+                                : item.tab === 'festivals'
+                                  ? 'celebration'
+                                  : 'verified'
+                          }
+                          size={24}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                      {item.tab === 'reviews' && (
+                        <View style={styles.reviewStarsRow}>
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <MaterialIcons key={s} name="star" size={13} color="#FBBF24" />
+                          ))}
+                        </View>
+                      )}
+                      {item.subtitle ? (
+                        <Text numberOfLines={3} style={styles.graphicCardSubtitle}>
+                          {item.subtitle}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                  <Text numberOfLines={1} style={styles.cardBrandTitle}>
-                    {businessName}
+                )}
+
+                {/* Brand Frame: Top Monogram/Logo Strip */}
+                {brandFrame && (
+                  <View style={styles.cardBrandBanner}>
+                    <View style={styles.cardMonogramBox}>
+                      {logoUrl ? (
+                        <Image source={{ uri: logoUrl }} style={styles.cardLogoImg} resizeMode="contain" />
+                      ) : (
+                        <Text style={styles.cardMonogramChar}>
+                          {(businessName || 'B').charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <Text numberOfLines={1} style={styles.cardBrandTitle}>
+                      {businessName}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Badge Overlay */}
+                <View style={styles.cardBadge}>
+                  <Text numberOfLines={1} style={styles.cardBadgeText}>
+                    {item.badge || 'PRO'}
                   </Text>
                 </View>
-              )}
 
-              {/* Badge Overlay */}
-              <View style={styles.cardBadge}>
-                <Text numberOfLines={1} style={styles.cardBadgeText}>
-                  {item.badge || 'PRO'}
-                </Text>
-              </View>
-
-              {/* Sleek Bottom Scrim with Headline & 1-Tap Use Pill */}
-              <View style={styles.cardContentOverlay}>
-                <Text numberOfLines={2} style={styles.cardHeadline}>
-                  {item.headline}
-                </Text>
-                <View style={styles.cardBottomRow}>
-                  <Text numberOfLines={1} style={styles.cardFormatTag}>
-                    {item.aspectRatio === '9:16' ? '📱 Story' : item.aspectRatio === '1:1' ? '◾ Square' : '🖼️ Post'}
+                {/* Sleek Bottom Scrim with Headline & 1-Tap Use Pill */}
+                <View style={styles.cardContentOverlay}>
+                  <Text numberOfLines={2} style={styles.cardHeadline}>
+                    {item.headline}
                   </Text>
-                  <View style={styles.useDesignBtn}>
-                    <Text style={styles.useDesignText}>Use</Text>
-                    <MaterialIcons name="arrow-forward" size={12} color="#FFFFFF" />
+                  <View style={styles.cardBottomRow}>
+                    <Text numberOfLines={1} style={styles.cardFormatTag}>
+                      {item.aspectRatio === '9:16' ? '📱 Story' : item.aspectRatio === '1:1' ? '◾ Square' : '🖼️ Post'}
+                    </Text>
+                    <View style={styles.useDesignBtn}>
+                      <Text style={styles.useDesignText}>Use</Text>
+                      <MaterialIcons name="arrow-forward" size={12} color="#FFFFFF" />
+                    </View>
                   </View>
                 </View>
-              </View>
-            </Pressable>
-          )}
+              </Pressable>
+            );
+          }}
         />
       )}
     </View>
@@ -1784,6 +1832,54 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
+  },
+  graphicCardBg: {
+    width: '100%',
+    height: '100%',
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  graphicCardPromo: {
+    backgroundColor: '#312E81',
+  },
+  graphicCardReview: {
+    backgroundColor: '#1E1B4B',
+  },
+  graphicCardFestival: {
+    backgroundColor: '#7F1D1D',
+  },
+  graphicCardBusiness: {
+    backgroundColor: '#064E3B',
+  },
+  graphicCardInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 8,
+    marginTop: -28,
+  },
+  graphicIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 2,
+  },
+  graphicCardSubtitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   cardBadge: {
     position: 'absolute',

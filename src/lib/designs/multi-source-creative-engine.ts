@@ -175,36 +175,8 @@ export async function getMultiSourceCategoryVisuals(
 
   if (pool.length === 0) return [];
 
-  // Guaranteed coprime stride: visits every element in the pool once before repeating
-  function gcd(a: number, b: number): number {
-    while (b) {
-      const t = b;
-      b = a % b;
-      a = t;
-    }
-    return a;
-  }
-
-  function getCoprimeStride(len: number): number {
-    if (len <= 2) return 1;
-    for (let s = Math.max(3, Math.floor(len / 2)); s < len; s++) {
-      if (gcd(s, len) === 1) return s;
-    }
-    return 1;
-  }
-
-  const stride = getCoprimeStride(pool.length);
-  const out: MultiSourceCreativeVisual[] = [];
-  let lastIdx = -1;
-  for (let i = 0; i < requestedCount; i++) {
-    let idx = (i * stride + Math.floor(i / pool.length)) % pool.length;
-    if (pool.length > 1 && idx === lastIdx) {
-      idx = (idx + 1) % pool.length;
-    }
-    lastIdx = idx;
-    out.push(pool[idx]);
-  }
-  return out;
+  // Return distinct visuals only — never cycle or duplicate the same photo across templates
+  return pool.slice(0, requestedCount);
 }
 
 /**

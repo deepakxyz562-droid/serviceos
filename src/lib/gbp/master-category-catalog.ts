@@ -226,10 +226,14 @@ export function generateCategoryBlueprints(params: {
   const displayName = category?.displayName || (context.detectedSubject ? `${context.detectedSubject} Service` : categoryOrTitle.trim());
 
   const visuals = getCategoryVisualPool(categoryOrTitle);
-
-  const primaryPhoto = visuals[0];
-  const secondaryPhoto = visuals[1] || visuals[0];
-  const tertiaryPhoto = visuals[2] || visuals[0];
+  const distinctVisuals = Array.from(new Set(visuals.filter(Boolean)));
+  let photoCursor = 0;
+  const getNextUniquePhoto = (): string => {
+    if (photoCursor < distinctVisuals.length) {
+      return distinctVisuals[photoCursor++];
+    }
+    return '';
+  };
 
   const isServiceTrade =
     /service|agency|consult|guard|security|law|tech|clean|repair|contractor|salon|clinic|driver|transport|hire|rental|care|app|hospital|education|academy|advisory/i.test(
@@ -299,7 +303,7 @@ export function generateCategoryBlueprints(params: {
       badge: 'CORE SERVICE',
       cta: isServiceTrade ? 'REQUEST CONSULTATION' : 'GET QUOTE',
       bullets: formattedBullets,
-      photoUrl: visuals[sIdx % visuals.length] || primaryPhoto,
+      photoUrl: getNextUniquePhoto(),
       targetKeywords: [
         { keyword: `${sName.toLowerCase()} in ${city}`, volume: 450 },
         { keyword: `${sName.toLowerCase()} company`, volume: 600 },
@@ -366,7 +370,7 @@ export function generateCategoryBlueprints(params: {
       badge: 'SPECIAL OFFER',
       cta: category?.defaultHooks.cta || (isServiceTrade ? 'BOOK NOW' : 'CLAIM OFFER NOW'),
       bullets: formattedBullets,
-      photoUrl: primaryPhoto,
+      photoUrl: getNextUniquePhoto(),
       targetKeywords: (category?.customerIntentKeywords || []).slice(0, 3).map((k) => ({
         keyword: k.replace(/\{city\}/g, city),
         volume: 850,
@@ -394,7 +398,7 @@ export function generateCategoryBlueprints(params: {
       badge: 'FEATURED SHOWCASE',
       cta: isServiceTrade ? 'HIRE NOW' : 'EXPLORE CATALOG',
       bullets: formattedBullets,
-      photoUrl: secondaryPhoto,
+      photoUrl: getNextUniquePhoto(),
       targetKeywords: (category?.customerIntentKeywords || []).slice(1, 4).map((k) => ({
         keyword: k.replace(/\{city\}/g, city),
         volume: 620,
@@ -422,7 +426,7 @@ export function generateCategoryBlueprints(params: {
         'Transparent Upfront Pricing',
         'Dedicated After-Sales Support',
       ],
-      photoUrl: tertiaryPhoto,
+      photoUrl: getNextUniquePhoto(),
       targetKeywords: [
         { keyword: `best ${displayName.toLowerCase()} in ${city}`, volume: 1200 },
         { keyword: `top rated ${displayName.toLowerCase()}`, volume: 450 },
