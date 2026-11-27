@@ -58,6 +58,7 @@ interface AiStudioFeedProps {
   city?: string;
   phone?: string;
   logoUrl?: string | null;
+  embedded?: boolean;
   onSelectTemplate: (template: StudioTemplateItem) => void;
   onPublished?: (message: string) => void | Promise<void>;
   onBack: () => void;
@@ -76,6 +77,7 @@ export function AiStudioFeed({
   industry,
   city = 'Patna',
   phone,
+  embedded = false,
   onSelectTemplate,
   onPublished,
   onBack,
@@ -616,7 +618,15 @@ export function AiStudioFeed({
   return (
     <View style={styles.container}>
       {/* ── TOP NAV BAR (SAFE AREA COMPLIANT) ── */}
-      <View style={[styles.navBar, { paddingTop: insets.top, height: 56 + insets.top }]}>
+      <View
+        style={[
+          styles.navBar,
+          {
+            paddingTop: embedded ? 0 : insets.top,
+            height: 52 + (embedded ? 0 : insets.top),
+          },
+        ]}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to Media"
@@ -1182,6 +1192,11 @@ export function AiStudioFeed({
             if (!resolvedImg) return null;
             return (
               <Pressable
+                onPressIn={() => {
+                  if (resolvedImg && typeof resolvedImg === 'object' && resolvedImg.uri) {
+                    void Image.prefetch(resolvedImg.uri);
+                  }
+                }}
                 onPress={() => onSelectTemplate(item)}
                 style={({ pressed }) => [
                   styles.card,

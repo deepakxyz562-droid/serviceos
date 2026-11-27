@@ -188,6 +188,7 @@ export function MediaMetadataSheet({
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
   const [activeUploadItem, setActiveUploadItem] = useState<PendingUpload | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [heroImageLoading, setHeroImageLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
@@ -714,18 +715,58 @@ export function MediaMetadataSheet({
               {/* ── CARD 1: THE BRANDED POSTER / IMAGE WITH OVERLAY & BRANDING SWITCH ── */}
               <View style={styles.posterCard}>
                 <View style={styles.photoCanvas}>
-                  {currentPhotoUrl ? (
-                    <Image
-                      source={resolveTemplateSource(currentPhotoUrl)}
-                      style={styles.heroPosterImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.emptyPhotoBox}>
-                      <MaterialIcons name="photo" size={48} color="#94A3B8" />
-                      <Text style={styles.emptyPhotoText}>Select a template or upload a photo</Text>
-                    </View>
-                  )}
+                  {(() => {
+                    const effectivePhoto =
+                      currentPhotoUrl ||
+                      (selectedTemplate?.photoUrl || selectedTemplate?.previewUrl || selectedTemplate?.url
+                        ? resolvePhotoUrl(
+                            selectedTemplate.photoUrl || selectedTemplate.previewUrl || selectedTemplate.url,
+                          )
+                        : null) ||
+                      (editingItem?.thumbnailUrl || editingItem?.url
+                        ? resolvePhotoUrl(editingItem.thumbnailUrl || editingItem.url)
+                        : null);
+                    const resolvedSrc = effectivePhoto ? resolveTemplateSource(effectivePhoto) : null;
+                    if (!resolvedSrc) {
+                      return (
+                        <View style={styles.emptyPhotoBox}>
+                          <MaterialIcons name="photo" size={48} color="#94A3B8" />
+                          <Text style={styles.emptyPhotoText}>Select a template or upload a photo</Text>
+                        </View>
+                      );
+                    }
+                    return (
+                      <>
+                        <Image
+                          source={resolvedSrc}
+                          style={styles.heroPosterImage}
+                          resizeMode="cover"
+                          onLoadStart={() => {
+                            if (typeof resolvedSrc === 'object' && resolvedSrc?.uri) {
+                              setHeroImageLoading(true);
+                            }
+                          }}
+                          onLoadEnd={() => setHeroImageLoading(false)}
+                        />
+                        {heroImageLoading ? (
+                          <View
+                            pointerEvents="none"
+                            style={{
+                              position: 'absolute',
+                              top: 10,
+                              right: 10,
+                              backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                              borderRadius: 14,
+                              padding: 6,
+                              zIndex: 5,
+                            }}
+                          >
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          </View>
+                        ) : null}
+                      </>
+                    );
+                  })()}
 
                   {/* Top Brand Banner Overlay (Toggle-based) */}
                   {addBranding && (

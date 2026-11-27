@@ -264,6 +264,7 @@ export function MediaHubPanel({
     return (
       <View style={styles.screenWrapper}>
         <AiStudioFeed
+          embedded
           businessName={profileName}
           industry={
             gbpPlace.data?.place?.category ||

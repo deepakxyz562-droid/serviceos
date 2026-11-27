@@ -126,36 +126,56 @@ export function InboxView({ embedded = false }: { embedded?: boolean }) {
         </Pressable>
       }
     >
-      {/* 3 Top Segment Switchers: Inbox, Engage (Visitors), Tickets */}
+      {/* 3 Equal-Width Top Segment Switchers: Conversations, Engage, Tickets */}
       <View
-        style={[
-          ui.row,
-          { justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
-          activeTab === 'inbox' ? { paddingHorizontal: 16, paddingTop: 12 } : undefined,
-        ]}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          paddingHorizontal: activeTab === 'inbox' ? 16 : 0,
+          paddingTop: activeTab === 'inbox' ? 10 : 0,
+          paddingBottom: 6,
+        }}
       >
-        <Chip
-          label="Conversations"
-          count={rawList.length}
-          selected={activeTab === 'inbox'}
-          onPress={() => setActiveTab('inbox')}
-        />
-        <Chip
-          label="Engage (Visitors)"
-          selected={activeTab === 'engage'}
-          onPress={() => setActiveTab('engage')}
-        />
-        <Chip
-          label="Tickets"
-          selected={activeTab === 'tickets'}
-          onPress={() => setActiveTab('tickets')}
-        />
-        {embedded ? (
-          <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
-            <MaterialIcons name="share" size={15} color={colors.brand} />
-            <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Chat Link</Text>
-          </Pressable>
-        ) : null}
+        {(
+          [
+            { key: 'inbox', label: `Conversations (${rawList.length})` },
+            { key: 'engage', label: 'Engage' },
+            { key: 'tickets', label: 'Tickets' },
+          ] as const
+        ).map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              onPress={() => setActiveTab(tab.key)}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 8,
+                paddingHorizontal: 8,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? colors.brand : colors.line,
+                backgroundColor: active ? colors.brand : colors.surface,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: active ? '#FFFFFF' : colors.muted,
+                }}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {activeTab !== 'inbox' ? <ErrorNotice message={inbox.error} retry={inbox.refresh} /> : null}
@@ -181,6 +201,17 @@ export function InboxView({ embedded = false }: { embedded?: boolean }) {
           ListHeaderComponent={
             <View style={{ gap: 10, marginBottom: 4 }}>
               <ErrorNotice message={inbox.error} retry={inbox.refresh} />
+              {embedded ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.muted }}>
+                    Recent customer threads
+                  </Text>
+                  <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
+                    <MaterialIcons name="share" size={15} color={colors.brand} />
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Share Chat Link</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               <Field
                 label="Search conversations"
                 value={search}

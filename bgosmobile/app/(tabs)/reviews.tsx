@@ -1538,10 +1538,14 @@ export default function ReviewRepliesScreen() {
                   gap: 8,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                   <MaterialIcons name="verified" size={16} color="#16A34A" />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>
-                    All reviews answered on Google Maps! 🎉
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={{ fontSize: 11.5, fontWeight: '700', color: '#166534', flex: 1 }}
+                  >
+                    All Google reviews answered!
                   </Text>
                 </View>
                 <Pressable

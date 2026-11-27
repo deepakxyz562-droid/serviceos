@@ -215,7 +215,13 @@ export function WorkspaceSwitcherSection({
                       </Text>
                     </View>
                     <Text style={{ fontSize: 10.5, color: '#64748B' }} numberOfLines={1}>
-                      /{ws.slug}
+                      {ws.industry
+                        ? ws.industry
+                        : /^(business|workspace|owner)(-[a-z0-9]+)?$|^[a-z0-9-]+-workspace$/i.test(ws.slug || '')
+                          ? ws.boundGbpLocationId
+                            ? 'Google Profile Linked'
+                            : 'Primary Workspace'
+                          : `/${ws.slug}`}
                     </Text>
                   </View>
                 </View>

@@ -277,8 +277,13 @@ export function PostCard({
   const targets = dedupePublishTargets(post.publishTargets);
   const googlePostUrl = getGooglePostUrl(post);
 
+  const heroThumbUri = optimizeThumbnailUrl(rawMedia, 960);
+
   return (
     <Pressable
+      onPressIn={() => {
+        if (heroThumbUri) void Image.prefetch(heroThumbUri);
+      }}
       onPress={onPress}
       style={({ pressed }) => [styles.postCard, pressed && { opacity: 0.94 }]}
     >
@@ -647,6 +652,7 @@ export function PostDetailModal({
     isTrial: false,
   });
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+  const [heroLoading, setHeroLoading] = useState(false);
   const [isGeneratingAiPhoto, setIsGeneratingAiPhoto] = useState(false);
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
 
@@ -1344,14 +1350,47 @@ export function PostDetailModal({
           ) : (
             /* ── VIEW POST MODE (Matching Screenshots 1 & 3) ── */
             <>
-              {/* Full Hero Image */}
+              {/* Full Hero Image (instant cached 360px underlay + high-res overlay) */}
               {currentMediaUrl || media ? (
                 <View style={styles.heroImageWrap}>
-                  <Image
-                    source={{ uri: optimizeThumbnailUrl(currentMediaUrl || media, 960) || currentMediaUrl || media }}
-                    style={styles.heroImage}
-                    resizeMode="cover"
-                  />
+                  {(() => {
+                    const activeRaw = currentMediaUrl || media;
+                    const cachedLow = optimizeThumbnailUrl(activeRaw, 360) || activeRaw;
+                    const highRes = optimizeThumbnailUrl(activeRaw, 960) || activeRaw;
+                    return (
+                      <>
+                        {cachedLow && cachedLow !== highRes ? (
+                          <Image
+                            source={{ uri: cachedLow }}
+                            style={[styles.heroImage, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+                        <Image
+                          source={{ uri: highRes }}
+                          style={styles.heroImage}
+                          resizeMode="cover"
+                          onLoadStart={() => setHeroLoading(true)}
+                          onLoadEnd={() => setHeroLoading(false)}
+                        />
+                        {heroLoading ? (
+                          <View
+                            pointerEvents="none"
+                            style={{
+                              position: 'absolute',
+                              top: 12,
+                              right: 12,
+                              backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                              borderRadius: 14,
+                              padding: 6,
+                            }}
+                          >
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          </View>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                   <Pressable
                     style={styles.changePhotoFloatingBtn}
                     onPress={openPhotoSwitcher}

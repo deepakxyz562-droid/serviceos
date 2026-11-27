@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantId = user.tenantId;
+    const workspaceId = user.workspaceId || null;
     const forceRefresh = request.nextUrl.searchParams.get('refresh') === 'true';
     const ifNoneMatch = request.headers.get('if-none-match');
 
