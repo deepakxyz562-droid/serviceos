@@ -176,4 +176,47 @@ describe('BGOS Email Deliverability & Performance Guardrails', () => {
     const androidJson = await androidRes.json();
     expect(Array.isArray(androidJson)).toBe(true);
   });
+
+  it('builds Android intent:// + Google Play fallback on /open while keeping iOS and Desktop safe', async () => {
+    const { buildBgosOpenHandoffConfig } = await import('@/lib/bgos/open-handoff');
+
+    const android = buildBgosOpenHandoffConfig({
+      view: 'reviews',
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+    });
+    expect(android.platform).toBe('android');
+    expect(android.isMobile).toBe(true);
+    expect(android.appSchemeUrl).toBe('bgos://open?view=reviews');
+    expect(android.androidIntentUrl).toContain('intent://open?view=reviews#Intent;scheme=bgos;package=com.fieseros.bgos;');
+    expect(android.androidIntentUrl).toContain('S.browser_fallback_url=');
+    expect(android.storeUrl).toContain('https://play.google.com/store/apps/details?id=com.fieseros.bgos');
+    expect(android.storeUrl).toContain('referrer=');
+    expect(android.storeLabel).toBe('Install BGOS on Google Play');
+
+    const iosNoStore = buildBgosOpenHandoffConfig({
+      view: 'socialMedia',
+      socialTab: 'ai-content',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+      iosAppStoreUrl: '',
+    });
+    expect(iosNoStore.platform).toBe('ios');
+    expect(iosNoStore.storeUrl).toBeNull();
+    expect(iosNoStore.appSchemeUrl).toBe('bgos://open?view=socialMedia&socialTab=ai-content');
+
+    const iosWithStore = buildBgosOpenHandoffConfig({
+      view: 'photos',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)',
+      iosAppStoreUrl: 'https://apps.apple.com/app/id123456789',
+    });
+    expect(iosWithStore.storeUrl).toBe('https://apps.apple.com/app/id123456789');
+    expect(iosWithStore.storeLabel).toBe('Download BGOS on App Store');
+
+    const desktop = buildBgosOpenHandoffConfig({
+      view: 'dashboard',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Safari/537.36',
+    });
+    expect(desktop.platform).toBe('desktop');
+    expect(desktop.isMobile).toBe(false);
+    expect(desktop.webFallbackUrl).toBe('/app?product=bgos&view=dashboard');
+  });
 });

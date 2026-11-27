@@ -1,33 +1,87 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import type { MobilePlatform } from '@/lib/bgos/open-handoff';
 
 interface MobileAppHandoffProps {
+  platform?: MobilePlatform;
   appSchemeUrl: string;
+  androidIntentUrl?: string;
+  storeUrl?: string | null;
+  storeLabel?: string | null;
   webFallbackUrl: string;
   actionTitle: string;
 }
 
 /**
- * Automatically attempts to open the native BGOS app via `bgos://open?...` on mobile browsers,
- * with a prominent 1-tap button and a non-blocking web fallback link.
+ * Automatically opens the installed BGOS mobile app (`intent://` on Android,
+ * `bgos://open?...` on iOS) and falls back cleanly to Google Play / App Store
+ * if the page stays active after 1.5 seconds (app not installed).
  */
 export function MobileAppHandoff({
+  platform = 'mobile',
   appSchemeUrl,
+  androidIntentUrl,
+  storeUrl = null,
+  storeLabel = null,
   webFallbackUrl,
   actionTitle,
 }: MobileAppHandoffProps) {
+  const [fallbackReady, setFallbackReady] = useState(false);
+  const appOpenedRef = useRef(false);
+
+  const primaryLaunchUrl =
+    platform === 'android' && androidIntentUrl ? androidIntentUrl : appSchemeUrl;
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    appOpenedRef.current = false;
+
+    const markOpened = () => {
+      if (document.visibilityState === 'hidden') {
+        appOpenedRef.current = true;
+      }
+    };
+    const markPageHide = () => {
+      appOpenedRef.current = true;
+    };
+
+    document.addEventListener('visibilitychange', markOpened);
+    window.addEventListener('pagehide', markPageHide);
+
+    const launchTimer = window.setTimeout(() => {
       try {
-        window.location.href = appSchemeUrl;
+        window.location.href = primaryLaunchUrl;
       } catch {
-        // User can tap the button or fallback link below
+        if (primaryLaunchUrl !== appSchemeUrl) {
+          try {
+            window.location.href = appSchemeUrl;
+          } catch {
+            // Fall through to fallback timer
+          }
+        }
       }
     }, 60);
 
-    return () => window.clearTimeout(timer);
-  }, [appSchemeUrl]);
+    // If the app didn't background the browser within 1.5s, show / redirect to store.
+    const fallbackTimer = window.setTimeout(() => {
+      if (appOpenedRef.current || document.visibilityState === 'hidden') return;
+      setFallbackReady(true);
+      if (storeUrl) {
+        try {
+          window.location.href = storeUrl;
+        } catch {
+          // Keep visible store button available below
+        }
+      }
+    }, 1500);
+
+    return () => {
+      window.clearTimeout(launchTimer);
+      window.clearTimeout(fallbackTimer);
+      document.removeEventListener('visibilitychange', markOpened);
+      window.removeEventListener('pagehide', markPageHide);
+    };
+  }, [primaryLaunchUrl, appSchemeUrl, storeUrl]);
 
   return (
     <div
@@ -87,7 +141,7 @@ export function MobileAppHandoff({
             color: '#0F172A',
           }}
         >
-          {actionTitle}
+          {fallbackReady && storeUrl ? 'Get the BGOS Mobile App' : actionTitle}
         </h1>
         <p
           style={{
@@ -97,23 +151,46 @@ export function MobileAppHandoff({
             color: '#64748B',
           }}
         >
-          Opening the BGOS mobile app on your device. If it does not switch automatically, tap the
-          button below.
+          {fallbackReady && storeUrl
+            ? 'BGOS is not installed yet on this device. Install it from the store or tap below if you already have it.'
+            : 'Opening the BGOS mobile app on your device. If it does not open automatically, tap below.'}
         </p>
 
+        {storeUrl && storeLabel ? (
+          <a
+            href={storeUrl}
+            style={{
+              display: 'block',
+              width: '100%',
+              boxSizing: 'border-box',
+              backgroundColor: fallbackReady ? '#009F50' : '#0F172A',
+              color: '#FFFFFF',
+              fontSize: '15px',
+              fontWeight: 700,
+              padding: '13px 20px',
+              borderRadius: '12px',
+              textDecoration: 'none',
+              marginBottom: '10px',
+            }}
+          >
+            {storeLabel}
+          </a>
+        ) : null}
+
         <a
-          href={appSchemeUrl}
+          href={primaryLaunchUrl}
           style={{
             display: 'block',
             width: '100%',
             boxSizing: 'border-box',
-            backgroundColor: '#009F50',
-            color: '#FFFFFF',
-            fontSize: '15px',
+            backgroundColor: fallbackReady && storeUrl ? '#F1F5F9' : '#009F50',
+            color: fallbackReady && storeUrl ? '#0F172A' : '#FFFFFF',
+            fontSize: '14px',
             fontWeight: 700,
-            padding: '13px 20px',
+            padding: '12px 20px',
             borderRadius: '12px',
             textDecoration: 'none',
+            border: fallbackReady && storeUrl ? '1px solid #CBD5E1' : 'none',
             marginBottom: '12px',
           }}
         >
