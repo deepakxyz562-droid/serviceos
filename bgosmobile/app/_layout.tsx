@@ -1,13 +1,14 @@
 import '../src/lib/runtime-polyfills';
 import React, { useEffect, useRef } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { NotificationResponse } from 'expo-notifications';
 import { getNotificationsModule, isExpoGoRuntime } from '../src/lib/notifications-runtime';
-import { notificationDestination } from '../src/lib/notification-routing';
+import { notificationDestination, resolveBgosDeepLink } from '../src/lib/notification-routing';
 import { apiRequest } from '../src/lib/api';
 import { autoSyncPushToken, enablePush, isPushPermissionGranted } from '../src/lib/push';
 import { useAuthStore } from '../src/stores/auth-store';
@@ -46,10 +47,47 @@ export default function RootLayout() {
   const seenNotifIdsRef = useRef<Set<string>>(new Set());
   const notifPollerReadyRef = useRef(false);
   const pushSyncedRef = useRef(false);
+  const pendingDeepLinkRef = useRef<string | null>(null);
+  const lastHandledUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Listen for Universal / App Links (`https://bgos.site/open?...`) and `bgos://open?...`
+  useEffect(() => {
+    const handleIncomingUrl = (rawUrl?: string | null) => {
+      if (!rawUrl || rawUrl === lastHandledUrlRef.current) return;
+      const target = resolveBgosDeepLink(rawUrl);
+      if (!target) return;
+      lastHandledUrlRef.current = rawUrl;
+      if (!isLoading && isAuthenticated && !onboardingRequired) {
+        router.push(target as any);
+      } else {
+        pendingDeepLinkRef.current = target;
+      }
+    };
+
+    void Linking.getInitialURL()
+      .then((initial) => handleIncomingUrl(initial))
+      .catch(() => {});
+
+    const sub = Linking.addEventListener('url', (event) => {
+      handleIncomingUrl(event?.url);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [isLoading, isAuthenticated, onboardingRequired, router]);
+
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || onboardingRequired) return;
+    if (pendingDeepLinkRef.current) {
+      const target = pendingDeepLinkRef.current;
+      pendingDeepLinkRef.current = null;
+      router.push(target as any);
+    }
+  }, [isLoading, isAuthenticated, onboardingRequired, router]);
 
   // Ensure default Android notification channel exists early on app startup
   useEffect(() => {
@@ -291,6 +329,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="setup" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="open" />
         <Stack.Screen name="gbp-callback" />
         <Stack.Screen name="inbox" />
         <Stack.Screen name="leads" />

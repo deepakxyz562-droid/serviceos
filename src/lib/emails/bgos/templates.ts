@@ -135,6 +135,20 @@ export function getBgosPricingForTenant(opts?: {
   };
 }
 
+export function buildBgosAppOpenUrl(
+  baseUrl?: string | null,
+  opts?: { view?: string; socialTab?: string; tab?: string; mode?: string },
+): string {
+  const appUrl = resolveBgosBaseUrl(baseUrl);
+  const qs = new URLSearchParams();
+  if (opts?.view) qs.set('view', opts.view);
+  if (opts?.socialTab) qs.set('socialTab', opts.socialTab);
+  if (opts?.tab) qs.set('tab', opts.tab);
+  if (opts?.mode) qs.set('mode', opts.mode);
+  const query = qs.toString();
+  return query ? `${appUrl}/open?${query}` : `${appUrl}/open`;
+}
+
 export function buildGoogleReviewLink(placeId?: string | null): string | null {
   if (!placeId || typeof placeId !== 'string') return null;
   const clean = placeId.trim();
@@ -160,9 +174,11 @@ interface ShellOptions {
 function renderBgosEmailShell(opts: ShellOptions): string {
   const accent = opts.accentColor || '#009F50';
   const appUrl = opts.appUrl.replace(/\/+$/, '');
+  const logoUrl = `${appUrl}/bgos/icon-192.png`;
   const year = new Date().getFullYear();
-  const supportUrl = `${appUrl}/app?product=bgos&view=helpCenter`;
-  const prefsUrl = `${appUrl}/app?product=bgos&view=settings`;
+  const dashboardOpenUrl = buildBgosAppOpenUrl(appUrl, { view: 'dashboard' });
+  const supportUrl = buildBgosAppOpenUrl(appUrl, { view: 'helpCenter' });
+  const prefsUrl = buildBgosAppOpenUrl(appUrl, { view: 'settings' });
 
   const preheaderHtml = opts.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f1f5f9;">${escapeHtml(opts.preheader)}</div>`
@@ -201,9 +217,19 @@ function renderBgosEmailShell(opts: ShellOptions): string {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td>
-                    <span style="display:inline-block;background-color:#ecfdf5;color:#00665D;border:1px solid #bbf7d0;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;letter-spacing:0.03em;">
-                      BGOS &middot; Business Growth OS
-                    </span>
+                    <a href="${escapeHtml(dashboardOpenUrl)}" style="text-decoration:none;display:inline-block;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td style="vertical-align:middle;padding-right:11px;">
+                            <img src="${escapeHtml(logoUrl)}" width="40" height="40" alt="BGOS Logo" style="display:block;width:40px;height:40px;border-radius:10px;border:1px solid #e2e8f0;" />
+                          </td>
+                          <td style="vertical-align:middle;">
+                            <div style="font-size:18px;line-height:20px;font-weight:800;color:#0f172a;letter-spacing:-0.02em;">BGOS</div>
+                            <div style="font-size:11.5px;line-height:15px;font-weight:600;color:#00665D;letter-spacing:0.01em;">Business Growth OS</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </a>
                   </td>
                 </tr>
               </table>
@@ -222,7 +248,7 @@ function renderBgosEmailShell(opts: ShellOptions): string {
           <tr>
             <td style="padding:22px 36px;background-color:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
               <p style="margin:0;font-size:12px;color:#64748b;">
-                <a href="${escapeHtml(appUrl)}" style="color:#009F50;font-weight:600;text-decoration:none;">BGOS Dashboard</a>
+                <a href="${escapeHtml(dashboardOpenUrl)}" style="color:#009F50;font-weight:600;text-decoration:none;">Open BGOS App</a>
                 &nbsp;&middot;&nbsp;
                 <a href="${escapeHtml(supportUrl)}" style="color:#475569;text-decoration:none;">Help Center</a>
                 &nbsp;&middot;&nbsp;
@@ -398,9 +424,10 @@ export function renderBgosWelcomeEmail(params: {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const displayName = (params.ownerName || 'there').trim();
   const biz = params.businessName.trim() || 'your business';
-  const integrationsUrl = `${appUrl}/app?product=bgos&view=integrations`;
-  const reviewsUrl = `${appUrl}/app?product=bgos&view=reviews`;
-  const studioUrl = `${appUrl}/app?product=bgos&view=socialMedia`;
+  const integrationsUrl = buildBgosAppOpenUrl(appUrl, { view: 'integrations' });
+  const reviewsUrl = buildBgosAppOpenUrl(appUrl, { view: 'reviews' });
+  const studioUrl = buildBgosAppOpenUrl(appUrl, { view: 'socialMedia' });
+  const dashboardOpenUrl = buildBgosAppOpenUrl(appUrl, { view: 'dashboard' });
   const trialText = params.trialDays && params.trialDays > 0
     ? `Your ${params.trialDays}-day free trial is live — let's put ${biz} in front of more local customers.`
     : `Your BGOS workspace is live — let's put ${biz} in front of more local customers.`;
@@ -445,7 +472,7 @@ export function renderBgosWelcomeEmail(params: {
           </tr>
         </table>
       </div>
-      ${renderPrimaryButton('Open Your BGOS Dashboard →', appUrl)}
+      ${renderPrimaryButton('Open Your BGOS App →', dashboardOpenUrl)}
       <p style="margin:8px 0 0;font-size:13px;color:#64748b;">Need help getting set up? Simply reply to this email anytime.</p>`,
   });
 
@@ -485,8 +512,8 @@ export function renderBgosReviewGrowthEmail(params: {
     (typeof params.reviewUrl === 'string' && params.reviewUrl.startsWith('http')
       ? params.reviewUrl.trim()
       : null) || buildGoogleReviewLink(params.placeId);
-  const reviewsUrl = `${appUrl}/app?product=bgos&view=reviews`;
-  const helpUrl = `${appUrl}/app?product=bgos&view=helpCenter`;
+  const reviewsUrl = buildBgosAppOpenUrl(appUrl, { view: 'reviews' });
+  const helpUrl = buildBgosAppOpenUrl(appUrl, { view: 'helpCenter' });
 
   const headline = `Go from ${count} to more than 5 reviews`;
 
@@ -548,7 +575,7 @@ export function renderBgosConnectGbpNudgeEmail(params: {
 }): RenderedBgosEmail {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
-  const connectUrl = `${appUrl}/app?product=bgos&view=integrations`;
+  const connectUrl = buildBgosAppOpenUrl(appUrl, { view: 'integrations' });
 
   const html = renderBgosEmailShell({
     title: `Connect Google Business Profile — ${biz}`,
@@ -576,7 +603,7 @@ export function renderBgosFirstPostNudgeEmail(params: {
 }): RenderedBgosEmail {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
-  const studioUrl = `${appUrl}/app?product=bgos&view=socialMedia`;
+  const studioUrl = buildBgosAppOpenUrl(appUrl, { view: 'socialMedia' });
 
   const html = renderBgosEmailShell({
     title: `Publish your first Google update — ${biz}`,
@@ -606,7 +633,7 @@ export function renderBgosUnrepliedReviewsEmail(params: {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
   const n = Math.max(1, params.pendingCount);
-  const reviewsUrl = `${appUrl}/app?product=bgos&view=reviews`;
+  const reviewsUrl = buildBgosAppOpenUrl(appUrl, { view: 'reviews' });
 
   const html = renderBgosEmailShell({
     title: `${n} customer review${n === 1 ? '' : 's'} waiting for a reply`,
@@ -642,7 +669,7 @@ export function renderBgosTrialEndingEmail(params: {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
   const days = Math.max(1, params.daysRemaining);
-  const billingUrl = `${appUrl}/app?product=bgos&view=billing`;
+  const billingUrl = buildBgosAppOpenUrl(appUrl, { view: 'billing' });
 
   const html = renderBgosEmailShell({
     title: `Your BGOS trial ends in ${days} day${days === 1 ? '' : 's'}`,
@@ -679,7 +706,7 @@ export function renderBgosTrialExpiredEmail(params: {
 }): RenderedBgosEmail {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
-  const billingUrl = `${appUrl}/app?product=bgos&view=billing`;
+  const billingUrl = buildBgosAppOpenUrl(appUrl, { view: 'billing' });
 
   const html = renderBgosEmailShell({
     title: `Your BGOS trial has ended — ${biz}`,
@@ -719,8 +746,8 @@ export function renderBgosPostTrialInactiveEmail(params: {
 }): RenderedBgosEmail {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
-  const billingUrl = `${appUrl}/app?product=bgos&view=billing`;
-  const dashboardUrl = `${appUrl}/app?product=bgos&view=dashboard`;
+  const billingUrl = buildBgosAppOpenUrl(appUrl, { view: 'billing' });
+  const dashboardUrl = buildBgosAppOpenUrl(appUrl, { view: 'dashboard' });
 
   const statusLine = params.gbpConnected
     ? `${biz} has Google Business Profile connected (${params.reviewsCount} synced review${params.reviewsCount === 1 ? '' : 's'}), but your automated growth tools haven't been activated yet.`
@@ -759,8 +786,8 @@ export function renderBgosWinBackEmail(params: {
 }): RenderedBgosEmail {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
-  const billingUrl = `${appUrl}/app?product=bgos&view=billing`;
-  const studioUrl = `${appUrl}/app?product=bgos&view=socialMedia`;
+  const billingUrl = buildBgosAppOpenUrl(appUrl, { view: 'billing' });
+  const studioUrl = buildBgosAppOpenUrl(appUrl, { view: 'socialMedia' });
 
   const html = renderBgosEmailShell({
     title: `What's new in BGOS for ${biz}`,
@@ -868,14 +895,16 @@ export function renderBgosDailyActionChecklistEmail(params: {
   const appUrl = resolveBgosBaseUrl(params.appUrl);
   const biz = params.businessName.trim() || 'your business';
   const unreplied = Math.max(0, params.unrepliedReviewsCount ?? 0);
-  const daysPhoto = Math.max(1, params.daysSinceLastPhoto ?? 4);
+  const rawDaysPhoto = params.daysSinceLastPhoto;
+  const hasKnownPhotoAge = typeof rawDaysPhoto === 'number' && Number.isFinite(rawDaysPhoto) && rawDaysPhoto >= 0 && rawDaysPhoto < 365;
+  const daysPhoto = hasKnownPhotoAge ? Math.max(1, Math.round(rawDaysPhoto)) : null;
   const posterTitle = params.posterHeadline || 'Exclusive Seasonal Special';
   const tasksCount = Math.max(1, params.todayTasksCount ?? 3);
 
-  const studioUrl = `${appUrl}/app?product=bgos&view=socialMedia&socialTab=ai-content`;
-  const reviewsUrl = `${appUrl}/app?product=bgos&view=reviews`;
-  const photosUrl = `${appUrl}/app?product=bgos&view=photos`;
-  const dashboardUrl = `${appUrl}/app?product=bgos&view=dashboard`;
+  const studioUrl = buildBgosAppOpenUrl(appUrl, { view: 'socialMedia', socialTab: 'ai-content' });
+  const reviewsUrl = buildBgosAppOpenUrl(appUrl, { view: 'reviews' });
+  const photosUrl = buildBgosAppOpenUrl(appUrl, { view: 'photos' });
+  const dashboardUrl = buildBgosAppOpenUrl(appUrl, { view: 'dashboard' });
 
   const subject = `📋 Today's 3-Minute Growth Checklist — ${biz}`;
   const preheader = `1 poster ready to publish • ${unreplied > 0 ? `${unreplied} reviews waiting` : '2 review invites to send'} • Boost ${biz}'s Google rank.`;
@@ -886,6 +915,11 @@ export function renderBgosDailyActionChecklistEmail(params: {
        </div>`
     : '';
 
+  const photoFreshnessCopy =
+    daysPhoto != null
+      ? `Your last photo was uploaded ${daysPhoto} day${daysPhoto === 1 ? '' : 's'} ago. Profiles with weekly fresh photos receive <strong>42% more direction requests</strong>.`
+      : `No fresh Google Business photos have been posted recently. Profiles with weekly fresh photos receive <strong>42% more direction requests</strong>.`;
+
   const bodyHtml = `
     <p style="margin:0 0 16px;font-size:15px;color:#334155;">
       Here is your quick, 3-minute morning checklist for <strong>${escapeHtml(biz)}</strong>. Completing these high-impact tasks keeps your profile active, improves Google Maps ranking, and attracts nearby customers:
@@ -893,10 +927,12 @@ export function renderBgosDailyActionChecklistEmail(params: {
 
     <!-- Checklist Card 1: Marketing Poster -->
     <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #009F50;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-      <div style="display:flex;align-items:center;margin-bottom:6px;">
-        <span style="font-size:16px;margin-right:8px;">📸</span>
-        <strong style="font-size:15px;color:#0f172a;">Task 1: Publish Today's Branded Poster</strong>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+        <tr>
+          <td style="vertical-align:middle;width:24px;font-size:16px;line-height:20px;">📸</td>
+          <td style="vertical-align:middle;font-size:15px;font-weight:700;color:#0f172a;line-height:20px;">Task 1: Publish Today's Branded Poster</td>
+        </tr>
+      </table>
       <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
         AI Studio created a fresh promotional visual: <em>"${escapeHtml(posterTitle)}"</em>. Publishing weekly Google updates boosts direction clicks and calls.
       </p>
@@ -908,10 +944,12 @@ export function renderBgosDailyActionChecklistEmail(params: {
 
     <!-- Checklist Card 2: Reviews & Reputation -->
     <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-      <div style="display:flex;align-items:center;margin-bottom:6px;">
-        <span style="font-size:16px;margin-right:8px;">⭐</span>
-        <strong style="font-size:15px;color:#0f172a;">Task 2: Customer Reviews &amp; Reputation</strong>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+        <tr>
+          <td style="vertical-align:middle;width:24px;font-size:16px;line-height:20px;">⭐</td>
+          <td style="vertical-align:middle;font-size:15px;font-weight:700;color:#0f172a;line-height:20px;">Task 2: Customer Reviews &amp; Reputation</td>
+        </tr>
+      </table>
       <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
         ${unreplied > 0
           ? `You have <strong>${unreplied} unreplied review${unreplied === 1 ? '' : 's'}</strong> waiting. Replying fast signals strong service to Google algorithms.`
@@ -924,12 +962,14 @@ export function renderBgosDailyActionChecklistEmail(params: {
 
     <!-- Checklist Card 3: Photo Freshness Check -->
     <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-      <div style="display:flex;align-items:center;margin-bottom:6px;">
-        <span style="font-size:16px;margin-right:8px;">📍</span>
-        <strong style="font-size:15px;color:#0f172a;">Task 3: Google Maps Freshness (Photo Check)</strong>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+        <tr>
+          <td style="vertical-align:middle;width:24px;font-size:16px;line-height:20px;">📍</td>
+          <td style="vertical-align:middle;font-size:15px;font-weight:700;color:#0f172a;line-height:20px;">Task 3: Google Maps Freshness (Photo Check)</td>
+        </tr>
+      </table>
       <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
-        Your last photo was uploaded ${daysPhoto} day${daysPhoto === 1 ? '' : 's'} ago. Profiles with weekly fresh photos receive <strong>42% more direction requests</strong>.
+        ${photoFreshnessCopy}
       </p>
       <a href="${escapeHtml(photosUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
         Upload Fresh Photo &rarr;
@@ -938,15 +978,17 @@ export function renderBgosDailyActionChecklistEmail(params: {
 
     <!-- Checklist Card 4: Operations & Dashboard -->
     <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #7c3aed;border-radius:12px;padding:16px 18px;margin-bottom:18px;box-shadow:0 2px 6px rgba(0,0,0,0.02);">
-      <div style="display:flex;align-items:center;margin-bottom:6px;">
-        <span style="font-size:16px;margin-right:8px;">📋</span>
-        <strong style="font-size:15px;color:#0f172a;">Task 4: Check Daily Inquiries &amp; Tasks</strong>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+        <tr>
+          <td style="vertical-align:middle;width:24px;font-size:16px;line-height:20px;">📋</td>
+          <td style="vertical-align:middle;font-size:15px;font-weight:700;color:#0f172a;line-height:20px;">Task 4: Check Daily Inquiries &amp; Tasks</td>
+        </tr>
+      </table>
       <p style="margin:4px 0 10px;font-size:13px;color:#64748b;line-height:1.5;">
         Inspect new customer chat messages, phone inquiries, and mark off your daily business follow-up checklist.
       </p>
       <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#7c3aed;color:#ffffff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;text-decoration:none;">
-        Open BGOS Dashboard &rarr;
+        Open BGOS App &rarr;
       </a>
     </div>
   `;
@@ -1055,8 +1097,8 @@ export function renderBgosGbpUpdatePendingEmail(params: {
         ${renderPrimaryButton('Verify on Google Business Profile', verifyUrl, '#2563eb')}
       `
         : `
-        <p style="margin:0 0 16px;">You can track status and manage your business from the BGOS dashboard:</p>
-        ${renderPrimaryButton('Open BGOS Dashboard', appUrl, '#009F50')}
+        <p style="margin:0 0 16px;">You can track status and manage your business from the BGOS app:</p>
+        ${renderPrimaryButton('Open BGOS App', buildBgosAppOpenUrl(appUrl, { view: 'dashboard' }), '#009F50')}
       `
     }
 

@@ -110,3 +110,94 @@ export function notificationDestination(data: Record<string, unknown>): string |
 
   return null;
 }
+
+const DEEP_LINK_VIEW_ROUTES: Record<string, string> = {
+  dashboard: '/(tabs)',
+  home: '/(tabs)',
+  reviews: '/(tabs)/reviews',
+  photos: '/(tabs)/photos',
+  studio: '/(tabs)/photos?mode=studio',
+  marketing: '/(tabs)/marketing',
+  tools: '/(tabs)/tools',
+  helpcenter: '/help',
+  help: '/help',
+  settings: '/settings',
+  preferences: '/preferences',
+  integrations: '/integrations',
+  billing: '/my-plan',
+  plans: '/my-plan',
+  growthreport: '/growth-report',
+  'growth-report': '/growth-report',
+  inbox: '/inbox',
+  leads: '/leads',
+  appointments: '/appointments',
+};
+
+/**
+ * Resolves incoming Universal / App Links (`https://bgos.site/open?view=...`)
+ * or custom-scheme links (`bgos://open?view=...`, `bgos://reviews`) into an Expo Router path.
+ * Ignores OAuth/auth callback URLs handled by their dedicated screens.
+ */
+export function resolveBgosDeepLink(rawUrl?: string | null): string | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const isCustomBgos = parsed.protocol === 'bgos:';
+    const isBgosWeb =
+      (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+      /(?:^|\.)bgos\.site$/i.test(parsed.hostname);
+
+    if (!isCustomBgos && !isBgosWeb) return null;
+
+    // Combine host + pathname for bgos://host/path vs https://bgos.site/path
+    const routeToken = isCustomBgos
+      ? [parsed.hostname, parsed.pathname].filter(Boolean).join('/').replace(/^\/+|\/+$/g, '').toLowerCase()
+      : parsed.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+
+    if (
+      routeToken.includes('gbp-callback') ||
+      routeToken.includes('auth-callback') ||
+      routeToken.includes('select-profile')
+    ) {
+      return null;
+    }
+
+    // Ignore plain https://bgos.site web URLs unless they target /open or /app
+    if (isBgosWeb && routeToken !== 'open' && !routeToken.startsWith('open/') && routeToken !== 'app') {
+      return null;
+    }
+
+    const viewRaw = (parsed.searchParams.get('view') || '').trim().toLowerCase();
+    const socialTab = (parsed.searchParams.get('socialTab') || parsed.searchParams.get('socialtab') || '')
+      .trim()
+      .toLowerCase();
+    const mode = (parsed.searchParams.get('mode') || '').trim().toLowerCase();
+
+    if (viewRaw === 'socialmedia') {
+      if (socialTab === 'ai-content' || mode === 'studio') {
+        return '/(tabs)/photos?mode=studio';
+      }
+      return '/(tabs)/marketing';
+    }
+
+    if (viewRaw && DEEP_LINK_VIEW_ROUTES[viewRaw]) {
+      return DEEP_LINK_VIEW_ROUTES[viewRaw];
+    }
+
+    const leaf = routeToken.replace(/^open\/?/, '').split('/').filter(Boolean).pop() || '';
+    if (leaf && DEEP_LINK_VIEW_ROUTES[leaf]) {
+      return DEEP_LINK_VIEW_ROUTES[leaf];
+    }
+
+    if (routeToken === 'open' || routeToken === 'app') {
+      return '/(tabs)';
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}

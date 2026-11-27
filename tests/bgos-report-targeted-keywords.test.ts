@@ -64,8 +64,14 @@ vi.mock('@/lib/db', () => ({
     trackedKeyword: {
       findMany: vi.fn(async () => mockState.trackedKeywords),
       updateMany: vi.fn(async ({ where, data }: any) => {
+        const kwFilter =
+          typeof where?.keyword === 'string'
+            ? where.keyword.toLowerCase()
+            : typeof where?.keyword?.equals === 'string'
+              ? where.keyword.equals.toLowerCase()
+              : null;
         for (const k of mockState.trackedKeywords) {
-          if (!where?.keyword || k.keyword === where.keyword) {
+          if (!kwFilter || String(k.keyword || '').toLowerCase() === kwFilter) {
             Object.assign(k, data);
           }
         }
@@ -357,5 +363,83 @@ describe('Targeted Keywords Auto-Seeding when Tracked Keywords are Empty', () =>
     expect(reportSrc).toContain("mode: 'batch_keywords'");
     expect(reportSrc).toContain('isDownOrFlat');
     expect(reportSrc).toContain('handleRefreshRanks');
+    expect(reportSrc).toContain('&refresh=1');
+    expect(reportSrc).toContain('autoBatchTriggeredRef');
+    expect(reportSrc).toContain('visitedPerfTabRef');
+  });
+
+  it('POST /api/gbp/rankings batch_keywords invalidates cached 4-tier report so Growth Action Report immediately shows measured ranks', async () => {
+    const prevKey = process.env.GOOGLE_PLACES_API_KEY;
+    process.env.GOOGLE_PLACES_API_KEY = 'test-places-key';
+    const origFetch = globalThis.fetch;
+
+    const { cache } = await import('@/lib/cache');
+    cache.clear();
+
+    mockState.trackedKeywords = [
+      { keyword: 'Swimming Pool Near Me', mapsRank: null, position: 1, score: 100 },
+    ];
+
+    try {
+      const reportMod = await import('@/app/api/bgos/reports/4-tier/route');
+      const rankingsMod = await import('@/app/api/gbp/rankings/route');
+
+      // Step 1: Initial Growth Action Report load caches null rank (simulated pre-scan visit)
+      const initialRes = await reportMod.GET(
+        new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=last_month'),
+      );
+      expect(initialRes.status).toBe(200);
+      expect(initialRes.headers.get('X-Cache')).toBe('MISS');
+      const initialJson = await initialRes.json();
+      expect(initialJson.rankedKeywords[0].rank).toBeNull();
+
+      // Confirm warm cache HIT before scan
+      const warmRes = await reportMod.GET(
+        new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=last_month'),
+      );
+      expect(warmRes.headers.get('X-Cache')).toBe('HIT');
+
+      // Step 2: batch_keywords scan measures rank 1.6 and updates TrackedKeyword case-insensitively
+      let callCount = 0;
+      globalThis.fetch = vi.fn(async () => {
+        callCount += 1;
+        // 5 sample points: positions 1, 2, 2, 2, 1 => avg 1.6
+        const rankOne = callCount === 1 || callCount === 5;
+        return new Response(
+          JSON.stringify({
+            places: rankOne
+              ? [{ id: 'ChIJ_self_farm_1' }]
+              : [{ id: 'other-1' }, { id: 'ChIJ_self_farm_1' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }) as any;
+
+      const scanRes = await rankingsMod.POST(
+        new NextRequest('http://localhost:3000/api/gbp/rankings', {
+          method: 'POST',
+          body: JSON.stringify({ mode: 'batch_keywords', force: true }),
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      expect(scanRes.status).toBe(200);
+      expect(mockState.trackedKeywords[0].mapsRank).toBe(1.6);
+
+      // Step 3: Next GET /api/bgos/reports/4-tier (even without refresh=1) gets MISS and shows 1.6!
+      const afterRes = await reportMod.GET(
+        new NextRequest('http://localhost:3000/api/bgos/reports/4-tier?period=last_month'),
+      );
+      expect(afterRes.status).toBe(200);
+      expect(afterRes.headers.get('X-Cache')).toBe('MISS');
+      const afterJson = await afterRes.json();
+      const measured = afterJson.rankedKeywords.find(
+        (k: any) => k.keyword.toLowerCase() === 'swimming pool near me',
+      );
+      expect(measured?.rank).toBe(1.6);
+    } finally {
+      globalThis.fetch = origFetch;
+      if (prevKey === undefined) delete process.env.GOOGLE_PLACES_API_KEY;
+      else process.env.GOOGLE_PLACES_API_KEY = prevKey;
+    }
   });
 });

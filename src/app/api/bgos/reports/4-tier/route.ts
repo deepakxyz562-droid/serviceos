@@ -557,6 +557,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Match Performance Report fallback when tracked, discovery, and AI profile keywords are all unavailable
+    if (candidateKeywords.length === 0) {
+      const rawCat = (
+        parsedReportSettings?.activeGbpCategory ||
+        tenant?.brandProfile?.industry ||
+        tenant?.industry ||
+        tenant?.name ||
+        'Local Service'
+      ).trim();
+      const cat = /services|^other$/i.test(rawCat) ? (tenant?.name || rawCat) : rawCat;
+      const citySuffix = tenant?.city ? ` in ${tenant.city}` : ' near me';
+      candidateKeywords = [
+        `${cat} near me`,
+        `best ${cat}${citySuffix}`,
+        `top rated ${cat} near me`,
+        `${cat}${citySuffix}`,
+        `${cat} booking${citySuffix}`,
+        `affordable ${cat} near me`,
+      ].map((kw) => ({ keyword: kw, volume: 0, defaultUsed: 0 }));
+    }
+
     const keywordsUsed = candidateKeywords.map((kw) => {
       const lower = kw.keyword.toLowerCase();
       const actualMatchCount = curPosts.filter((p) => {

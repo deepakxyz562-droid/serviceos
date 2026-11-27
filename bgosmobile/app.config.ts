@@ -29,6 +29,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
     supportsTablet: true,
     bundleIdentifier: 'com.fieseros.bgos',
     usesAppleSignIn: true,
+    associatedDomains: ['applinks:bgos.site'],
     ...(hasIosGoogleServicesPlist ? { googleServicesFile: './GoogleService-Info.plist' } : {}),
     infoPlist: {
       CFBundleDisplayName: 'BGOS',
@@ -42,6 +43,20 @@ export default ({ config, projectRoot }: ConfigContext): any => {
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
     compileSdkVersion: 37,
     targetSdkVersion: 36,
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: [
+          {
+            scheme: 'https',
+            host: 'bgos.site',
+            pathPrefix: '/open',
+          },
+        ],
+        category: ['BROWSABLE', 'DEFAULT'],
+      },
+    ],
     permissions: ['POST_NOTIFICATIONS'],
     blockedPermissions: [
       'android.permission.RECORD_AUDIO',

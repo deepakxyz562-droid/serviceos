@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isDeliverableEmail, isSyntheticPlaceholderEmail } from '@/lib/emails/bgos/templates';
+import {
+  buildBgosAppOpenUrl,
+  escapeHtml,
+  isDeliverableEmail,
+  isSyntheticPlaceholderEmail,
+  renderBgosDailyActionChecklistEmail,
+} from '@/lib/emails/bgos/templates';
+import { resolveBgosDeepLink } from '../bgosmobile/src/lib/notification-routing';
 
 describe('BGOS Email Deliverability & Performance Guardrails', () => {
   it('correctly identifies synthetic phone placeholder emails and marks them undeliverable', () => {
@@ -113,5 +120,58 @@ describe('BGOS Email Deliverability & Performance Guardrails', () => {
 
     expect(nameMatched?.id).toBe('loc_2');
     expect(nameMatched?.name).toBe('FieserOS Software');
+  });
+
+  it('renders crisp BGOS logo header, replaces 999 days sentinel, and routes Daily Checklist CTAs through /open app links', () => {
+    const email = renderBgosDailyActionChecklistEmail({
+      businessName: 'FieserOS',
+      unrepliedReviewsCount: 0,
+      daysSinceLastPhoto: 999,
+      posterHeadline: 'Keep FieserOS visible on Google Maps',
+      appUrl: 'https://bgos.site',
+    });
+
+    expect(email.html).toContain('https://bgos.site/bgos/icon-192.png');
+    expect(email.html).toContain('width="40" height="40"');
+    expect(email.html).toContain('Business Growth OS');
+    expect(email.html).not.toContain('999 day');
+    expect(email.html).toContain('No fresh Google Business photos have been posted recently.');
+    const expectedStudioUrl = buildBgosAppOpenUrl('https://bgos.site', { view: 'socialMedia', socialTab: 'ai-content' });
+    expect(email.html).toContain(escapeHtml(expectedStudioUrl));
+    expect(email.text).toContain(expectedStudioUrl);
+    expect(email.html).toContain(buildBgosAppOpenUrl('https://bgos.site', { view: 'reviews' }));
+    expect(email.html).toContain(buildBgosAppOpenUrl('https://bgos.site', { view: 'photos' }));
+    expect(email.html).toContain(buildBgosAppOpenUrl('https://bgos.site', { view: 'dashboard' }));
+    expect(email.html).toContain(buildBgosAppOpenUrl('https://bgos.site', { view: 'helpCenter' }));
+    expect(email.html).toContain(buildBgosAppOpenUrl('https://bgos.site', { view: 'settings' }));
+  });
+
+  it('resolves incoming mailer app/universal links to mobile screens while ignoring OAuth callbacks', () => {
+    expect(resolveBgosDeepLink('bgos://open?view=socialMedia&socialTab=ai-content')).toBe('/(tabs)/photos?mode=studio');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=reviews')).toBe('/(tabs)/reviews');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=photos')).toBe('/(tabs)/photos');
+    expect(resolveBgosDeepLink('bgos://open?view=dashboard')).toBe('/(tabs)');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=helpCenter')).toBe('/help');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=settings')).toBe('/settings');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=growthReport')).toBe('/growth-report');
+
+    // Preserve OAuth callback flows
+    expect(resolveBgosDeepLink('bgos://gbp-callback?google=connected')).toBeNull();
+    expect(resolveBgosDeepLink('bgos://auth-callback?token=abc')).toBeNull();
+  });
+
+  it('serves valid .well-known Universal Links & Android Asset Links JSON manifests', async () => {
+    const appleRoute = await import('@/app/.well-known/apple-app-site-association/route');
+    const androidRoute = await import('@/app/.well-known/assetlinks.json/route');
+
+    const appleRes = await appleRoute.GET();
+    expect(appleRes.status).toBe(200);
+    const appleJson = await appleRes.json();
+    expect(appleJson.applinks).toBeTruthy();
+
+    const androidRes = await androidRoute.GET();
+    expect(androidRes.status).toBe(200);
+    const androidJson = await androidRes.json();
+    expect(Array.isArray(androidJson)).toBe(true);
   });
 });

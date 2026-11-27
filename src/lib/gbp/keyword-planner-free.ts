@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { cache } from '@/lib/cache';
 import { db } from '@/lib/db';
 import { loadAiKeyChain } from '@/lib/ai-client';
 import {
@@ -799,12 +800,18 @@ export async function scanTargetKeywordsBatch(params: {
     for (const r of scanResults) {
       await (db as any).trackedKeyword
         .updateMany({
-          where: { tenantId: params.tenantId, keyword: r.keyword.toLowerCase() },
+          where: {
+            tenantId: params.tenantId,
+            keyword: { equals: r.keyword, mode: 'insensitive' },
+          },
           data: { mapsRank: r.rank, lastCheckedAt: new Date(scannedAt) },
         })
         .catch(() => {});
     }
   }
+
+  // Bust cached 4-tier growth report snapshots so Growth Action Report immediately sees updated ranks
+  cache.invalidateByPrefix(`report_4tier:${params.tenantId}:`);
 
   return {
     skipped: false,

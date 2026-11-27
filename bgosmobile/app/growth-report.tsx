@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -162,25 +162,33 @@ export default function GrowthReportScreen() {
     };
   }, [report]);
 
-  const loadReport = async (p = period, isPullRefresh = false) => {
-    if (isPullRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
+  const autoBatchTriggeredRef = useRef(false);
+  const visitedPerfTabRef = useRef(false);
+
+  const loadReport = async (p = period, isPullRefresh = false, silent = false) => {
+    if (!silent) {
+      if (isPullRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
     }
     setErrorMsg(null);
     try {
-      const data = await apiRequest<ReportData>(`/api/bgos/reports/4-tier?period=${p}`);
+      const refreshQuery = isPullRefresh || silent ? '&refresh=1' : '';
+      const data = await apiRequest<ReportData>(`/api/bgos/reports/4-tier?period=${p}${refreshQuery}`);
       setReport(data);
     } catch (e: any) {
       const msg = e?.message || 'Failed to load growth report';
-      setErrorMsg(msg);
-      if (!report) {
+      if (!silent) setErrorMsg(msg);
+      if (!report && !silent) {
         Alert.alert('Error', msg);
       }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!silent) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -192,7 +200,7 @@ export default function GrowthReportScreen() {
         method: 'POST',
         body: { mode: 'batch_keywords', force: true },
       });
-      await loadReport(period, true);
+      await loadReport(period, false, true);
     } catch (e: any) {
       Alert.alert('Rank Refresh Failed', e?.message || 'Could not measure keyword ranks right now.');
     } finally {
@@ -203,6 +211,44 @@ export default function GrowthReportScreen() {
   useEffect(() => {
     loadReport(period);
   }, [period]);
+
+  // Auto-trigger initial batch rank scan when Growth Action Report loads with unmeasured keywords
+  useEffect(() => {
+    if (loading || refreshingRanks || autoBatchTriggeredRef.current || !report) return;
+    const rows =
+      report.rankedKeywords && report.rankedKeywords.length > 0
+        ? report.rankedKeywords
+        : report.actionReport?.keywordsUsed || [];
+    if (rows.length > 0 && rows.every((r) => r.rank == null)) {
+      autoBatchTriggeredRef.current = true;
+      void (async () => {
+        setRefreshingRanks(true);
+        try {
+          await apiRequest('/api/gbp/rankings', {
+            method: 'POST',
+            body: { mode: 'batch_keywords', force: false },
+          });
+          await loadReport(period, false, true);
+        } catch {
+          // Keep existing report rows if batch scan is unavailable
+        } finally {
+          setRefreshingRanks(false);
+        }
+      })();
+    }
+  }, [report, loading, refreshingRanks, period]);
+
+  // Reload Growth Action Report fresh when switching back from Performance Report tab
+  useEffect(() => {
+    if (activeTab === 'performance') {
+      visitedPerfTabRef.current = true;
+      return;
+    }
+    if (activeTab === 'action' && visitedPerfTabRef.current) {
+      visitedPerfTabRef.current = false;
+      void loadReport(period, false, true);
+    }
+  }, [activeTab, period]);
 
   const [sendingWa, setSendingWa] = useState(false);
 

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email-send';
 import { verifyCronAuth } from '@/lib/cron-auth';
 import {
+  buildBgosAppOpenUrl,
   buildGoogleReviewLink,
   escapeHtml,
   isDeliverableEmail,
@@ -184,6 +185,7 @@ async function handleDigest(request: NextRequest) {
 <body>
   <div class="card">
     <div class="header">
+      <img src="${escapeHtml(bgosUrl)}/bgos/icon-192.png" width="44" height="44" alt="BGOS Logo" style="display:block;margin:0 auto 10px;width:44px;height:44px;border-radius:10px;background:#ffffff;" />
       <h1>Weekly Google Business Profile Digest</h1>
       <p>Performance report for ${safeName}</p>
     </div>
@@ -217,14 +219,14 @@ async function handleDigest(request: NextRequest) {
 
       ${reviewMilestoneBox}
 
-      <a href="${escapeHtml(bgosUrl)}" class="cta-btn">View Live BGOS Dashboard</a>
+      <a href="${escapeHtml(buildBgosAppOpenUrl(bgosUrl, { view: 'growthReport' }))}" class="cta-btn">Open BGOS Report in App</a>
     </div>
     <div class="footer">
       Delivered automatically by BGOS &bull; Business Growth Operating System
       <br/>
       <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
       &nbsp;&middot;&nbsp;
-      <a href="${escapeHtml(bgosUrl)}/app?product=bgos&amp;view=settings" style="color:#64748b;text-decoration:underline;">Email Preferences</a>
+      <a href="${escapeHtml(buildBgosAppOpenUrl(bgosUrl, { view: 'settings' }))}" style="color:#64748b;text-decoration:underline;">Email Preferences</a>
     </div>
   </div>
 </body>

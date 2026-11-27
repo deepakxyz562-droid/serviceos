@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { cache } from '@/lib/cache';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { applyTenantRateLimit, rateLimitResponse, tenantScanLimiter } from '@/lib/rate-limit';
@@ -859,6 +860,8 @@ export async function POST(request: NextRequest) {
         mapsRank: gridResult.avgRank != null ? Number(gridResult.avgRank.toFixed(1)) : null,
       });
 
+      cache.invalidateByPrefix(`report_4tier:${user.tenantId}:`);
+
       return NextResponse.json({
         success: true,
         scan: savedGridRecord,
@@ -1174,6 +1177,7 @@ export async function POST(request: NextRequest) {
         },
       });
       if (saved.count) {
+        cache.invalidateByPrefix(`report_4tier:${user.tenantId}:`);
         return NextResponse.json({
           success: true,
           message: 'Measured Google Maps positions saved',
