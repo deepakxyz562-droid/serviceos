@@ -38,7 +38,7 @@ export default ({ config, projectRoot }: ConfigContext): any => {
   },
   android: {
     package: 'com.fieseros.bgos',
-    versionCode: 58,
+    versionCode: 59,
     googleServicesFile: './google-services.json',
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B9042' },
     compileSdkVersion: 37,
