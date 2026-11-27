@@ -1909,12 +1909,14 @@ function AgentsScreen() {
                   </View>
                 </View>
 
-                <Action
-                  secondary
-                  label="Open WhatsApp Repeat Campaigns"
-                  icon="campaign"
-                  onPress={() => router.push('/whatsapp-campaigns' as any)}
-                />
+                {Boolean(workspace.data?.features?.whatsappRepeatCampaigns) ? (
+                  <Action
+                    secondary
+                    label="Open WhatsApp Repeat Campaigns"
+                    icon="campaign"
+                    onPress={() => router.push('/whatsapp-campaigns' as any)}
+                  />
+                ) : null}
               </Card>
             );
           })()}

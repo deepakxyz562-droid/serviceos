@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { getUpcomingOccasions, generateOccasionCampaignDraft } from '@/lib/marketing/occasions';
+import { requireBgosRepeatCampaignsAccess } from '@/lib/bgos-plan-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const planGate = await requireBgosRepeatCampaignsAccess(user);
+    if (!planGate.ok) return planGate.response;
 
     const occasions = getUpcomingOccasions();
     return NextResponse.json({
@@ -41,6 +44,8 @@ export async function POST(request: NextRequest) {
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const planGate = await requireBgosRepeatCampaignsAccess(user);
+    if (!planGate.ok) return planGate.response;
 
     const body = (await request.json().catch(() => ({}))) as {
       occasionId?: string;

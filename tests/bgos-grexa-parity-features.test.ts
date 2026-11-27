@@ -18,6 +18,8 @@ const {
     name: 'Smile Dental Clinic',
     city: 'Bhopal',
     industry: 'Dentist',
+    plan: 'business',
+    planStatus: 'active',
     description: 'Old local clinic description.',
     brandProfile: {
       businessName: 'Smile Dental Clinic',
@@ -170,11 +172,14 @@ import { GET as whatsappWorkflowsGet, POST as whatsappWorkflowsPost } from '@/ap
 import { GET as citationsGet, PATCH as citationsPatch } from '@/app/api/gbp/citations/route';
 import { POST as suggestAreasPost } from '@/app/api/gbp/service-areas/suggest/route';
 import { POST as suspensionAppealPost } from '@/app/api/gbp/suspension-appeal/route';
+import { POST as reviewRequestPost } from '@/app/api/reviews/request/route';
 import { analyzeGbpSuspensionRisks } from '@/lib/gbp/suspension-shield';
 import { getUpcomingOccasions } from '@/lib/marketing/occasions';
 import { processWhatsAppInactivityFollowups } from '@/lib/whatsapp/inactivity-followup';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { googleBusinessAdapter } from '@/lib/social/adapters/googlebusiness';
+import { DEFAULT_PLAN_MATRIX } from '@/lib/plan-features';
+import { BGOS_PLANS } from '../shared/bgos-plans';
 
 vi.mock('@/lib/credit-management', () => ({
   checkWhatsAppCredits: vi.fn(async () => ({ allowed: false, reason: 'No connected WhatsApp account' })),
@@ -184,6 +189,8 @@ vi.mock('@/lib/credit-management', () => ({
 describe('Grexa vs BGOS Feature Parity Verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTenant.plan = 'business';
+    mockTenant.planStatus = 'active';
   });
 
   describe('1. GBP Description AI Rewrite & Google Maps Publishing', () => {
@@ -468,7 +475,7 @@ describe('Grexa vs BGOS Feature Parity Verification', () => {
       expect(createJson.name).toBe('New Lead Instant Welcome');
     });
 
-    it('wires 1-tap playbooks in automations.tsx and Send Brochure / Booking Link in leads.tsx & inbox.tsx', () => {
+    it('wires simplified AI Growth Automations hub in automations.tsx and Send Brochure / Booking Link in leads.tsx & inbox.tsx', () => {
       const automationsSrc = fs.readFileSync(
         path.join(process.cwd(), 'bgosmobile/app/automations.tsx'),
         'utf8',
@@ -482,8 +489,10 @@ describe('Grexa vs BGOS Feature Parity Verification', () => {
         'utf8',
       );
 
-      expect(automationsSrc).toContain('/api/whatsapp/workflows');
-      expect(automationsSrc).toContain('1-Tap WhatsApp Playbooks');
+      expect(automationsSrc).toContain('title="AI Growth Automations"');
+      expect(automationsSrc).toContain('/api/bgos/workspace');
+      expect(automationsSrc).toContain('/whatsapp-campaigns');
+      expect(automationsSrc).toContain('/agents');
       expect(leadsSrc).toContain('Send Brochure');
       expect(leadsSrc).toContain('Booking Link');
       expect(inboxSrc).toContain("'Send Brochure'");
@@ -594,6 +603,220 @@ describe('Grexa vs BGOS Feature Parity Verification', () => {
       expect(auditSrc).toContain('/api/gbp/suspension-appeal');
       expect(citationsSrc).toContain('/api/gbp/citations');
       expect(layoutSrc).toContain('name="citations"');
+    });
+  });
+
+  describe('8. BGOS Mobile Plan Alignment, Automations Simplification & Sidebar Cleanup', () => {
+    it('aligns DEFAULT_PLAN_MATRIX trial and starter flags and removes B2B lead credits copy from BGOS_PLANS', () => {
+      expect(DEFAULT_PLAN_MATRIX.trial).toMatchObject({
+        live_chat: true,
+        whatsapp: true,
+        omnichannel_inbox: true,
+        ai_assistant: true,
+        ai_suggested_replies: true,
+      });
+
+      expect(DEFAULT_PLAN_MATRIX.starter).toMatchObject({
+        live_chat: true,
+        whatsapp: false,
+        omnichannel_inbox: true,
+        ai_assistant: true,
+        ai_suggested_replies: true,
+      });
+
+      const allPlanFeatures = [
+        ...BGOS_PLANS.starter.features,
+        ...BGOS_PLANS.growth.features,
+        ...BGOS_PLANS.business.features,
+      ]
+        .join(' ')
+        .toLowerCase();
+      expect(allPlanFeatures).not.toContain('lead search credits');
+      expect(BGOS_PLANS.business.features.join(' ').toLowerCase()).not.toContain('lead search credits');
+    });
+
+    it('removes web-only lead credits and redundant automations row while hiding + Add Business in mobile sidebar', () => {
+      const myPlanSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/my-plan.tsx'),
+        'utf8',
+      );
+      const toolsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/(tabs)/tools.tsx'),
+        'utf8',
+      );
+      const sidebarSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/src/components/navigation/sidebar-drawer.tsx'),
+        'utf8',
+      );
+      const switcherSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/src/components/navigation/workspace-switcher-section.tsx'),
+        'utf8',
+      );
+
+      expect(myPlanSrc).not.toContain('LEAD CREDITS');
+      expect(myPlanSrc).not.toContain('2,500 monthly B2B lead search credits');
+      expect(toolsSrc).not.toContain('AI Automations & Triggers');
+      expect(toolsSrc).not.toContain('Lead Credits');
+      expect(sidebarSrc).toContain('showAddBusiness={false}');
+      expect(sidebarSrc).toContain('hideIfSingleWorkspace');
+      expect(switcherSrc).toContain('hideIfSingleWorkspace');
+    });
+  });
+
+  describe('9. Business-Only Repeat Campaigns & Non-Editable Bulk Review Template', () => {
+    it('restricts whatsapp_repeat_campaigns API endpoints exclusively to active paid Business+ plans (blocking Trial/Starter/Growth)', async () => {
+      expect(DEFAULT_PLAN_MATRIX.free.whatsapp_repeat_campaigns).toBe(false);
+      expect(DEFAULT_PLAN_MATRIX.trial.whatsapp_repeat_campaigns).toBe(false);
+      expect(DEFAULT_PLAN_MATRIX.starter.whatsapp_repeat_campaigns).toBe(false);
+      expect(DEFAULT_PLAN_MATRIX.growth.whatsapp_repeat_campaigns).toBe(false);
+      expect(DEFAULT_PLAN_MATRIX.business.whatsapp_repeat_campaigns).toBe(true);
+      expect(DEFAULT_PLAN_MATRIX.enterprise.whatsapp_repeat_campaigns).toBe(true);
+
+      const blockedStates: Array<{ plan: string; planStatus: string }> = [
+        { plan: 'business', planStatus: 'trial' },
+        { plan: 'starter', planStatus: 'active' },
+        { plan: 'growth', planStatus: 'active' },
+        { plan: 'free', planStatus: 'active' },
+      ];
+
+      for (const st of blockedStates) {
+        mockTenant.plan = st.plan;
+        mockTenant.planStatus = st.planStatus;
+
+        const r1 = await occasionsGet(new NextRequest('http://localhost/api/marketing/occasions'));
+        expect(r1.status).toBe(403);
+        const j1 = await r1.json();
+        expect(j1.code).toBe('PLAN_UPGRADE_REQUIRED');
+
+        const r2 = await occasionsSendGet(
+          new NextRequest('http://localhost/api/marketing/occasions/send?audience=inactive_60_days'),
+        );
+        expect(r2.status).toBe(403);
+      }
+
+      mockTenant.plan = 'business';
+      mockTenant.planStatus = 'active';
+      const okRes = await occasionsGet(new NextRequest('http://localhost/api/marketing/occasions'));
+      expect(okRes.status).toBe(200);
+    });
+
+    it('hides WhatsApp Repeat Campaigns on non-Business mobile plans and moves Business copy across plans', () => {
+      const waSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/whatsapp-campaigns.tsx'),
+        'utf8',
+      );
+      const toolsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/(tabs)/tools.tsx'),
+        'utf8',
+      );
+      const mktSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/(tabs)/marketing.tsx'),
+        'utf8',
+      );
+      const agentsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/agents.tsx'),
+        'utf8',
+      );
+      const autoSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/automations.tsx'),
+        'utf8',
+      );
+      const paywallSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/src/components/billing/paywall-gate.tsx'),
+        'utf8',
+      );
+      const myPlanSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/my-plan.tsx'),
+        'utf8',
+      );
+
+      expect(waSrc).toContain('features?.whatsappRepeatCampaigns');
+      expect(waSrc).toContain('Upgrade to Unlock Repeat Campaigns');
+      expect(toolsSrc).toContain('features?.whatsappRepeatCampaigns');
+      expect(mktSrc).toContain('features?.whatsappRepeatCampaigns');
+      expect(agentsSrc).toContain('features?.whatsappRepeatCampaigns');
+      expect(autoSrc).toContain('features?.whatsappRepeatCampaigns');
+      expect(paywallSrc).not.toContain('lead search credits');
+      expect(paywallSrc).toContain('WhatsApp Repeat Campaigns');
+      expect(myPlanSrc).toContain('WhatsApp Repeat Campaigns');
+      expect(BGOS_PLANS.business.features.join(' ')).toContain('WhatsApp Repeat Campaigns');
+      expect(BGOS_PLANS.growth.features.join(' ').toLowerCase()).not.toContain('repeat campaigns');
+    });
+
+    it('locks bulk review invite preview to non-editable template and enforces 30-day anti-repeat + 5/day pacing', async () => {
+      const reviewReqUiSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/src/components/gbp/review-request.tsx'),
+        'utf8',
+      );
+      expect(reviewReqUiSrc).toContain('Locked Template');
+      expect(reviewReqUiSrc).toContain('metaReadOnlyBubbleWrap');
+      expect(reviewReqUiSrc).not.toContain('customBulkMessage');
+      expect(reviewReqUiSrc).not.toContain('setCustomBulkMessage');
+
+      const createdRows: any[] = [];
+      const recentlySentDate = new Date(Date.now() - 2 * 86400_000);
+      mockDb.campaignTemplate = { findMany: vi.fn(async () => []) };
+      mockDb.communicationProvider = { findFirst: vi.fn(async () => null) };
+      mockDb.activityLog = { create: vi.fn(async () => ({ id: 'act-1' })) };
+      mockDb.customer = {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async ({ data }: any) => ({ id: 'cust-new', ...data })),
+      };
+      mockDb.lead = {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async ({ data }: any) => ({ id: 'lead-new', ...data })),
+      };
+      mockDb.scheduledMessage = {
+        findMany: vi.fn(async () => [
+          {
+            recipientPhone: '+919800000001',
+            status: 'sent',
+            dueAt: recentlySentDate,
+            sentAt: recentlySentDate,
+          },
+        ]),
+        create: vi.fn(async ({ data }: any) => {
+          const row = { id: `sm-${createdRows.length + 1}`, ...data };
+          createdRows.push(row);
+          return row;
+        }),
+      };
+
+      const req = new NextRequest('http://localhost/api/reviews/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'scheduled',
+          waDeliveryMode: 'direct_queue',
+          channel: 'whatsapp',
+          dailyLimit: 5,
+          country: 'IN',
+          timeZone: 'Asia/Kolkata',
+          businessName: 'Smile Dental Clinic',
+          reviewLink: 'https://g.page/r/smile-dental/review',
+          messageTemplate: 'Give us 5 stars for 50% off!',
+          recipients: [
+            { name: 'Already Invited', phone: '+919800000001' },
+            { name: 'User 1', phone: '+919800000011' },
+            { name: 'User 2', phone: '+919800000012' },
+            { name: 'User 3', phone: '+919800000013' },
+            { name: 'User 4', phone: '+919800000014' },
+            { name: 'User 5', phone: '+919800000015' },
+            { name: 'User 6', phone: '+919800000016' },
+            { name: 'User 7', phone: '+919800000017' },
+          ],
+        }),
+      });
+
+      const res = await reviewRequestPost(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.skippedDuplicates).toBe(1);
+      expect(json.scheduledCount).toBe(7);
+      expect(json.totalDays).toBe(2);
+      expect(createdRows).toHaveLength(7);
+      expect(createdRows[0].bodyText).not.toContain('Give us 5 stars for 50% off!');
+      expect(createdRows[0].bodyText).toContain('Please share your feedback on your recent experience');
     });
   });
 });

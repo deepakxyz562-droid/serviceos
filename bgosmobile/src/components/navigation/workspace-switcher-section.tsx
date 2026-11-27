@@ -35,6 +35,7 @@ interface WorkspaceSwitcherSectionProps {
   onSwitched?: (ws: WorkspaceListItem) => void;
   title?: string;
   showAddBusiness?: boolean;
+  hideIfSingleWorkspace?: boolean;
   navigateHomeOnSwitch?: boolean;
 }
 
@@ -56,6 +57,7 @@ export function WorkspaceSwitcherSection({
   onSwitched,
   title,
   showAddBusiness = true,
+  hideIfSingleWorkspace = false,
   navigateHomeOnSwitch = true,
 }: WorkspaceSwitcherSectionProps) {
   const router = useRouter();
@@ -115,6 +117,10 @@ export function WorkspaceSwitcherSection({
     } finally {
       setSwitchingId(null);
     }
+  }
+
+  if (hideIfSingleWorkspace && workspaces.length <= 1) {
+    return null;
   }
 
   return (

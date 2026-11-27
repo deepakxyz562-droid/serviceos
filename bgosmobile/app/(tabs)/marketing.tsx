@@ -2719,48 +2719,50 @@ export default function MarketingScreen() {
           {/* Connected Social Accounts Strip */}
           <StayActiveSocialMediaCard />
 
-          {/* WhatsApp Occasion & Customer Comeback Hub Shortcut */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open WhatsApp Repeat Campaigns"
-            onPress={() => router.push('/whatsapp-campaigns' as any)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#ECFDF5',
-              borderWidth: 1,
-              borderColor: '#A7F3D0',
-              borderRadius: 12,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              gap: 10,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 10,
-                  backgroundColor: '#16A34A',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <MaterialIcons name="chat" size={17} color="#FFFFFF" />
+          {/* WhatsApp Occasion & Customer Comeback Hub Shortcut (Business Plan Only) */}
+          {Boolean(workspace.data?.features?.whatsappRepeatCampaigns) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open WhatsApp Repeat Campaigns"
+              onPress={() => router.push('/whatsapp-campaigns' as any)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#ECFDF5',
+                borderWidth: 1,
+                borderColor: '#A7F3D0',
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                gap: 10,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    backgroundColor: '#16A34A',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="chat" size={17} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
+                    WhatsApp Repeat Campaigns
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#047857' }}>
+                    Occasion offers, Hinglish drafts &amp; 60d+ comeback blasts
+                  </Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46' }}>
-                  WhatsApp Repeat Campaigns
-                </Text>
-                <Text style={{ fontSize: 11, color: '#047857' }}>
-                  Occasion offers, Hinglish drafts &amp; 60d+ comeback blasts
-                </Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#059669" />
-          </Pressable>
+              <MaterialIcons name="chevron-right" size={20} color="#059669" />
+            </Pressable>
+          ) : null}
 
           {/* Segmented Switcher: Posts vs Calendar */}
           <View style={styles.postViewSwitcher}>

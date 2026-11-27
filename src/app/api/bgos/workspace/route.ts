@@ -12,6 +12,7 @@ import {
 } from '@/lib/bgos-store-catalog';
 import { checkBgosSlugAvailability, normalizeBgosSlug } from '@/lib/bgos-slug-service';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
+import { resolveAuthoritativeBgosPlanState } from '@/lib/bgos-plan-access';
 import type { BgosPageVisibility, BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const pageVisibilityPatchSchema = z.object({
@@ -210,6 +211,16 @@ export async function resolveWorkspaceData(
     const storeSettings = parseBgosStoreSettings(settings);
     const socialProfiles = parseSocialProfiles(tenant.socialLinksJson, settings);
 
+    const rawPlanCode = subscription?.billingSource === 'product' ? subscription.plan : tenant.plan;
+    const rawPlanStatus = subscription?.billingSource === 'product' ? subscription.status : tenant.planStatus;
+    const authPlanState = await resolveAuthoritativeBgosPlanState(user.tenantId, {
+      workspaceId: user.workspaceId,
+      fallbackPlan: rawPlanCode,
+      fallbackStatus: rawPlanStatus,
+    });
+    const resolvedPlan = authPlanState.plan || rawPlanCode;
+    const resolvedStatus = authPlanState.status || rawPlanStatus;
+
     const data: BgosWorkspace = {
       name: effectiveBusinessName,
       mode: isAgencyMode ? 'agency' : 'local',
@@ -263,7 +274,8 @@ export async function resolveWorkspaceData(
           mediaSchedule: false,
         },
       },
-      plan: { code: subscription?.billingSource === 'product' ? subscription.plan : tenant.plan, status: subscription?.billingSource === 'product' ? subscription.status : tenant.planStatus },
+      plan: { code: resolvedPlan, status: resolvedStatus },
+      features: authPlanState.features,
       billing: {
         region: locationBilling.defaultRegion,
         currency: locationBilling.currency,

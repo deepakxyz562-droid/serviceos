@@ -16,6 +16,7 @@ import { Screen, Card, Action, Badge, ErrorNotice, Loading, ui, colors } from '.
 import { apiRequest } from '../src/lib/api';
 import { useResource } from '../src/hooks/use-resource';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 interface MarketingOccasionItem {
   id: string;
@@ -77,7 +78,13 @@ const AUDIENCE_LABELS: Array<{
 
 function WhatsAppCampaignsScreen() {
   const router = useRouter();
-  const occasionsRes = useResource<{ occasions: MarketingOccasionItem[] }>('/api/marketing/occasions');
+  const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const canUseRepeatCampaigns = Boolean(workspaceRes.data?.features?.whatsappRepeatCampaigns);
+  const occasionsRes = useResource<{ occasions: MarketingOccasionItem[] }>(
+    '/api/marketing/occasions',
+    0,
+    canUseRepeatCampaigns,
+  );
 
   const [selectedOccasionId, setSelectedOccasionId] = useState<string>('we-miss-you-re-engagement');
   const [tone, setTone] = useState<'english' | 'hinglish'>('hinglish');
@@ -118,8 +125,9 @@ function WhatsAppCampaignsScreen() {
   }, [selectedTemplateName]);
 
   useEffect(() => {
+    if (!canUseRepeatCampaigns) return;
     void loadAudience(audience);
-  }, [audience, loadAudience]);
+  }, [audience, canUseRepeatCampaigns, loadAudience]);
 
   useEffect(() => {
     const list = occasionsRes.data?.occasions || [];
@@ -222,6 +230,54 @@ function WhatsAppCampaignsScreen() {
 
   const occasions = occasionsRes.data?.occasions || [];
   const counts = audienceData?.counts || { all_leads: 0, past_customers: 0, inactive_60_days: 0 };
+
+  if (workspaceRes.loading && !workspaceRes.data) {
+    return (
+      <Screen title="WhatsApp Repeat Campaigns" subtitle="Business Plan Exclusive" showBack>
+        <Loading />
+      </Screen>
+    );
+  }
+
+  if (!canUseRepeatCampaigns) {
+    return (
+      <Screen
+        title="WhatsApp Repeat Campaigns"
+        subtitle="Available exclusively on the Business plan."
+        showBack
+        onRefresh={() => void workspaceRes.refresh()}
+      >
+        <Card style={{ gap: 12, padding: 18 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: '#FEF3C7',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="lock" size={20} color="#B45309" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Badge accent label="Business Plan Feature" />
+              <Text style={[ui.heading, { marginTop: 4 }]}>Upgrade to Unlock Repeat Campaigns</Text>
+            </View>
+          </View>
+          <Text style={[ui.caption, { lineHeight: 19 }]}>
+            WhatsApp Repeat Campaigns, Hinglish festival offers, and 60-day customer comeback blasts are included exclusively on the Business plan (not included on Trial, Starter, or Growth).
+          </Text>
+          <Action
+            label="View Business Plan"
+            icon="workspace-premium"
+            onPress={() => router.push('/my-plan')}
+          />
+        </Card>
+      </Screen>
+    );
+  }
 
   return (
     <Screen

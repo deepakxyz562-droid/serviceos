@@ -40,6 +40,13 @@ function getPhoneTail(raw: string | null | undefined): string | null {
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
+const REVIEW_COOLDOWN_DAYS = 30;
+
+function toLocalDayKey(date: Date, timeZone: string): string {
+  const p = getLocalDateParts(date, timeZone);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
 function isPlaceholderCustomerName(name: string | null | undefined): boolean {
   const trimmed = (name || '').trim();
   if (!trimmed) return true;
@@ -742,30 +749,45 @@ export async function GET(request: NextRequest) {
         .filter((r) => r.status === 'pending' && r.recipientPhone)
         .map((r) => r.recipientPhone as string),
     );
+    const cooldownCutoffMs = Date.now() - REVIEW_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+    const recentSentPhones = new Set(
+      scheduledRows
+        .filter(
+          (r) =>
+            r.status === 'sent' &&
+            r.recipientPhone &&
+            (r.sentAt ? new Date(r.sentAt).getTime() : new Date(r.dueAt).getTime()) >= cooldownCutoffMs,
+        )
+        .map((r) => r.recipientPhone as string),
+    );
 
     const candidateMap = new Map<
       string,
-      { name: string; phone: string; source: 'booking' | 'crm'; alreadyQueued: boolean }
+      { name: string; phone: string; source: 'booking' | 'crm'; alreadyQueued: boolean; alreadyInvited: boolean }
     >();
     for (const b of recentBookings) {
       const norm = b.customerPhone ? normalizePhoneWithCountry(b.customerPhone, ctx.locale.callingCode) : null;
       if (norm && !candidateMap.has(norm)) {
+        const invitedRecently = recentSentPhones.has(norm);
         candidateMap.set(norm, {
           name: b.customerName?.trim() || 'Customer',
           phone: norm,
           source: 'booking',
-          alreadyQueued: pendingPhones.has(norm),
+          alreadyQueued: pendingPhones.has(norm) || invitedRecently,
+          alreadyInvited: invitedRecently,
         });
       }
     }
     for (const c of crmCustomers) {
       const norm = c.phone ? normalizePhoneWithCountry(c.phone, ctx.locale.callingCode) : null;
       if (norm && !candidateMap.has(norm)) {
+        const invitedRecently = recentSentPhones.has(norm);
         candidateMap.set(norm, {
           name: c.name?.trim() || 'Customer',
           phone: norm,
           source: 'crm',
-          alreadyQueued: pendingPhones.has(norm),
+          alreadyQueued: pendingPhones.has(norm) || invitedRecently,
+          alreadyInvited: invitedRecently,
         });
       }
     }
@@ -865,23 +887,52 @@ export async function POST(request: NextRequest) {
           ? [body.id]
           : [];
 
-      const [rows, ctx, metaTemplates] = await Promise.all([
-        db.scheduledMessage.findMany({
-          where: {
-            tenantId: user.tenantId,
-            messageType: 'review_request',
-            ...(targetIds.length > 0
-              ? { id: { in: targetIds } }
-              : action === 'retry_failed'
-                ? { status: 'failed' }
-                : { status: 'pending' }),
-          },
-          orderBy: { dueAt: 'asc' },
-          take: 10,
-        }),
+      const now = new Date();
+      const [ctx, metaTemplates, recentSentForDay] = await Promise.all([
         resolveWorkspaceReviewContext(user.tenantId),
         getReviewTemplateCatalog(user.tenantId),
+        db.scheduledMessage
+          .findMany({
+            where: {
+              tenantId: user.tenantId,
+              messageType: 'review_request',
+              status: 'sent',
+              sentAt: { gte: new Date(now.getTime() - 36 * 60 * 60 * 1000) },
+            },
+            select: { sentAt: true, dueAt: true },
+          })
+          .catch(() => []),
       ]);
+
+      const todayKey = toLocalDayKey(now, ctx.locale.timeZone);
+      const sentTodayCount = recentSentForDay.filter(
+        (r) => toLocalDayKey(new Date(r.sentAt || r.dueAt), ctx.locale.timeZone) === todayKey,
+      ).length;
+      const remainingToday = Math.max(0, 5 - sentTodayCount);
+
+      if (action === 'dispatch_now' && targetIds.length === 0 && remainingToday === 0) {
+        return NextResponse.json({
+          success: true,
+          sentCount: 0,
+          failedCount: 0,
+          message: 'Daily safe limit reached (5/5 review invites sent today). Remaining pending invites stay queued for tomorrow.',
+        });
+      }
+
+      const batchTake = targetIds.length > 0 ? Math.min(targetIds.length, 5) : action === 'retry_failed' ? 5 : remainingToday;
+      const rows = await db.scheduledMessage.findMany({
+        where: {
+          tenantId: user.tenantId,
+          messageType: 'review_request',
+          ...(targetIds.length > 0
+            ? { id: { in: targetIds } }
+            : action === 'retry_failed'
+              ? { status: 'failed' }
+              : { status: 'pending', dueAt: { lte: now } }),
+        },
+        orderBy: { dueAt: 'asc' },
+        take: batchTake,
+      });
 
       if (!rows.length) {
         return NextResponse.json({ success: true, sentCount: 0, failedCount: 0, message: 'No matching invites to send right now.' });
@@ -1001,8 +1052,9 @@ export async function POST(request: NextRequest) {
     const includeDirectLink = body.includeDirectLink !== false;
     const isScheduledMode = body.mode === 'drip' || body.mode === 'scheduled' || body.mode === 'bulk';
     const channel: 'whatsapp' | 'sms' = body.channel === 'sms' ? 'sms' : 'whatsapp';
-    const dailyLimit = Math.min(25, Math.max(1, Number.parseInt(String(body.dailyLimit || 5), 10) || 5));
-    const customTemplate = typeof body.messageTemplate === 'string' ? body.messageTemplate : undefined;
+    const dailyLimit = Math.min(5, Math.max(1, Number.parseInt(String(body.dailyLimit || 5), 10) || 5));
+    // WhatsApp review invite copy is locked to approved Meta / policy-safe templates (non-editable).
+    const customTemplate = channel === 'sms' && typeof body.messageTemplate === 'string' ? body.messageTemplate : undefined;
     const serviceName = typeof body.serviceName === 'string' && body.serviceName.trim() ? body.serviceName.trim() : undefined;
     const sanitizedCustomNote =
       typeof body.customNote === 'string' && body.customNote.trim()
@@ -1120,19 +1172,41 @@ export async function POST(request: NextRequest) {
     }
 
     if (isScheduledMode) {
-      // Check already-pending recipients so accidental double-clicks don't duplicate invites
-      const existingPending = await db.scheduledMessage.findMany({
-        where: {
-          tenantId: user.tenantId,
-          messageType: 'review_request',
-          status: 'pending',
-        },
-        select: { recipientPhone: true },
-      });
-      const existingSet = new Set(existingPending.map((r) => r.recipientPhone).filter(Boolean));
+      const now = new Date();
+      const cooldownCutoffMs = now.getTime() - REVIEW_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+      const existingRows = await db.scheduledMessage
+        .findMany({
+          where: {
+            tenantId: user.tenantId,
+            messageType: 'review_request',
+            status: { in: ['pending', 'sent'] },
+          },
+          orderBy: { dueAt: 'desc' },
+          take: 500,
+          select: { recipientPhone: true, status: true, dueAt: true, sentAt: true },
+        })
+        .catch(() => []);
+
+      const existingBlockedSet = new Set<string>();
+      const dayCountMap = new Map<string, number>();
+      for (const r of existingRows) {
+        const phone = r.recipientPhone;
+        const statusVal = String(r.status || 'pending').toLowerCase();
+        const ts = r.sentAt ? new Date(r.sentAt).getTime() : r.dueAt ? new Date(r.dueAt).getTime() : now.getTime();
+        if (phone && (statusVal === 'pending' || (statusVal === 'sent' && ts >= cooldownCutoffMs))) {
+          existingBlockedSet.add(phone);
+        }
+        const dayRef = statusVal === 'sent' ? new Date(r.sentAt || r.dueAt || now) : new Date(r.dueAt || now);
+        if (!Number.isNaN(dayRef.getTime())) {
+          const dk = toLocalDayKey(dayRef, locale.timeZone);
+          dayCountMap.set(dk, (dayCountMap.get(dk) || 0) + 1);
+        }
+      }
 
       const entries = Array.from(byPhone.entries());
-      const newEntries = entries.filter(([phone]) => !existingSet.has(phone));
+      const newEntries = markSentImmediately
+        ? entries.filter(([phone]) => !existingBlockedSet.has(phone))
+        : entries.filter(([phone]) => !existingBlockedSet.has(phone));
       const skippedDuplicates = entries.length - newEntries.length;
 
       if (newEntries.length === 0) {
@@ -1178,7 +1252,8 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json(
           {
-            error: 'All selected phone numbers are already scheduled in your pending review queue.',
+            error:
+              'All selected phone numbers are already queued or were invited in the last 30 days.',
             code: 'ALREADY_QUEUED',
             skippedDuplicates,
           },
@@ -1186,7 +1261,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const now = new Date();
       const { hour: baseHour, minute: baseMinute } = parseHourMinute(preferredTime, 10, 0);
       const localNow = getLocalDateParts(now, locale.timeZone);
       // Only start Day 0 today if local time in the user's country is before 8:00 PM; otherwise start tomorrow morning!
@@ -1194,21 +1268,39 @@ export async function POST(request: NextRequest) {
       const daySlots: Record<number, { date: string; count: number }> = {};
       let firstBatchAt: string | null = null;
       const createdIds: string[] = [];
+      let searchDayOffset = canStartToday ? 0 : 1;
 
-      const useFreeformCustom = Boolean(
-        customTemplate &&
-          customTemplate.trim() &&
-          (channel === 'sms' || waDeliveryMode === 'direct_queue' || !hasWhatsAppProvider),
-      );
+      const useFreeformCustom = Boolean(customTemplate && customTemplate.trim() && channel === 'sms');
 
       for (let idx = 0; idx < newEntries.length; idx++) {
         const [phone, customerName] = newEntries[idx];
-        const batchDay = Math.floor(idx / dailyLimit);
-        const slotIndex = idx % dailyLimit;
+
+        let targetDayKey = '';
+        let slotIndex = 0;
+        for (let guard = 0; guard < 180; guard++) {
+          const probeDate = computeLocalScheduledDate({
+            dayOffset: searchDayOffset,
+            hour: baseHour,
+            minute: baseMinute,
+            timeZone: locale.timeZone,
+            now,
+          });
+          const dk = toLocalDayKey(probeDate, locale.timeZone);
+          const countOnDay = dayCountMap.get(dk) || 0;
+          if (countOnDay < dailyLimit) {
+            targetDayKey = dk;
+            slotIndex = countOnDay;
+            break;
+          }
+          searchDayOffset += 1;
+        }
+        if (!targetDayKey) {
+          targetDayKey = toLocalDayKey(now, locale.timeZone);
+        }
+        dayCountMap.set(targetDayKey, slotIndex + 1);
 
         let dueAt: Date;
-        if (batchDay === 0 && canStartToday) {
-          // Respect preferred local hour if it's still ahead today; otherwise space softly 5m + 15m*slot apart
+        if (searchDayOffset === 0 && canStartToday) {
           const candidatePreferredToday = computeLocalScheduledDate({
             dayOffset: 0,
             hour: Math.min(18, baseHour + Math.floor(slotIndex / 2)),
@@ -1222,11 +1314,10 @@ export async function POST(request: NextRequest) {
             dueAt = new Date(now.getTime() + (5 + slotIndex * 15) * 60 * 1000);
           }
         } else {
-          const offsetDays = canStartToday ? batchDay : batchDay + 1;
           const slotHour = Math.min(18, baseHour + Math.floor(slotIndex / 2));
           const slotMinute = (baseMinute + (slotIndex % 2) * 30) % 60;
           dueAt = computeLocalScheduledDate({
-            dayOffset: offsetDays,
+            dayOffset: searchDayOffset,
             hour: slotHour,
             minute: slotMinute,
             timeZone: locale.timeZone,
@@ -1235,7 +1326,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!firstBatchAt) firstBatchAt = dueAt.toISOString();
-        const dayKey = batchDay;
+        const dayKey = searchDayOffset;
         if (!daySlots[dayKey]) {
           daySlots[dayKey] = { date: dueAt.toISOString(), count: 0 };
         }
@@ -1261,19 +1352,26 @@ export async function POST(request: NextRequest) {
               includeDirectLink,
               customTemplate,
             })
-          : channel === 'whatsapp'
-            ? buildTemplatePreviewMessage({
-                template: selectedTemplate,
-                parameters: tplParams.parameters,
-                reviewLink: includeDirectLink ? (shortReviewUrl || reviewLink) : '',
-              })
-            : buildReviewInviteMessage({
+          : channel === 'whatsapp' && (waDeliveryMode === 'direct_queue' || !hasWhatsAppProvider)
+            ? buildReviewInviteMessage({
                 customerName,
                 businessName,
                 reviewLink,
                 includeDirectLink,
-                customTemplate,
-              });
+              })
+            : channel === 'whatsapp'
+              ? buildTemplatePreviewMessage({
+                  template: selectedTemplate,
+                  parameters: tplParams.parameters,
+                  reviewLink: includeDirectLink ? (shortReviewUrl || reviewLink) : '',
+                })
+              : buildReviewInviteMessage({
+                  customerName,
+                  businessName,
+                  reviewLink,
+                  includeDirectLink,
+                  customTemplate,
+                });
 
         const row = await db.scheduledMessage.create({
           data: {
@@ -1291,7 +1389,7 @@ export async function POST(request: NextRequest) {
               source: sourceLabel,
               reviewLink,
               shortReviewUrl,
-              batchDay: batchDay + 1,
+              batchDay: searchDayOffset + 1,
               timeZone: locale.timeZone,
               country: locale.country,
               serviceName: serviceName || null,

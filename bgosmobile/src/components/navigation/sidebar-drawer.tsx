@@ -198,8 +198,12 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 18 }}
           >
-            {/* BUSINESS WORKSPACES SWITCHER */}
-            <WorkspaceSwitcherSection onClose={onClose} />
+            {/* MULTI-BUSINESS SWITCHER (only shown when user manages multiple workspaces) */}
+            <WorkspaceSwitcherSection
+              onClose={onClose}
+              showAddBusiness={false}
+              hideIfSingleWorkspace
+            />
 
             {/* GOOGLE GROWTH & BRAND BRAIN */}
             <View style={{ gap: 6 }}>

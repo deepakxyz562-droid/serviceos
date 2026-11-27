@@ -73,9 +73,9 @@ const BGOS_DEFAULT_PLANS = [
     badge: 'Popular for solo shops',
     features: [
       'AI chatbot & shared customer inbox',
-      'Unlimited intake & survey forms',
-      'Appointment calendar & booking',
-      'Up to 1,000 contacts',
+      'Google Business posts, SEO audit & 3×3 grid',
+      'Unlimited forms & appointment booking',
+      '200 AI Studio images/month · 1,000 contacts',
     ],
   },
   {
@@ -87,11 +87,10 @@ const BGOS_DEFAULT_PLANS = [
     highlight: true,
     features: [
       'Everything in Starter',
-      'Google SEO Maps rank boost',
-      '1-Tap WhatsApp Google Reviews',
-      'Printable Countertop QR Standees',
-      'Automated marketing broadcasts',
-      'Up to 10,000 contacts',
+      '1-Tap WhatsApp Business reviews & chat',
+      'AI review autopilot & quiet-chat nudges',
+      'Printable QR standees, Citations & Suspension Shield',
+      '600 AI Studio images/month · 10,000 contacts',
     ],
   },
   {
@@ -99,13 +98,14 @@ const BGOS_DEFAULT_PLANS = [
     name: 'Business',
     priceInr: 3999,
     priceUsd: 79,
-    badge: 'Multi-location & enterprise',
+    badge: 'Multi-location & growth teams',
     features: [
       'Everything in Growth',
-      '2,500 monthly B2B lead search credits',
-      'Multi-team permissions & routing',
-      'Executive 4-tier growth analytics',
-      'Up to 100,000 contacts',
+      'WhatsApp Repeat Campaigns & 60d comeback blasts',
+      '5×5 Live Geo-Grid rank tracker',
+      '2,000 AI Studio images/month',
+      'Team management (up to 25 seats)',
+      'Executive 4-tier growth analytics & 100,000 contacts',
     ],
   },
 ];
@@ -333,15 +333,9 @@ export default function MyPlanScreen() {
             </Text>
           </View>
           <View style={{ flex: 1, backgroundColor: colors.background, padding: 10, borderRadius: 10 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.muted }}>FORMS</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.muted }}>ACTIVE FORMS</Text>
             <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink, marginTop: 2 }}>
               {billingRes.data?.usage?.forms || 0}
-            </Text>
-          </View>
-          <View style={{ flex: 1, backgroundColor: colors.background, padding: 10, borderRadius: 10 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.muted }}>LEAD CREDITS</Text>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.ink, marginTop: 2 }}>
-              {billingRes.data?.usage?.usedLeadCredits || 0}/{billingRes.data?.usage?.leadCreditLimit || 0}
             </Text>
           </View>
         </View>

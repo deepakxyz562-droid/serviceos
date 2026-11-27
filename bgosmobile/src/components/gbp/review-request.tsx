@@ -63,6 +63,7 @@ interface CrmCandidate {
   phone: string;
   source: 'booking' | 'crm';
   alreadyQueued: boolean;
+  alreadyInvited?: boolean;
 }
 
 export interface ReviewMetaTemplatePreset {
@@ -343,7 +344,6 @@ export function ReviewRequestSheet({
   const channel = 'whatsapp';
   const dailyLimit = 5;
   const preferredTime = '10:00';
-  const [customBulkMessage, setCustomBulkMessage] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [csvName, setCsvName] = useState<string | null>(null);
   const [csvRecipients, setCsvRecipients] = useState<ParsedBulkRecipient[]>([]);
@@ -439,11 +439,6 @@ export function ReviewRequestSheet({
       void loadQueue();
     }
   }, [visible, initialTab, loadQueue]);
-
-  useEffect(() => {
-    const defaultTpl = `Hello {firstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`;
-    setCustomBulkMessage(defaultTpl);
-  }, [cleanBusinessName, effectiveReviewUrl]);
 
   const inviteText = useMemo(() => {
     const greetingEn = firstName ? `Hello ${firstName},` : 'Hello there,';
@@ -752,7 +747,6 @@ export function ReviewRequestSheet({
           saveToCustomers: saveToCrm,
           saveToLeads: saveToCrm,
           leadStatus: 'won',
-          messageTemplate: customBulkMessage.trim() || undefined,
           recipients: activeBulkRecipients,
         },
       });
@@ -1224,7 +1218,13 @@ export function ReviewRequestSheet({
                                   <Text style={styles.crmPhone}>{cand.phone}</Text>
                                 </View>
                                 <Text style={styles.crmSourcePill}>
-                                  {cand.alreadyQueued ? 'Queued' : cand.source === 'booking' ? 'Booking' : 'CRM'}
+                                  {cand.alreadyInvited
+                                    ? 'Invited'
+                                    : cand.alreadyQueued
+                                      ? 'Queued'
+                                      : cand.source === 'booking'
+                                        ? 'Booking'
+                                        : 'CRM'}
                                 </Text>
                               </Pressable>
                             );
@@ -1247,22 +1247,24 @@ export function ReviewRequestSheet({
                   )}
                 </View>
 
-                {/* ── Card 3: Invite Message Preview ── */}
+                {/* ── Card 3: Invite Message Preview (Non-Editable Approved Template) ── */}
                 <View style={styles.bulkInputCard}>
                   <View style={styles.cardHeaderLine}>
-                    <Text style={styles.bulkLabel}>Invite Message</Text>
-                    <View style={styles.editableBadge}>
-                      <Text style={styles.editableBadgeText}>WhatsApp Message</Text>
+                    <Text style={styles.bulkLabel}>3. Invite Message Preview</Text>
+                    <View style={styles.lockedBadge}>
+                      <MaterialIcons name="lock" size={11} color={colors.brandDark} />
+                      <Text style={styles.lockedBadgeText}>Locked Template</Text>
                     </View>
                   </View>
-                  <TextInput
-                    value={customBulkMessage}
-                    onChangeText={setCustomBulkMessage}
-                    multiline
-                    style={styles.bulkMsgInput}
-                  />
+                  <View style={styles.metaReadOnlyBubbleWrap}>
+                    <View style={styles.metaReadOnlyBubble}>
+                      <Text style={styles.bubbleMessageText}>
+                        {`Hello {FirstName},\n\nPlease share your feedback on your recent experience at *${cleanBusinessName}*:\n${effectiveReviewUrl}\n\n*${cleanBusinessName}* Team`}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.channelHint}>
-                    Use {'{firstName}'} to personalize each customer automatically. Google review link is included automatically.
+                    Template copy is fixed for Meta WhatsApp 24h approval compliance and Google Review policy safety. Each customer receives their personalized greeting and direct review link automatically (max 5 unique customers/day).
                   </Text>
                 </View>
 

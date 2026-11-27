@@ -79,6 +79,7 @@ export interface BgosWorkspace {
   socialProfiles?: BgosSocialProfiles;
   intakeForm?: { id: string; name: string; slug: string } | null;
   plan: { code: string; status: string };
+  features?: { whatsappRepeatCampaigns: boolean };
   billing?: {
     region: 'india' | 'international';
     currency: 'INR' | 'USD';

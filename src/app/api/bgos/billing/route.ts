@@ -13,6 +13,7 @@ import {
   activateBgosSubscription,
   getTenantBgosEntitlement,
 } from '@/lib/bgos-entitlement';
+import { evaluateRepeatCampaignsAccess } from '@/lib/bgos-plan-access';
 import { db } from '@/lib/db';
 import { isCreemConfigured, createCreemCheckoutSession } from '@/lib/creem';
 import {
@@ -132,6 +133,12 @@ export async function GET(request: NextRequest) {
           autoPayCancelled,
         },
         entitlement,
+        features: {
+          whatsappRepeatCampaigns: evaluateRepeatCampaignsAccess({
+            plan: entitlement.plan || access.subscription.plan,
+            status: entitlement.status || access.subscription.status,
+          }),
+        },
         defaultRegion,
         billingCountry: locationBilling.countryCode,
         currency: locationBilling.currency,

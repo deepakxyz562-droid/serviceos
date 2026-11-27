@@ -70,7 +70,7 @@ const PLANS = [
     features: [
       'Everything in Starter',
       'Google SEO Maps rank boost & local audit',
-      '1-Tap WhatsApp Google Review requests',
+      '1-Tap WhatsApp Business reviews & chat',
       'Printable Countertop QR Standees',
       'AI Marketing Studio & Autopilot',
       'Up to 10,000 active contacts',
@@ -85,10 +85,10 @@ const PLANS = [
     highlight: false,
     features: [
       'Everything in Growth',
-      '2,500 monthly B2B lead search credits',
+      'WhatsApp Repeat Campaigns & 60d comeback blasts',
+      '5×5 Live Geo-Grid rank tracker',
       'Multi-team staff permissions & routing',
-      'Executive 4-tier growth analytics',
-      'Up to 100,000 contacts',
+      'Executive 4-tier growth analytics & 100,000 contacts',
     ],
   },
 ];

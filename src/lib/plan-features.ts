@@ -71,6 +71,7 @@ export const PLAN_FEATURE_DEFS: PlanFeatureDef[] = [
   { key: 'workflows', label: 'Workflows', description: 'Visual workflow builder', category: 'automation' },
   { key: 'form_builder', label: 'Form Builder', description: 'Drag-and-drop custom form builder', category: 'automation' },
   { key: 'marketing_campaigns', label: 'Marketing Campaigns', description: 'SMS/WhatsApp/email bulk campaigns', category: 'automation' },
+  { key: 'whatsapp_repeat_campaigns', label: 'WhatsApp Repeat Campaigns', description: 'Occasion blasts & 60-day customer comeback campaigns', category: 'automation' },
   { key: 'broadcast', label: 'Broadcast', description: 'One-to-many messaging', category: 'automation' },
   { key: 'customer_segments', label: 'Customer Segments', description: 'Build segments + smart lists', category: 'automation' },
   { key: 'template_studio', label: 'Template Studio', description: 'Reusable message + document templates', category: 'automation' },
@@ -151,7 +152,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     email_integration: false, omnichannel_inbox: false, ai_assistant: false,
     ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
     ai_form_generator: false,
-    workflows: false, form_builder: true, marketing_campaigns: false, broadcast: false,
+    workflows: false, form_builder: true, marketing_campaigns: false, whatsapp_repeat_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
@@ -163,19 +164,19 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     document_center: true, role_permissions: false, advanced_reports: false,
     data_retention: false, advanced_security: false,
   },
-  // Trial: full CRM + operations + finance + KB + docs so users can explore.
+  // Trial: full CRM + operations + finance + KB + docs + AI chatbot/WhatsApp so users can test BGOS.
   // workflows=true so trial users can experiment; everything else gated off.
   trial: {
     // CRM (all)
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
-    // Communication (none)
-    live_chat: false, sms_numbers: false, ai_receptionist: false, whatsapp: false,
-    email_integration: false, omnichannel_inbox: false, ai_assistant: false,
-    ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
+    // Communication (BGOS trial unlocks inbox, chatbot & WhatsApp)
+    live_chat: true, sms_numbers: false, ai_receptionist: false, whatsapp: true,
+    email_integration: false, omnichannel_inbox: true, ai_assistant: true,
+    ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: true,
     ai_form_generator: true,
     // Automation (workflows + forms enabled so trial users can experiment)
-    workflows: true, form_builder: true, marketing_campaigns: false, broadcast: false,
+    workflows: true, form_builder: true, marketing_campaigns: false, whatsapp_repeat_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     // Operations (all basic — route_optimization is disabled on every tier; the standalone
     // route-optimization-view.tsx was a stub and has been deleted. Real auto-dispatch lives in
@@ -194,15 +195,15 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     document_center: true, role_permissions: false, advanced_reports: false,
     data_retention: false, advanced_security: false,
   },
-  // Starter: trial MINUS workflows (locked behind growth+)
+  // Starter: AI chatbot & shared inbox included; WhatsApp Cloud API & workflows on growth+
   starter: {
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
-    live_chat: false, sms_numbers: false, ai_receptionist: false, whatsapp: false,
-    email_integration: false, omnichannel_inbox: false, ai_assistant: false,
-    ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
+    live_chat: true, sms_numbers: false, ai_receptionist: false, whatsapp: false,
+    email_integration: false, omnichannel_inbox: true, ai_assistant: true,
+    ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: true,
     ai_form_generator: true,
-    workflows: false, form_builder: true, marketing_campaigns: false, broadcast: false,
+    workflows: false, form_builder: true, marketing_campaigns: false, whatsapp_repeat_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     // Starter = solo operator: no dispatch_board, no gps_tracking, no recurring_invoices
     dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
@@ -223,7 +224,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     email_integration: true, omnichannel_inbox: true, ai_assistant: true,
     ai_quote_generator: true, ai_job_summary: true, ai_suggested_replies: true,
     ai_form_generator: true,
-    workflows: true, form_builder: true, marketing_campaigns: true, broadcast: true,
+    workflows: true, form_builder: true, marketing_campaigns: true, whatsapp_repeat_campaigns: false, broadcast: true,
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
     // Professional: dispatch_board + recurring_invoices enabled; gps_tracking still business+
     dispatch_board: true, gps_tracking: false, customer_portal: true, employee_portal: true,
@@ -245,7 +246,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     email_integration: true, omnichannel_inbox: true, ai_assistant: true,
     ai_quote_generator: true, ai_job_summary: true, ai_suggested_replies: true,
     ai_form_generator: true,
-    workflows: true, form_builder: true, marketing_campaigns: true, broadcast: true,
+    workflows: true, form_builder: true, marketing_campaigns: true, whatsapp_repeat_campaigns: true, broadcast: true,
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
     dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
@@ -266,7 +267,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     email_integration: true, omnichannel_inbox: true, ai_assistant: true,
     ai_quote_generator: true, ai_job_summary: true, ai_suggested_replies: true,
     ai_form_generator: true,
-    workflows: true, form_builder: true, marketing_campaigns: true, broadcast: true,
+    workflows: true, form_builder: true, marketing_campaigns: true, whatsapp_repeat_campaigns: true, broadcast: true,
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
     dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,

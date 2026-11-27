@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { checkWhatsAppCredits } from '@/lib/credit-management';
+import { requireBgosRepeatCampaignsAccess } from '@/lib/bgos-plan-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +146,8 @@ export async function GET(request: NextRequest) {
     if (!user?.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
+    const planGate = await requireBgosRepeatCampaignsAccess(user);
+    if (!planGate.ok) return planGate.response;
 
     const audience = normalizeAudienceKey(new URL(request.url).searchParams.get('audience'));
     const [{ counts, recipients }, waStatus, templates] = await Promise.all([
@@ -194,6 +197,8 @@ export async function POST(request: NextRequest) {
     if (!['owner', 'admin', 'standalone_user'].includes(user.role)) {
       return NextResponse.json({ error: 'Not permitted' }, { status: 403 });
     }
+    const planGate = await requireBgosRepeatCampaignsAccess(user);
+    if (!planGate.ok) return planGate.response;
 
     const body = (await request.json().catch(() => ({}))) as {
       audience?: string;

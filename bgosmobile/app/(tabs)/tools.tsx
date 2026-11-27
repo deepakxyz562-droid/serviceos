@@ -266,18 +266,14 @@ export default function ToolsScreen() {
           icon="smart-toy"
           onPress={() => router.push('/agents')}
         />
-        <MenuRow
-          title="AI Automations & Triggers"
-          detail="Instant lead follow-ups, booking reminders & workflows"
-          icon="bolt"
-          onPress={() => router.push('/automations')}
-        />
-        <MenuRow
-          title="WhatsApp Repeat Campaigns"
-          detail="Occasion offers, Hinglish drafts & customer comeback blasts"
-          icon="campaign"
-          onPress={() => router.push('/whatsapp-campaigns' as any)}
-        />
+        {Boolean(data?.features?.whatsappRepeatCampaigns) ? (
+          <MenuRow
+            title="WhatsApp Repeat Campaigns"
+            detail="Occasion offers, Hinglish drafts & customer comeback blasts"
+            icon="campaign"
+            onPress={() => router.push('/whatsapp-campaigns' as any)}
+          />
+        ) : null}
         <MenuRow
           title="AI Search & SEO Audit"
           detail="Target keywords, Website audit, Maps Geo-Grid & AI visibility"
@@ -393,12 +389,6 @@ export default function ToolsScreen() {
             <Text style={ui.caption}>Active Forms</Text>
             <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
               {data?.usage?.forms ?? 0}
-            </Text>
-          </View>
-          <View style={{ flex: 1, padding: 10, borderRadius: 10, backgroundColor: colors.background }}>
-            <Text style={ui.caption}>Lead Credits</Text>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.ink }}>
-              {data?.usage?.usedLeadCredits ?? 0}/{data?.usage?.leadCreditLimit ?? 100}
             </Text>
           </View>
         </View>
