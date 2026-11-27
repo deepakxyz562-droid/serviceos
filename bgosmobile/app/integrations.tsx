@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -107,12 +108,12 @@ const SUPPORTED_CHANNELS: ChannelDef[] = [
   {
     key: 'whatsapp',
     name: 'WhatsApp Business Messaging',
-    badge: '1-Tap Reviews & CRM',
+    badge: 'AI Chat, Campaigns & Reminders',
     icon: 'chat',
     iconColor: '#25D366',
     iconBg: '#DCFCE7',
-    desc: 'Automated 1-tap Google review requests, appointment confirmations, and instant customer chat.',
-    oauthPath: '/(tabs)/reviews',
+    desc: 'Connect Meta WhatsApp Cloud API for 24/7 AI chat booking, PDF brochures, reminders, and campaigns.',
+    oauthPath: '/api/whatsapp/manual-config',
   },
 ];
 
@@ -123,6 +124,15 @@ function IntegrationsScreen() {
   const [disconnectingAccount, setDisconnectingAccount] = useState<Account | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [waModalOpen, setWaModalOpen] = useState(false);
+  const [waPhoneNumber, setWaPhoneNumber] = useState('');
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState('');
+  const [waWabaId, setWaWabaId] = useState('');
+  const [waAccessToken, setWaAccessToken] = useState('');
+  const [waTesting, setWaTesting] = useState(false);
+  const [waSaving, setWaSaving] = useState(false);
+  const [waTestResult, setWaTestResult] = useState<string | null>(null);
+
   const refreshAll = async () => {
     await Promise.all([accountsRes.refresh(), waConfig.refresh()]).catch(() => {});
   };
@@ -132,10 +142,71 @@ function IntegrationsScreen() {
   const waActive = Boolean(waConfig.data?.isConfigured);
   const totalConnected = activeAccounts.length + (waActive ? 1 : 0);
 
-  // Connect Channel via OAuth (shared launcher)
+  const openWhatsAppSetup = () => {
+    setWaTestResult(null);
+    setWaModalOpen(true);
+  };
+
+  const handleTestWhatsApp = async () => {
+    const token = waAccessToken.trim();
+    const phoneId = waPhoneNumberId.trim();
+    if (!token || !phoneId) {
+      Alert.alert('Missing Credentials', 'Enter Phone Number ID and Meta Access Token to test.');
+      return;
+    }
+    setWaTesting(true);
+    setWaTestResult(null);
+    try {
+      const res = await apiRequest<{ success?: boolean; verifiedName?: string; displayPhoneNumber?: string; error?: string }>(
+        '/api/whatsapp/config',
+        {
+          method: 'PUT',
+          body: JSON.stringify({ accessToken: token, phoneNumberId: phoneId }),
+        },
+      );
+      setWaTestResult(
+        `Verified: ${res.verifiedName || 'WhatsApp Business'} (${res.displayPhoneNumber || phoneId})`,
+      );
+    } catch (e: any) {
+      setWaTestResult(`Test failed: ${e?.message || 'Invalid credentials'}`);
+    } finally {
+      setWaTesting(false);
+    }
+  };
+
+  const handleSaveWhatsApp = async () => {
+    const phoneNumber = waPhoneNumber.trim();
+    const phoneNumberId = waPhoneNumberId.trim();
+    const wabaId = waWabaId.trim();
+    const accessToken = waAccessToken.trim();
+    if (!phoneNumber || !phoneNumberId || !wabaId || !accessToken) {
+      Alert.alert(
+        'Missing Fields',
+        'Phone Number, Phone Number ID, WABA ID, and Permanent Access Token are required.',
+      );
+      return;
+    }
+    setWaSaving(true);
+    try {
+      await apiRequest('/api/whatsapp/manual-config', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber, phoneNumberId, wabaId, accessToken }),
+      });
+      await waConfig.refresh();
+      setWaModalOpen(false);
+      setWaAccessToken('');
+      Alert.alert('WhatsApp Connected', 'Your WhatsApp Business Cloud number is now live.');
+    } catch (e: any) {
+      Alert.alert('Connection Failed', e?.message || 'Could not save WhatsApp Cloud credentials.');
+    } finally {
+      setWaSaving(false);
+    }
+  };
+
+  // Connect Channel via OAuth (shared launcher) or WhatsApp Cloud modal
   const handleConnect = async (channel: ChannelDef) => {
     if (channel.key === 'whatsapp') {
-      router.push('/(tabs)/reviews');
+      openWhatsAppSetup();
       return;
     }
 
@@ -294,7 +365,7 @@ function IntegrationsScreen() {
                       ) : isWa ? (
                         <Pressable
                           accessibilityRole="button"
-                          onPress={() => router.push('/(tabs)/reviews')}
+                          onPress={openWhatsAppSetup}
                           style={styles.settingsBtn}
                         >
                           <MaterialIcons name="settings" size={16} color="#64748B" />
@@ -319,6 +390,106 @@ function IntegrationsScreen() {
           })}
         </View>
       )}
+
+      {/* ── WhatsApp Cloud API Setup Modal ── */}
+      <Modal
+        visible={waModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWaModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 400, alignItems: 'stretch' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.modalHeading, { textAlign: 'left' }]}>
+                Connect WhatsApp Cloud API
+              </Text>
+              <Pressable onPress={() => setWaModalOpen(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={20} color="#64748B" />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSubheading, { textAlign: 'left' }]}>
+              Enter your Meta WhatsApp Business Cloud API credentials from developers.facebook.com to send &amp; receive AI chats, booking confirmations, and campaigns on your own number.
+            </Text>
+
+            <View style={{ gap: 8 }}>
+              <TextInput
+                value={waPhoneNumber}
+                onChangeText={setWaPhoneNumber}
+                placeholder="Business Phone (e.g. +919876543210)"
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+                style={styles.waInput}
+              />
+              <TextInput
+                value={waPhoneNumberId}
+                onChangeText={setWaPhoneNumberId}
+                placeholder="Meta Phone Number ID"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                style={styles.waInput}
+              />
+              <TextInput
+                value={waWabaId}
+                onChangeText={setWaWabaId}
+                placeholder="WhatsApp Business Account (WABA) ID"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                style={styles.waInput}
+              />
+              <TextInput
+                value={waAccessToken}
+                onChangeText={setWaAccessToken}
+                placeholder="Permanent System User Access Token"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                secureTextEntry
+                style={styles.waInput}
+              />
+            </View>
+
+            {waTestResult ? (
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: waTestResult.startsWith('Verified') ? '#059669' : '#DC2626',
+                }}
+              >
+                {waTestResult}
+              </Text>
+            ) : null}
+
+            <View style={styles.modalButtonsRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleTestWhatsApp}
+                disabled={waTesting || waSaving}
+                style={styles.modalCancelBtn}
+              >
+                {waTesting ? (
+                  <ActivityIndicator size="small" color="#334155" />
+                ) : (
+                  <Text style={styles.modalCancelText}>Test Token</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleSaveWhatsApp}
+                disabled={waTesting || waSaving}
+                style={[styles.modalConfirmBtn, { backgroundColor: '#009F50' }]}
+              >
+                {waSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Save &amp; Connect</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Disconnect Confirmation Modal ── */}
       <Modal
@@ -661,6 +832,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  waInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
   },
 });
 

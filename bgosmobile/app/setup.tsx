@@ -19,6 +19,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Action, Card, ErrorNotice, Field, Loading, Screen, colors, ui } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/auth-store';
 import { apiRequest } from '../src/lib/api';
+import { uploadFileToStorage } from '../src/lib/upload';
 import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { WEB_URL } from '../src/lib/constants';
 import { gbpColors, StarRow } from '../src/components/gbp/bits';
@@ -141,6 +142,7 @@ export default function SetupScreen() {
   // Step 3 PDF upload
   const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
   const [uploadedPdfSize, setUploadedPdfSize] = useState<string | null>(null);
+  const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
 
@@ -520,11 +522,27 @@ export default function SetupScreen() {
       setUploadedPdfName(file.name);
       setUploadedPdfSize(file.size ? `${(file.size / 1024).toFixed(0)} KB` : null);
 
+      const uploadedUrl = await uploadFileToStorage(
+        {
+          uri: file.uri,
+          name: file.name || 'brochure.pdf',
+          mimeType: file.mimeType || 'application/pdf',
+          fileSize: typeof file.size === 'number' ? file.size : undefined,
+          file: (file as any).file,
+        },
+        { folder: 'brochures', visibility: 'public' },
+      );
+      setUploadedPdfUrl(uploadedUrl);
+      await apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: { brochureUrl: uploadedUrl },
+      });
+
       const categoryQuery = (locationCategory || data?.industry || '').trim();
       if (!categoryQuery) {
         Alert.alert(
-          'Brochure Attached',
-          `Attached "${file.name}". Select a business category first or add services manually below.`,
+          'Brochure Uploaded',
+          `Uploaded & saved "${file.name}" for WhatsApp brochure sharing. Select a business category or add services manually below.`,
         );
         return;
       }
@@ -542,18 +560,21 @@ export default function SetupScreen() {
       if (suggested.length > 0) {
         setOfferingsList((prev) => Array.from(new Set([...prev, ...suggested])));
         Alert.alert(
-          'Brochure Attached & Services Suggested',
-          `Attached "${file.name}" and added AI-suggested offerings for ${categoryQuery}. Review or edit them below.`,
+          'Brochure Uploaded & Services Suggested',
+          `Uploaded & saved "${file.name}" and added AI-suggested offerings for ${categoryQuery}. Review or edit them below.`,
         );
       } else {
         Alert.alert(
-          'Brochure Attached',
-          `Attached "${file.name}". Automatic PDF parsing runs when saved — review or add your services below.`,
+          'Brochure Uploaded',
+          `Uploaded & saved "${file.name}" to your workspace for WhatsApp sharing. Review or add your services below.`,
         );
       }
     } catch (err) {
-      console.warn('[setup] DocumentPicker error:', err);
-      Alert.alert('Upload Error', 'Could not open document picker. Please try again.');
+      console.warn('[setup] PDF brochure upload error:', err);
+      Alert.alert(
+        'Upload Error',
+        err instanceof Error ? err.message : 'Could not upload PDF brochure. Please try again.',
+      );
     } finally {
       setIsUploadingPdf(false);
     }

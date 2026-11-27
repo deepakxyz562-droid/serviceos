@@ -18,6 +18,7 @@ import {
 } from '@/lib/scheduling/calendar-helper';
 import { pushBookingToGoogleCalendar } from '@/lib/scheduling/google-calendar-sync';
 import { getAuthUser } from '@/lib/auth';
+import { resolveTenantLocale, wallClockToUtcDate } from '@/lib/locale-timezone';
 
 export interface CustomerInput {
   name?: string | null;
@@ -70,7 +71,8 @@ export interface BookingResult {
 export function resolveScheduledDateTimes(
   dateInput: string,
   timeInput?: string | null,
-  durationMinutes = 30
+  durationMinutes = 30,
+  timezone = 'UTC',
 ): { scheduledAt: Date; scheduledEndTime: Date; dateStr: string; timeStr: string } {
   let scheduledAt: Date;
 
@@ -78,7 +80,7 @@ export function resolveScheduledDateTimes(
     // ISO string provided
     scheduledAt = new Date(dateInput);
   } else {
-    // Separate date and time
+    // Separate date and time — interpret in tenant's local timezone rather than raw UTC
     let hours = 10;
     let minutes = 0;
 
@@ -108,7 +110,14 @@ export function resolveScheduledDateTimes(
 
     const [year, month, day] = dateInput.split('-').map(Number);
     if (year && month && day) {
-      scheduledAt = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+      scheduledAt = wallClockToUtcDate({
+        year,
+        month,
+        day,
+        hour: hours,
+        minute: minutes,
+        timeZone: timezone || 'UTC',
+      });
     } else {
       scheduledAt = new Date(dateInput);
       if (isNaN(scheduledAt.getTime())) {
@@ -127,6 +136,7 @@ export function resolveScheduledDateTimes(
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
+    timeZone: timezone || 'UTC',
   });
 
   return { scheduledAt, scheduledEndTime, dateStr, timeStr };
@@ -150,7 +160,7 @@ export async function createAppointmentBooking(
     date,
     time,
     durationMinutes = 30,
-    timezone = 'UTC',
+    timezone: explicitTimezone,
     customer = {},
     notes = '',
     source = 'form',
@@ -171,10 +181,25 @@ export async function createAppointmentBooking(
     throw new Error('A valid business workspace is required to book an appointment');
   }
 
+  let timezone = explicitTimezone && explicitTimezone !== 'UTC' ? explicitTimezone : '';
+  if (!timezone) {
+    try {
+      const t = await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { country: true, settingsJson: true },
+      });
+      timezone = resolveTenantLocale({ tenantCountry: t?.country, settingsJson: t?.settingsJson }).timeZone;
+    } catch {
+      timezone = 'UTC';
+    }
+  }
+  if (!timezone) timezone = 'UTC';
+
   const { scheduledAt, scheduledEndTime, dateStr, timeStr } = resolveScheduledDateTimes(
     date,
     time,
-    durationMinutes
+    durationMinutes,
+    timezone,
   );
 
   let availableSlotMatched = true;
@@ -389,6 +414,33 @@ export async function createAppointmentBooking(
     } catch (gcalPushErr) {
       console.warn('[booking-service] Google Calendar push warning:', gcalPushErr);
     }
+  }
+
+  if (
+    tenantId &&
+    (booking.customerPhone || booking.customerEmail) &&
+    source !== 'ai_chat_widget' &&
+    source !== 'manual'
+  ) {
+    import('@/lib/whatsapp-notifications')
+      .then(({ notifyCustomerBookingConfirmed }) =>
+        notifyCustomerBookingConfirmed({
+          id: booking.id,
+          bookingId: booking.id,
+          bookingType: booking.bookingType,
+          title: displayTitle,
+          customerName: booking.customerName,
+          customerPhone: booking.customerPhone,
+          customerEmail: booking.customerEmail,
+          address: booking.address,
+          scheduledAt: scheduledAt.toISOString(),
+          tenantId,
+          customerId: booking.customerId,
+        }),
+      )
+      .catch((err) => {
+        console.warn('[booking-service] Customer confirmation notification notice:', err);
+      });
   }
 
   return {

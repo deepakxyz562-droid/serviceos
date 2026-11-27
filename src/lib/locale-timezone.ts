@@ -174,6 +174,42 @@ export function getLocalDateParts(date: Date, timeZone: string): {
 }
 
 /**
+ * Converts an explicit calendar date (year/month 1-12/day) + local wall-clock hour:minute
+ * in `timeZone` into the exact UTC Date.
+ */
+export function wallClockToUtcDate(options: {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute?: number;
+  timeZone: string;
+}): Date {
+  const tz = isValidTimeZone(options.timeZone) ? options.timeZone : 'UTC';
+  const desiredWallMs = Date.UTC(
+    options.year,
+    options.month - 1,
+    options.day,
+    options.hour,
+    options.minute ?? 0,
+    0,
+    0,
+  );
+
+  // Two-pass convergence handles DST boundaries & half-hour offsets (+05:30, +05:45)
+  let guessMs = desiredWallMs;
+  for (let pass = 0; pass < 3; pass++) {
+    const actual = getLocalDateParts(new Date(guessMs), tz);
+    const actualWallMs = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0, 0);
+    const diffMs = desiredWallMs - actualWallMs;
+    if (diffMs === 0) break;
+    guessMs += diffMs;
+  }
+
+  return new Date(guessMs);
+}
+
+/**
  * Converts a target calendar day offset (relative to today in `timeZone`) and local
  * wall-clock `hour:minute` into an exact UTC Date, accounting for DST and fractional-hour offsets.
  */
@@ -193,34 +229,17 @@ export function computeLocalScheduledDate(options: {
       todayLocal.year,
       todayLocal.month - 1,
       todayLocal.day + Math.max(0, options.dayOffset),
-      options.hour,
-      options.minute ?? 0,
-      0,
-      0,
     ),
   );
 
-  const desiredWallMs = Date.UTC(
-    targetCal.getUTCFullYear(),
-    targetCal.getUTCMonth(),
-    targetCal.getUTCDate(),
-    targetCal.getUTCHours(),
-    targetCal.getUTCMinutes(),
-    0,
-    0,
-  );
-
-  // Two-pass wall-clock convergence handles DST boundaries & half-hour offsets (+05:30, +05:45)
-  let guessMs = desiredWallMs;
-  for (let pass = 0; pass < 3; pass++) {
-    const actual = getLocalDateParts(new Date(guessMs), tz);
-    const actualWallMs = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0, 0);
-    const diffMs = desiredWallMs - actualWallMs;
-    if (diffMs === 0) break;
-    guessMs += diffMs;
-  }
-
-  return new Date(guessMs);
+  return wallClockToUtcDate({
+    year: targetCal.getUTCFullYear(),
+    month: targetCal.getUTCMonth() + 1,
+    day: targetCal.getUTCDate(),
+    hour: options.hour,
+    minute: options.minute ?? 0,
+    timeZone: tz,
+  });
 }
 
 /**

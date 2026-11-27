@@ -7,8 +7,13 @@ import { createInboundMessage } from '@/lib/inbox-message-service';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { getAppUrl } from '@/lib/brand';
 import { callAI, type ChatMessage } from '@/lib/ai-client';
-import { extractBookingIntent, tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import {
+  extractBookingIntent,
+  tryExecuteChatBooking,
+  upsertWhatsAppInquiryLead,
+} from '@/lib/scheduling/chat-booking-helper';
 import { checkAvailability } from '@/lib/scheduling/ai-tools';
+import { getLocalDateParts, resolveTenantLocale } from '@/lib/locale-timezone';
 import crypto from 'crypto';
 
 // Well-known dev fallback tokens — accepted ONLY outside production so local
@@ -379,6 +384,9 @@ async function handlePlainTextInbound(
     const timestamp = (message as { timestamp?: string }).timestamp;
     const textBody =
       ((message as { text?: { body?: string } }).text?.body || '').toString();
+    const waContacts = (value as { contacts?: Array<{ wa_id?: string; profile?: { name?: string } }> })?.contacts;
+    const contactProfileName =
+      waContacts?.find((c) => !c.wa_id || c.wa_id === from)?.profile?.name?.trim() || undefined;
 
     if (!from || !textBody) {
       console.warn('[WhatsApp Callback] Plain-text inbound missing from/body');
@@ -471,6 +479,20 @@ async function handlePlainTextInbound(
     }
 
     // ── 3. Find or create a Conversation ──────────────────────────────────
+    const digitsOnly = from.replace(/\D/g, '');
+    const last10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+    const matchedCustomer = await db.customer.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { phone: from },
+          ...(digitsOnly ? [{ phone: `+${digitsOnly}` }] : []),
+          ...(last10.length >= 10 ? [{ phone: { endsWith: last10 } }] : []),
+        ],
+      },
+      select: { id: true },
+    }).catch(() => null);
+
     let conversationId: string;
     try {
       const existingConv = await db.conversation.findFirst({
@@ -491,6 +513,9 @@ async function handlePlainTextInbound(
             lastMessageAt: new Date(),
             lastMessageBody: textBody,
             lastDirection: 'inbound',
+            ...(matchedCustomer?.id && !existingConv.customerId
+              ? { customerId: matchedCustomer.id }
+              : {}),
           },
         });
       } else {
@@ -498,6 +523,7 @@ async function handlePlainTextInbound(
         await db.conversation.create({
           data: {
             conversationId,
+            customerId: matchedCustomer?.id || null,
             customerPhone: from,
             channel: 'whatsapp',
             status: 'active',
@@ -540,7 +566,7 @@ async function handlePlainTextInbound(
           conversationId,
           channel: 'whatsapp',
           senderId: from,
-          senderName: from,
+          senderName: contactProfileName || from,
           content: textBody,
           messageType: 'text',
           externalId: messageId || undefined,
@@ -680,12 +706,26 @@ async function handlePlainTextInbound(
     // If the tenant has an active FormAgent (trained receptionist / AI employee),
     // route the inbound conversation to the agent so customer questions are answered
     // with trained business knowledge, FAQs, and persona.
+    let leadCaptured = false;
     try {
       // Check if conversation AI is paused by an operator
-      const convRecord = await db.conversation.findFirst({
-        where: { conversationId, tenantId },
-        select: { aiPaused: true },
-      });
+      const [convRecord, tenantLocaleRow] = await Promise.all([
+        db.conversation.findFirst({
+          where: { conversationId, tenantId },
+          select: { aiPaused: true },
+        }),
+        db.tenant
+          .findUnique({
+            where: { id: tenantId },
+            select: { country: true, settingsJson: true },
+          })
+          .catch(() => null),
+      ]);
+
+      const tenantTz = resolveTenantLocale({
+        tenantCountry: tenantLocaleRow?.country,
+        settingsJson: tenantLocaleRow?.settingsJson,
+      }).timeZone;
 
       if (!convRecord?.aiPaused) {
         const activeAgent = await db.formAgent.findFirst({
@@ -732,25 +772,47 @@ async function handlePlainTextInbound(
 
           // Check for natural language booking intent and live slot availability
           try {
-            const bookingIntent = extractBookingIntent(textBody, conversationHistory);
+            const bookingIntent = extractBookingIntent(
+              textBody,
+              conversationHistory,
+              undefined,
+              {
+                customerPhone: from,
+                customerName: contactProfileName,
+                timezone: tenantTz,
+              },
+            );
             if (bookingIntent.hasIntent) {
+              leadCaptured = true;
               const autoBooking = await tryExecuteChatBooking({
                 tenantId,
                 agentId: activeAgent.id,
                 message: textBody,
                 history: conversationHistory,
+                customerPhone: from,
+                customerName: contactProfileName,
+                timezone: tenantTz,
               }).catch(() => null);
 
               if (autoBooking?.success && autoBooking.booking) {
                 const bookingTime = autoBooking.booking.scheduledAt
-                  ? new Date(autoBooking.booking.scheduledAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                  ? new Date(autoBooking.booking.scheduledAt).toLocaleString('en-US', {
+                      timeZone: tenantTz,
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })
                   : 'your scheduled time';
                 systemPrompt += `\n\nAPPOINTMENT CONFIRMED: Appointment ID ${autoBooking.booking.id} has been scheduled for ${bookingTime}. Provide an enthusiastic, concise confirmation with these details.`;
               } else {
-                const checkDate = bookingIntent.dateStr || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                const nowParts = getLocalDateParts(new Date(), tenantTz);
+                const tomorrowStr = new Date(Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day + 1))
+                  .toISOString()
+                  .split('T')[0];
+                const checkDate = bookingIntent.dateStr || tomorrowStr;
                 const availability = await checkAvailability({
                   tenantId,
                   date: checkDate,
+                  timezone: tenantTz,
                 }).catch(() => null);
 
                 if (availability?.success && availability.slots.length > 0) {
@@ -761,7 +823,11 @@ async function handlePlainTextInbound(
                   const baseTime = new Date(`${checkDate}T12:00:00Z`).getTime() || Date.now();
                   for (let offset = 1; offset <= 3; offset++) {
                     const altDate = new Date(baseTime + offset * 86400000).toISOString().split('T')[0];
-                    const altAvail = await checkAvailability({ tenantId, date: altDate }).catch(() => null);
+                    const altAvail = await checkAvailability({
+                      tenantId,
+                      date: altDate,
+                      timezone: tenantTz,
+                    }).catch(() => null);
                     if (altAvail?.success && altAvail.slots.length > 0) {
                       const altSlots = altAvail.slots.slice(0, 4).map((s) => s.label).join(', ');
                       alternateSummary = `${altDate} has open slots: ${altSlots}`;
@@ -778,6 +844,18 @@ async function handlePlainTextInbound(
             }
           } catch (bookingErr) {
             console.warn('[WhatsApp Callback] Booking intent check notice:', bookingErr);
+          }
+
+          if (!leadCaptured) {
+            leadCaptured = true;
+            await upsertWhatsAppInquiryLead({
+              tenantId,
+              customerPhone: from,
+              customerName: contactProfileName,
+              message: textBody,
+              agentId: activeAgent.id,
+              timezone: tenantTz,
+            }).catch(() => null);
           }
 
           const aiResult = await callAI({
@@ -848,6 +926,15 @@ async function handlePlainTextInbound(
       }
     } catch (agentErr) {
       console.warn('[WhatsApp Callback] FormAgent processing failed, falling back:', agentErr);
+    }
+
+    if (!leadCaptured) {
+      await upsertWhatsAppInquiryLead({
+        tenantId,
+        customerPhone: from,
+        customerName: contactProfileName,
+        message: textBody,
+      }).catch(() => null);
     }
 
     // ── 6. Auto-reply when tenant is offline ──────────────────────────────

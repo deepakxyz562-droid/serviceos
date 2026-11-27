@@ -16,6 +16,11 @@ import { outlookBusyTimes } from '@/lib/scheduling/outlook-calendar-sync';
 
 import { db } from '@/lib/db';
 import { fetchGoogleCalendarBusyTimes } from '@/lib/scheduling/google-calendar-sync';
+import {
+  getLocalDateParts,
+  resolveTenantLocale,
+  wallClockToUtcDate,
+} from '@/lib/locale-timezone';
 
 export interface TimeSlot {
   startTime: string;   // ISO 8601 datetime (UTC)
@@ -59,12 +64,37 @@ export async function calculateAvailableSlots(
   params: SlotEngineParams,
 ): Promise<SlotEngineResult> {
   const { tenantId, serviceId, employeeId, date, timezone } = params;
-  const tz = timezone || 'America/New_York';
+  const tenant = tenantId
+    ? await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { country: true, settingsJson: true },
+      }).catch(() => null)
+    : null;
+  const localeInfo = resolveTenantLocale({
+    tenantCountry: tenant?.country,
+    settingsJson: tenant?.settingsJson,
+    overrideTimeZone: timezone && timezone !== 'UTC' ? timezone : undefined,
+  });
+  const tz = localeInfo.timeZone;
+
+  let parsedSettings: Record<string, any> = {};
+  if (tenant?.settingsJson) {
+    try {
+      parsedSettings =
+        typeof tenant.settingsJson === 'string'
+          ? JSON.parse(tenant.settingsJson)
+          : (tenant.settingsJson as Record<string, any>);
+    } catch {}
+  }
 
   try {
-    // 1. Parse the date + determine day of week
-    const targetDate = new Date(date + 'T00:00:00');
-    const dayOfWeek = targetDate.getDay(); // 0=Sunday
+    // 1. Parse requested YYYY-MM-DD in tenant calendar + determine day of week
+    const [yearStr, monthStr, dayStr] = date.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    const targetDate = new Date(Date.UTC(year, month - 1, day));
+    const dayOfWeek = targetDate.getUTCDay(); // 0=Sunday
 
     // 2. Check if date is a holiday
     const holiday = await db.holidayCalendar.findFirst({
@@ -85,8 +115,8 @@ export async function calculateAvailableSlots(
     }
 
     // 3. Fetch Availability rules for this day
-    // Priority: employee-specific > tenant-level default
-    let availability = null;
+    // Priority: employee-specific > tenant-level default > tenant settingsJson.businessHours > Mon-Fri default
+    let availability: Awaited<ReturnType<typeof db.availability.findFirst>> = null;
     if (employeeId) {
       availability = await db.availability.findUnique({
         where: {
@@ -106,10 +136,29 @@ export async function calculateAvailableSlots(
       }).catch(() => null);
     }
 
-    // If no availability rule exists, use sensible defaults
-    const workingDay = availability?.isWorkingDay ?? (dayOfWeek >= 1 && dayOfWeek <= 5); // Mon-Fri default
-    const startTime = availability?.startTime || '09:00';
-    const endTime = availability?.endTime || '17:00';
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+    const bhMap = parsedSettings?.businessHours;
+    const bhDay = bhMap?.[DAY_NAMES[dayOfWeek]] || bhMap?.[DAY_NAMES[dayOfWeek].toLowerCase()];
+
+    let workingDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+    let startTime = '09:00';
+    let endTime = '17:00';
+
+    if (availability) {
+      workingDay = availability.isWorkingDay;
+      startTime = availability.startTime || '09:00';
+      endTime = availability.endTime || '17:00';
+    } else if (bhDay && typeof bhDay === 'object') {
+      workingDay = bhDay.open !== false;
+      if (bhDay.is24Hours) {
+        startTime = '00:00';
+        endTime = '23:59';
+      } else {
+        startTime = bhDay.openTime || bhDay.startTime || '09:00';
+        endTime = bhDay.closeTime || bhDay.endTime || '17:00';
+      }
+    }
+
     const breakStart = availability?.breakStart || null;
     const breakEnd = availability?.breakEnd || null;
 
@@ -171,8 +220,8 @@ export async function calculateAvailableSlots(
     // 6. Remove break time slots
     const filteredSlots = breakStart && breakEnd
       ? slots.filter((slot) => {
-          const slotStart = parseSlotTime(slot.startTime);
-          const slotEnd = parseSlotTime(slot.endTime);
+          const slotStart = parseSlotTime(slot.startTime, tz);
+          const slotEnd = parseSlotTime(slot.endTime, tz);
           const breakS = parseTimeString(breakStart);
           const breakE = parseTimeString(breakEnd);
           return !(slotStart < breakE && slotEnd > breakS);
@@ -180,8 +229,10 @@ export async function calculateAvailableSlots(
       : slots;
 
     // 7. Remove slots that overlap with existing bookings
-    const dayStart = new Date(date + 'T00:00:00');
-    const dayEnd = new Date(date + 'T23:59:59');
+    const dayStart = wallClockToUtcDate({ year, month, day, hour: 0, minute: 0, timeZone: tz });
+    const dayEnd = new Date(
+      wallClockToUtcDate({ year, month, day, hour: 23, minute: 59, timeZone: tz }).getTime() + 59999,
+    );
 
     const existingBookings = await db.booking.findMany({
       where: {
@@ -267,7 +318,7 @@ export async function calculateAvailableSlots(
 }
 
 /**
- * Generate time slots between start and end times.
+ * Generate time slots between start and end times in the tenant timezone.
  */
 function generateTimeSlots(
   date: string,
@@ -275,9 +326,14 @@ function generateTimeSlots(
   endTime: string,
   durationMin: number,
   bufferMin: number,
-  _timezone: string,
+  timezone: string,
 ): TimeSlot[] {
   const slots: TimeSlot[] = [];
+  const [yearStr, monthStr, dayStr] = date.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
 
@@ -285,11 +341,17 @@ function generateTimeSlots(
   const endMin = endH * 60 + endM;
 
   while (currentMin + durationMin <= endMin) {
-    const slotStart = new Date(date + 'T00:00:00');
-    slotStart.setMinutes(currentMin);
-
-    const slotEnd = new Date(slotStart);
-    slotEnd.setMinutes(slotStart.getMinutes() + durationMin);
+    const hour = Math.floor(currentMin / 60);
+    const minute = currentMin % 60;
+    const slotStart = wallClockToUtcDate({
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      timeZone: timezone,
+    });
+    const slotEnd = new Date(slotStart.getTime() + durationMin * 60000);
 
     slots.push({
       startTime: slotStart.toISOString(),
@@ -312,11 +374,11 @@ function parseTimeString(time: string): number {
 }
 
 /**
- * Parse an ISO datetime → minutes since midnight (in local time)
+ * Parse an ISO datetime → minutes since midnight (in the specified timezone)
  */
-function parseSlotTime(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+function parseSlotTime(iso: string, timezone = 'UTC'): number {
+  const parts = getLocalDateParts(new Date(iso), timezone);
+  return parts.hour * 60 + parts.minute;
 }
 
 /**

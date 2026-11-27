@@ -16,6 +16,7 @@
 
 import { db } from '@/lib/db';
 import { createAppointmentBooking, BookingResult } from '@/lib/scheduling/booking-service';
+import { getLocalDateParts } from '@/lib/locale-timezone';
 
 export interface ExtractedBookingIntent {
   hasIntent: boolean;
@@ -35,12 +36,52 @@ export interface ExtractedBookingIntent {
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+const HINDI_WEEKDAY_MAP: Record<string, string> = {
+  ravivar: 'sunday',
+  itvar: 'sunday',
+  somvar: 'monday',
+  somwar: 'monday',
+  mangalvar: 'tuesday',
+  mangalwar: 'tuesday',
+  budhvar: 'wednesday',
+  budhwar: 'wednesday',
+  guruvar: 'thursday',
+  veervar: 'thursday',
+  shukravar: 'friday',
+  shukrawar: 'friday',
+  shanivar: 'saturday',
+  shaniwar: 'saturday',
+};
+
+function getDateStrWithOffset(daysOffset: number, timeZone?: string | null): string {
+  if (timeZone) {
+    const parts = getLocalDateParts(new Date(), timeZone);
+    return new Date(Date.UTC(parts.year, parts.month - 1, parts.day + daysOffset))
+      .toISOString()
+      .split('T')[0];
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + daysOffset);
+  return d.toISOString().split('T')[0];
+}
+
 /**
  * Computes the YYYY-MM-DD string for the next occurrence of a given weekday.
  */
-function getNextWeekdayDate(dayName: string): string {
+function getNextWeekdayDate(dayName: string, timeZone?: string | null): string {
   const targetDay = WEEKDAYS.indexOf(dayName.toLowerCase());
-  if (targetDay === -1) return new Date().toISOString().split('T')[0];
+  if (targetDay === -1) return getDateStrWithOffset(0, timeZone);
+
+  if (timeZone) {
+    const parts = getLocalDateParts(new Date(), timeZone);
+    const localMidnight = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    const currentDay = localMidnight.getUTCDay();
+    let daysToAdd = (targetDay - currentDay + 7) % 7;
+    if (daysToAdd === 0) daysToAdd = 7;
+    return new Date(Date.UTC(parts.year, parts.month - 1, parts.day + daysToAdd))
+      .toISOString()
+      .split('T')[0];
+  }
 
   const d = new Date();
   const currentDay = d.getDay();
@@ -48,6 +89,89 @@ function getNextWeekdayDate(dayName: string): string {
   if (daysToAdd === 0) daysToAdd = 7; // next week if today
   d.setDate(d.getDate() + daysToAdd);
   return d.toISOString().split('T')[0];
+}
+
+function parseHinglishOrStandardTime(text: string, allowBareAtHour: boolean): string | undefined {
+  const timeMatch = text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
+  if (timeMatch) {
+    return timeMatch[1].toUpperCase();
+  }
+
+  // Hinglish: "subah 10 baje", "11 baje", "shaam 5:30 baje"
+  const bajeMatch = text.match(
+    /(?:(subah|morning|dopahar|afternoon|shaam|sham|evening|raat|night)\s+)?\b(\d{1,2})(?::(\d{2}))?\s*(?:baje|bj)\b(?:\s+(subah|morning|dopahar|afternoon|shaam|sham|evening|raat|night))?/i,
+  );
+  if (bajeMatch) {
+    const period = (bajeMatch[1] || bajeMatch[4] || '').toLowerCase();
+    const h = parseInt(bajeMatch[2], 10);
+    const m = bajeMatch[3] || '00';
+    if (h >= 1 && h <= 12) {
+      if (period === 'subah' || period === 'morning') {
+        return `${h}:${m} ${h === 12 ? 'PM' : 'AM'}`;
+      }
+      if (['dopahar', 'afternoon', 'shaam', 'sham', 'evening', 'raat', 'night'].includes(period)) {
+        return `${h}:${m} PM`;
+      }
+      return h < 8 || h === 12 ? `${h}:${m} PM` : `${h}:${m} AM`;
+    }
+  }
+
+  if (allowBareAtHour) {
+    const atHourMatch = text.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\b/i);
+    if (atHourMatch) {
+      const h = parseInt(atHourMatch[1], 10);
+      const m = atHourMatch[2] || '00';
+      if (h >= 1 && h <= 12) {
+        return h < 8 || h === 12 ? `${h}:${m} PM` : `${h}:${m} AM`;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function parseDateFromChatText(text: string, timeZone?: string | null): string | undefined {
+  const lower = text.toLowerCase();
+
+  if (/\b(?:day\s+after\s+tomorrow|parso|parson)\b/i.test(lower)) {
+    return getDateStrWithOffset(2, timeZone);
+  }
+  if (/\b(?:tomorrow|kal)\b/i.test(lower)) {
+    return getDateStrWithOffset(1, timeZone);
+  }
+  if (/\b(?:today|aaj)\b/i.test(lower)) {
+    return getDateStrWithOffset(0, timeZone);
+  }
+
+  for (const day of WEEKDAYS) {
+    if (new RegExp(`\\b${day}\\b`, 'i').test(lower)) {
+      return getNextWeekdayDate(day, timeZone);
+    }
+  }
+
+  for (const [hindiDay, engDay] of Object.entries(HINDI_WEEKDAY_MAP)) {
+    if (new RegExp(`\\b${hindiDay}\\b`, 'i').test(lower)) {
+      return getNextWeekdayDate(engDay, timeZone);
+    }
+  }
+
+  const isoDateMatch = text.match(/\b(202\d-\d{2}-\d{2})\b/);
+  if (isoDateMatch) {
+    return isoDateMatch[1];
+  }
+
+  const slashDateMatch = text.match(/\b(\d{1,2})\/(\d{1,2})\/(202\d|\d{2})\b/);
+  if (slashDateMatch) {
+    const p1 = parseInt(slashDateMatch[1], 10);
+    const p2 = parseInt(slashDateMatch[2], 10);
+    const y = slashDateMatch[3].length === 2 ? `20${slashDateMatch[3]}` : slashDateMatch[3];
+    // Handle DD/MM/YYYY when first component > 12 (e.g. 25/11/2026)
+    const month = p1 > 12 && p2 <= 12 ? String(p2).padStart(2, '0') : String(p1).padStart(2, '0');
+    const day = p1 > 12 && p2 <= 12 ? String(p1).padStart(2, '0') : String(p2).padStart(2, '0');
+    return `${y}-${month}-${day}`;
+  }
+
+  return undefined;
 }
 
 /**
@@ -65,8 +189,13 @@ function getNextWeekdayDate(dayName: string): string {
  */
 export function extractBookingIntent(
   message: string,
-  history: Array<{ role?: string; sender?: string; content?: string; text?: string }> = [],
-  fallbackServiceName = 'Appointment Inquiry'
+  history: Array<{ role?: string; sender?: string; senderType?: string; content?: string; text?: string }> = [],
+  fallbackServiceName = 'Appointment Inquiry',
+  defaults?: {
+    customerPhone?: string | null;
+    customerName?: string | null;
+    timezone?: string | null;
+  },
 ): ExtractedBookingIntent {
   // combinedText: USER-AUTHORED messages only — NOT the AI's responses.
   // Previously included ALL history (including the AI's responses), which
@@ -108,6 +237,7 @@ export function extractBookingIntent(
   //    Intent ONLY fires on the CURRENT message, not on history.
   const bookingKeywordPatterns = [
     /\bbook\b/,
+    /\bbooking\b/,
     /\bappointment\b/,
     /\bschedule\b/,
     /\bconfirmation\s+call\b/,
@@ -120,6 +250,8 @@ export function extractBookingIntent(
     /\bconsultation\b/,
     /\bcome\s+over\b/,
     /\bdispatch\b/,
+    // Hinglish / Hindi conversational booking intent
+    /\b(?:book\s*kar|book\s*karo|book\s*kard[eo]|kar\s*do|milna\s*hai|aana\s*hai|chahiye|checkup|check-?up|trial|timings?|baje)\b/i,
   ];
 
   // Explicit user confirmation phrases (user is explicitly confirming a prior booking offer)
@@ -129,6 +261,7 @@ export function extractBookingIntent(
     /\bgo\s+ahead\s+(and\s+)?(book|schedule|confirm)\b/i,
     /\bbook\s+(me|it|that|us)\b/i,
     /\byes,?\s*(please|book|schedule|confirm)\b/i,
+    /\b(?:haan|ha|hanji|ji)\s*(?:please|book|confirm|theek\s*hai|chalega|done|kar\s*do|kardo)\b/i,
   ];
 
   // Informational queries that MUST NOT trigger booking execution under any circumstances.
@@ -153,90 +286,27 @@ export function extractBookingIntent(
   // Final intent: requires booking keyword in CURRENT message AND not an informational query
   const hasIntent = hasIntentInCurrentMessage && !isInformationalQuery;
 
-  // 3. Time extraction
-  //    - Current message: always extracted if present
-  //    - History: ONLY carried forward if current message also has explicit booking intent
-  //      (prevents a time from 3 turns ago triggering a booking on "your services")
-  const timeRegex = /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))\b/i;
-  const timeMatchCurrent = message.match(timeRegex);
-  const timeMatchCombined = combinedText.match(timeRegex);
-  let timeStr: string | undefined = timeMatchCurrent
-    ? timeMatchCurrent[1].toUpperCase()
-    : (hasIntent && timeMatchCombined ? timeMatchCombined[1].toUpperCase() : undefined);
+  // 3. Time extraction (supports standard AM/PM + Hinglish "baje")
+  const timeMatchCurrent = parseHinglishOrStandardTime(message, true);
+  const timeMatchCombined = parseHinglishOrStandardTime(combinedText, false);
+  const timeStr: string | undefined = timeMatchCurrent
+    ? timeMatchCurrent
+    : (hasIntent ? timeMatchCombined : undefined);
 
-  // "at 2" or "at 10" without AM/PM — current message only
-  if (!timeStr) {
-    const atHourMatch = message.match(/\bat\s+(\d{1,2})\b/i);
-    if (atHourMatch) {
-      const h = parseInt(atHourMatch[1], 10);
-      timeStr = h < 8 || h === 12 ? `${h}:00 PM` : `${h}:00 AM`;
-    }
-  }
-
-  // 4. Date extraction
-  //    Current message is checked first. History is only used if hasIntent is true
-  //    to prevent stale dates bleeding into unrelated responses.
-  let dateStr: string | undefined;
-
-  if (lower.includes('tomorrow')) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    dateStr = tomorrow.toISOString().split('T')[0];
-  } else if (lower.includes('today')) {
-    dateStr = new Date().toISOString().split('T')[0];
-  } else {
-    for (const day of WEEKDAYS) {
-      if (lower.includes(day)) {
-        dateStr = getNextWeekdayDate(day);
-        break;
-      }
-    }
-  }
-
-  if (!dateStr) {
-    const isoDateMatchCurrent = message.match(/\b(202\d-\d{2}-\d{2})\b/);
-    if (isoDateMatchCurrent) {
-      dateStr = isoDateMatchCurrent[1];
-    } else {
-      const slashDateMatchCurrent = message.match(/\b(\d{1,2})\/(\d{1,2})\/(202\d|\d{2})\b/);
-      if (slashDateMatchCurrent) {
-        const m = slashDateMatchCurrent[1].padStart(2, '0');
-        const d = slashDateMatchCurrent[2].padStart(2, '0');
-        const y = slashDateMatchCurrent[3].length === 2 ? `20${slashDateMatchCurrent[3]}` : slashDateMatchCurrent[3];
-        dateStr = `${y}-${m}-${d}`;
-      }
-    }
-  }
-
-  // Fallback to history dates ONLY when current message has explicit booking intent
+  // 4. Date extraction (supports EN + Hinglish "kal"/"aaj"/"parso" & Hindi weekdays in tenant TZ)
+  let dateStr: string | undefined = parseDateFromChatText(message, defaults?.timezone);
   if (!dateStr && hasIntent) {
-    if (lowerCombined.includes('tomorrow')) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      dateStr = tomorrow.toISOString().split('T')[0];
-    } else if (lowerCombined.includes('today')) {
-      dateStr = new Date().toISOString().split('T')[0];
-    } else {
-      for (const day of WEEKDAYS) {
-        if (lowerCombined.includes(day)) {
-          dateStr = getNextWeekdayDate(day);
-          break;
-        }
-      }
-    }
-    if (!dateStr) {
-      const isoDateMatch = combinedText.match(/\b(202\d-\d{2}-\d{2})\b/);
-      if (isoDateMatch) dateStr = isoDateMatch[1];
-    }
+    dateStr = parseDateFromChatText(combinedText, defaults?.timezone);
   }
 
   // 5. Email extraction
   const emailMatch = combinedText.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
   const customerEmail = emailMatch ? emailMatch[1] : undefined;
 
-  // 6. Phone extraction
+  // 6. Phone extraction (falls back to channel caller phone e.g. WhatsApp `from`)
   const phoneMatch = combinedText.match(/\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/);
-  const customerPhone = phoneMatch ? phoneMatch[0] : undefined;
+  const defaultPhone = defaults?.customerPhone?.trim();
+  const customerPhone = phoneMatch ? phoneMatch[0] : (defaultPhone || undefined);
 
   // 7. Address extraction
   let customerAddress: string | undefined;
@@ -246,11 +316,9 @@ export function extractBookingIntent(
   }
 
   // 8. Name extraction — CURRENT MESSAGE ONLY (not combinedText)
-  // Previously ran against combinedText which includes the AI's greeting
-  // "I'm your AI assistant" → captured "your" as the customer name.
   let customerName: string | undefined;
   const namePatterns = [
-    /(?:my name is|name:)\s+([a-zA-Z]{2,20})/i,
+    /(?:my name is|name:|mera naam)\s+([a-zA-Z]{2,20})/i,
     /(?:i am|i'm)\s+([a-zA-Z]{2,20})\b/i,
   ];
 
@@ -258,9 +326,7 @@ export function extractBookingIntent(
     const match = message.match(pat);
     if (match && match[1]) {
       const candidate = match[1].trim();
-      // Expanded forbidden list — includes pronouns/articles that follow
-      // "I'm" in AI greetings (e.g. "I'm your AI assistant" → "your")
-      const forbidden = ['tomorrow', 'today', 'monday', 'friday', 'saturday',
+      const forbidden = ['tomorrow', 'today', 'kal', 'aaj', 'parso', 'monday', 'friday', 'saturday',
         'sunday', 'call', 'confirmation', 'appointment', 'emergency',
         'your', 'our', 'the', 'this', 'that', 'here', 'there',
         'welcome', 'hello', 'hi', 'glad', 'happy', 'sorry', 'ready'];
@@ -268,6 +334,13 @@ export function extractBookingIntent(
         customerName = candidate.charAt(0).toUpperCase() + candidate.slice(1);
         break;
       }
+    }
+  }
+
+  if (!customerName && defaults?.customerName?.trim()) {
+    const fallbackName = defaults.customerName.trim();
+    if (!['unknown', 'visitor', 'customer'].includes(fallbackName.toLowerCase())) {
+      customerName = fallbackName;
     }
   }
 
@@ -332,12 +405,17 @@ export async function tryCaptureChatLead(params: {
   }
 
   try {
+    const rawPhone = intent.customerPhone?.trim() || '';
+    const phoneDigits = rawPhone.replace(/\D/g, '');
+    const last10Phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : '';
     const existing = tenantId
       ? await db.lead.findFirst({
           where: {
             tenantId,
             OR: [
-              ...(intent.customerPhone ? [{ phone: intent.customerPhone }] : []),
+              ...(rawPhone ? [{ phone: rawPhone }] : []),
+              ...(phoneDigits ? [{ phone: phoneDigits }, { phone: `+${phoneDigits}` }] : []),
+              ...(last10Phone ? [{ phone: { endsWith: last10Phone } }] : []),
               ...(intent.customerEmail ? [{ email: intent.customerEmail }] : []),
             ],
           },
@@ -427,6 +505,31 @@ export async function tryCaptureChatLead(params: {
   }
 }
 
+export async function upsertWhatsAppInquiryLead(params: {
+  tenantId: string;
+  customerPhone: string;
+  customerName?: string | null;
+  message: string;
+  agentId?: string | null;
+  timezone?: string | null;
+  intent?: ExtractedBookingIntent;
+}) {
+  const intent =
+    params.intent ||
+    extractBookingIntent(params.message, [], 'WhatsApp Inquiry', {
+      customerPhone: params.customerPhone,
+      customerName: params.customerName,
+      timezone: params.timezone,
+    });
+
+  return tryCaptureChatLead({
+    tenantId: params.tenantId,
+    agentId: params.agentId,
+    intent,
+    message: params.message,
+  });
+}
+
 /**
  * Attempts to parse and execute a real booking from chat context.
  */
@@ -438,9 +541,16 @@ export async function tryExecuteChatBooking(params: {
   serviceName?: string;
   message: string;
   imageUrl?: string;
-  history?: Array<{ role?: string; sender?: string; content?: string; text?: string }>;
+  customerPhone?: string | null;
+  customerName?: string | null;
+  timezone?: string | null;
+  history?: Array<{ role?: string; sender?: string; senderType?: string; content?: string; text?: string }>;
 }): Promise<BookingResult | null> {
-  const intent = extractBookingIntent(params.message, params.history, params.serviceName);
+  const intent = extractBookingIntent(params.message, params.history, params.serviceName, {
+    customerPhone: params.customerPhone,
+    customerName: params.customerName,
+    timezone: params.timezone,
+  });
 
   // If user provided contact info, capture intake lead & submission asynchronously
   if (intent.customerPhone || intent.customerEmail) {
@@ -482,6 +592,7 @@ export async function tryExecuteChatBooking(params: {
       date: effectiveDate,
       time: effectiveTime,
       durationMinutes: 30,
+      timezone: params.timezone || undefined,
       customer: {
         name: intent.customerName,
         email: intent.customerEmail || '',

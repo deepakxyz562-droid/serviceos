@@ -92,6 +92,13 @@ function WhatsAppCampaignsScreen() {
   const [brochureUrl, setBrochureUrl] = useState('');
   const [audience, setAudience] = useState<'all_leads' | 'past_customers' | 'inactive_60_days'>('inactive_60_days');
 
+  useEffect(() => {
+    const savedBrochure = workspaceRes.data?.links?.brochure;
+    if (savedBrochure && !brochureUrl.trim()) {
+      setBrochureUrl(savedBrochure);
+    }
+  }, [workspaceRes.data?.links?.brochure, brochureUrl]);
+
   const [campaignTitle, setCampaignTitle] = useState('Customer Comeback & Seasonal Offer');
   const [whatsappMessage, setWhatsappMessage] = useState(
     'Hi {FirstName}! 👋 Long weekend aa raha hai — aapke liye special priority slot aur return offer ready hai. Reply karein to book instantly!',

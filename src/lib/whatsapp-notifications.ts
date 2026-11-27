@@ -16,6 +16,8 @@ import { loadTenantEmailBranding, type TenantEmailBranding } from '@/lib/tenant-
 import { renderPinEmailHtml } from '@/lib/email-templates/render-pin-email'
 import { renderBookingConfirmationEmail } from '@/lib/email-templates/booking-confirmation'
 import { getAppUrl } from '@/lib/brand'
+import { buildMetaTemplateSendPayload } from '@/lib/bgos-meta-templates'
+import { resolveTenantLocale } from '@/lib/locale-timezone'
 
 // ==========================================
 // TYPES
@@ -1724,15 +1726,16 @@ export async function notifyCustomerBookingConfirmed(
   let customerPhone = (job.customerPhone as string) || ''
   let customerEmail = (job.customerEmail as string) || ''
   let customerName = (job.customerName as string) || ''
+  let verifiedCustomerId: string | undefined
 
-  // Fallback: resolve from Customer record if missing on Job
-  if ((!customerPhone || !customerEmail || !customerName) && job.customerId) {
+  if (job.customerId && typeof db.customer?.findUnique === 'function') {
     try {
       const cust = await db.customer.findUnique({
         where: { id: job.customerId as string },
-        select: { phone: true, email: true, name: true },
+        select: { id: true, phone: true, email: true, name: true },
       })
       if (cust) {
+        verifiedCustomerId = cust.id
         if (!customerPhone && cust.phone) customerPhone = cust.phone
         if (!customerEmail && cust.email) customerEmail = cust.email
         if (!customerName && cust.name) customerName = cust.name
@@ -1744,45 +1747,143 @@ export async function notifyCustomerBookingConfirmed(
 
   if (!customerPhone && !customerEmail) return
 
-  const jobNumber = getJobNumber(job)
-  const scheduledDate = formatDate(job.scheduledAt as string | null)
+  const tenantId = (job.tenantId as string) || undefined
+  const tenantRecord =
+    tenantId && typeof db.tenant?.findUnique === 'function'
+      ? await db.tenant
+          .findUnique({
+            where: { id: tenantId },
+            select: {
+              name: true,
+              slug: true,
+              publicSlug: true,
+              country: true,
+              settingsJson: true,
+            },
+          })
+          .catch(() => null)
+      : null
+
+  const localeInfo = resolveTenantLocale({
+    tenantCountry: tenantRecord?.country,
+    settingsJson: tenantRecord?.settingsJson,
+  })
+  let tenantSettings: Record<string, any> = {}
+  if (tenantRecord?.settingsJson) {
+    try {
+      tenantSettings = JSON.parse(tenantRecord.settingsJson) || {}
+    } catch {}
+  }
+
+  const businessName =
+    (job.tenantName as string) ||
+    (typeof tenantSettings.activeGbpTitle === 'string' && tenantSettings.activeGbpTitle.trim()) ||
+    (typeof tenantSettings.bookingPageConfig?.businessName === 'string' &&
+      tenantSettings.bookingPageConfig.businessName.trim()) ||
+    tenantRecord?.name ||
+    'Our Team'
+  const slug =
+    tenantSettings.bookingPageConfig?.publicSlug ||
+    tenantRecord?.publicSlug ||
+    tenantRecord?.slug ||
+    ''
   const appUrl = getAppUrl()
+  const portalUrl =
+    (job.portalUrl as string) ||
+    (slug ? `https://bgos.site/${encodeURIComponent(slug)}` : appUrl)
+
+  const isBookingRecord = Boolean(
+    job.bookingId || job.bookingType || (!job.jobNumber && !job.visits),
+  )
+  const jobNumber = getJobNumber(job)
+  const rawDate = job.scheduledAt ? new Date(String(job.scheduledAt)) : null
+  const hasValidDate = Boolean(rawDate && !Number.isNaN(rawDate.getTime()))
+  const datePart = hasValidDate
+    ? rawDate!.toLocaleDateString('en-US', {
+        timeZone: localeInfo.timeZone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : 'Scheduled Date'
+  const timePart = hasValidDate
+    ? rawDate!.toLocaleTimeString('en-US', {
+        timeZone: localeInfo.timeZone,
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Scheduled Time'
+  const scheduledDate = hasValidDate
+    ? `${datePart}, ${timePart}`
+    : formatDate(job.scheduledAt as string | null)
+  const serviceTitle = String(job.title || 'Appointment')
+  const footerNote = isBookingRecord
+    ? 'We look forward to serving you at your scheduled time.'
+    : 'We will assign a technician shortly.'
 
   const message = [
     '📋 Booking Confirmed',
     '',
     'Thank you for your booking.',
     `Booking ID: ${jobNumber}`,
-    `Service: ${job.title || 'N/A'}`,
+    `Service: ${serviceTitle}`,
     `Date: ${scheduledDate}`,
     '',
-    'We will assign a technician shortly.',
+    footerNote,
   ].join('\n')
 
   const emailHtml = renderBookingConfirmationEmail({
     customerName: customerName || undefined,
     jobNumber,
-    jobTitle: (job.title as string) || undefined,
+    jobTitle: serviceTitle,
     scheduledDate,
     address: (job.address as string) || (job.location as string) || undefined,
     customerPhone: customerPhone || undefined,
     customerEmail: customerEmail || undefined,
-    viewBookingUrl: job.id ? `${appUrl}/?view=jobs&job=${job.id}` : `${appUrl}/?view=jobs&job=${jobNumber}`,
-    tenantName: (job.tenantName as string) || undefined,
+    viewBookingUrl: isBookingRecord
+      ? portalUrl
+      : job.id
+        ? `${appUrl}/?view=jobs&job=${job.id}`
+        : `${appUrl}/?view=jobs&job=${jobNumber}`,
+    tenantName: businessName,
   })
+
+  const builtTemplate =
+    customerPhone && !options?.emailOnly
+      ? buildMetaTemplateSendPayload(
+          'utility_booking_confirmation',
+          [
+            customerName || 'Customer',
+            businessName,
+            datePart,
+            timePart,
+            serviceTitle,
+            portalUrl,
+          ],
+          'en_US',
+        )
+      : null
 
   await sendJobNotification({
     to: customerPhone,
     message,
+    ...(builtTemplate
+      ? {
+          type: 'template' as const,
+          templateName: builtTemplate.templateName,
+          templateLanguage: builtTemplate.templateLanguage,
+          templateComponents: builtTemplate.templateComponents,
+        }
+      : {}),
     emailHtml,
     recipientName: customerName || undefined,
     recipientRole: 'customer',
     subject: `Booking Confirmed: #${jobNumber}`,
-    jobId: job.id as string,
-    customerId: (job.customerId as string) || undefined,
-    tenantId: (job.tenantId as string) || undefined,
+    jobId: isBookingRecord ? undefined : (job.id as string),
+    customerId: verifiedCustomerId,
+    tenantId,
     eventType: 'booking.confirmed',
-    smsMessage: `Booking confirmed: #${jobNumber}, ${job.title || 'N/A'}, scheduled ${scheduledDate}. We will assign a technician shortly.`,
+    smsMessage: `Booking confirmed: #${jobNumber}, ${serviceTitle}, scheduled ${scheduledDate}. ${footerNote}`,
     ...(customerEmail ? { emailTo: customerEmail } : {}),
     emailPriority: 'operational',
     ...(options?.emailOnly ? { channels: ['email'] } : {}),

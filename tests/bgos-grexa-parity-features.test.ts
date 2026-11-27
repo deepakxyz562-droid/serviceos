@@ -159,7 +159,17 @@ vi.mock('@/lib/ai-client', () => ({
 }));
 
 vi.mock('@/lib/whatsapp-send', () => ({
-  sendWhatsAppMessage: vi.fn(async () => ({ messageId: 'wa-msg-123' })),
+  sendWhatsAppMessage: vi.fn(async () => ({ success: true, messageId: 'wa-msg-123' })),
+}));
+
+vi.mock('@/lib/scheduling/google-calendar-sync', () => ({
+  fetchGoogleCalendarBusyTimes: vi.fn(async () => []),
+  pushBookingToGoogleCalendar: vi.fn(async () => ({})),
+}));
+
+vi.mock('@/lib/scheduling/outlook-calendar-sync', () => ({
+  outlookBusyTimes: vi.fn(async () => []),
+  syncOutlookBooking: vi.fn(async () => ({})),
 }));
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -173,9 +183,15 @@ import { GET as citationsGet, PATCH as citationsPatch } from '@/app/api/gbp/cita
 import { POST as suggestAreasPost } from '@/app/api/gbp/service-areas/suggest/route';
 import { POST as suspensionAppealPost } from '@/app/api/gbp/suspension-appeal/route';
 import { POST as reviewRequestPost } from '@/app/api/reviews/request/route';
+import { POST as inboxMessagePost } from '@/app/api/omnichannel/conversations/[id]/messages/route';
+import { PATCH as workspacePatch } from '@/app/api/bgos/workspace/route';
 import { analyzeGbpSuspensionRisks } from '@/lib/gbp/suspension-shield';
 import { getUpcomingOccasions } from '@/lib/marketing/occasions';
 import { processWhatsAppInactivityFollowups } from '@/lib/whatsapp/inactivity-followup';
+import { extractBookingIntent, tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { calculateAvailableSlots } from '@/lib/scheduling/slot-engine';
+import { scheduleAppointmentReminders } from '@/lib/appointment-reminders';
+import { notifyCustomerBookingConfirmed } from '@/lib/whatsapp-notifications';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { googleBusinessAdapter } from '@/lib/social/adapters/googlebusiness';
 import { DEFAULT_PLAN_MATRIX } from '@/lib/plan-features';
@@ -817,6 +833,350 @@ describe('Grexa vs BGOS Feature Parity Verification', () => {
       expect(createdRows).toHaveLength(7);
       expect(createdRows[0].bodyText).not.toContain('Give us 5 stars for 50% off!');
       expect(createdRows[0].bodyText).toContain('Please share your feedback on your recent experience');
+    });
+  });
+
+  describe('WhatsApp Chat & Marketing Production Readiness', () => {
+    it('extracts Hinglish booking intent with WA caller phone and executes chat booking + CRM lead in tenant timezone', async () => {
+      const createdLeads: any[] = [];
+      const createdBookings: any[] = [];
+      const tomorrowIst = new Date(Date.now() + 2 * 86400_000).toISOString().split('T')[0];
+
+      mockTenant.country = 'IN';
+      mockTenant.settingsJson = JSON.stringify({
+        timezone: 'Asia/Kolkata',
+        businessHours: {
+          Sunday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Monday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Tuesday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Wednesday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Thursday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Friday: { open: true, openTime: '09:00', closeTime: '18:00' },
+          Saturday: { open: true, openTime: '09:00', closeTime: '18:00' },
+        },
+      });
+      mockDb.holidayCalendar = { findFirst: vi.fn(async () => null) };
+      mockDb.availability = {
+        findUnique: vi.fn(async () => null),
+        findFirst: vi.fn(async () => null),
+      };
+      mockDb.serviceAvailability = { findFirst: vi.fn(async () => null) };
+      mockDb.service = { findUnique: vi.fn(async () => null) };
+      mockDb.lead = {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: any) => {
+          const row = { id: `lead-${createdLeads.length + 1}`, ...data };
+          createdLeads.push(row);
+          return row;
+        }),
+        update: vi.fn(async ({ data }: any) => ({ id: 'lead-1', ...data })),
+      };
+      mockDb.booking = {
+        findFirst: vi.fn(async () => null),
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async ({ data }: any) => {
+          const row = { id: `bk-${createdBookings.length + 1}`, ...data };
+          createdBookings.push(row);
+          return row;
+        }),
+        update: vi.fn(async ({ data }: any) => ({ id: 'bk-1', ...data })),
+      };
+
+      const intent = extractBookingIntent(
+        'Kal subah 11 baje dental checkup book kardo',
+        [],
+        'Dental Checkup',
+        { customerPhone: '919876543210', customerName: 'Rohan', timezone: 'Asia/Kolkata' },
+      );
+      expect(intent.hasIntent).toBe(true);
+      expect(intent.isBookingReady).toBe(true);
+      expect(intent.timeStr).toBe('11:00 AM');
+      expect(intent.customerPhone).toBe('919876543210');
+      expect(intent.customerName).toBe('Rohan');
+
+      const result = await tryExecuteChatBooking({
+        tenantId: 'tenant-dental-1',
+        serviceName: 'Dental Checkup',
+        message: `Book appointment on ${tomorrowIst} at 11:00 AM`,
+        customerPhone: '919876543210',
+        customerName: 'Rohan',
+        timezone: 'Asia/Kolkata',
+      });
+
+      expect(result?.success).toBe(true);
+      expect(createdBookings).toHaveLength(1);
+      expect(createdBookings[0].customerPhone).toBe('919876543210');
+      // 11:00 AM IST == 05:30:00Z
+      expect(new Date(createdBookings[0].scheduledAt).toISOString()).toBe(`${tomorrowIst}T05:30:00.000Z`);
+      expect(createdLeads.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('calculateAvailableSlots respects settingsJson.businessHours Saturday hours in tenant timezone', async () => {
+      // Find next Saturday >= 2 days out so leadTime cutoff does not filter morning slots
+      const cursor = new Date(Date.now() + 2 * 86400_000);
+      while (cursor.getUTCDay() !== 6) {
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+      const saturdayStr = cursor.toISOString().split('T')[0];
+
+      mockTenant.country = 'IN';
+      mockTenant.settingsJson = JSON.stringify({
+        timezone: 'Asia/Kolkata',
+        businessHours: {
+          Saturday: { open: true, openTime: '10:00', closeTime: '13:00' },
+        },
+      });
+      mockDb.holidayCalendar = { findFirst: vi.fn(async () => null) };
+      mockDb.availability = {
+        findUnique: vi.fn(async () => null),
+        findFirst: vi.fn(async () => null),
+      };
+      mockDb.booking = {
+        findFirst: vi.fn(async () => null),
+        findMany: vi.fn(async () => []),
+      };
+
+      const avail = await calculateAvailableSlots({
+        tenantId: 'tenant-dental-1',
+        date: saturdayStr,
+      });
+
+      expect(avail.workingDay).toBe(true);
+      expect(avail.timezone).toBe('Asia/Kolkata');
+      expect(avail.slots.length).toBeGreaterThan(0);
+      // 10:00 AM IST == 04:30:00Z
+      expect(avail.slots[0].startTime).toBe(`${saturdayStr}T04:30:00.000Z`);
+    });
+
+    it('nudges quiet chats after AI outbound reply, skips already-booked customers, and gates inactive/starter plans', async () => {
+      const outboundConv = {
+        ...mockQuietConversation,
+        id: 'conv-outbound-1',
+        conversationId: 'conv-outbound-1',
+        lastDirection: 'outbound',
+        lastMessageAt: new Date(Date.now() - 3 * 3600_000),
+        metadataJson: '{}',
+      };
+      mockTenant.plan = 'growth';
+      mockTenant.planStatus = 'active';
+      mockDb.tenant.findUnique = vi.fn(async () => mockTenant);
+      mockDb.formAgent = {
+        findFirst: vi.fn(async () => ({
+          tenantId: 'tenant-dental-1',
+          name: 'Smile AI',
+          configJson: JSON.stringify({
+            settings: { followUp: { enabled: true, delayMinutes: 60, languageMode: 'hinglish' } },
+          }),
+        })),
+      };
+      mockDb.conversation.findMany = vi.fn(async () => [outboundConv]);
+      mockDb.conversation.update = vi.fn(async ({ data }: any) => Object.assign(outboundConv, data));
+      mockDb.booking = { findFirst: vi.fn(async () => null) };
+
+      const nudgeRes = await processWhatsAppInactivityFollowups();
+      expect(mockDb.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            lastDirection: { in: ['outbound', 'inbound'] },
+          }),
+        }),
+      );
+      expect(nudgeRes.nudgedCount).toBe(1);
+      expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
+
+      // Now simulate customer already booked an upcoming slot
+      outboundConv.metadataJson = '{}';
+      mockDb.booking = {
+        findFirst: vi.fn(async () => ({ id: 'bk-future-1' })),
+      };
+      const bookedRes = await processWhatsAppInactivityFollowups();
+      expect(bookedRes.nudgedCount).toBe(0);
+
+      // Starter / Free / Expired plan should be skipped
+      mockTenant.plan = 'starter';
+      mockDb.booking = { findFirst: vi.fn(async () => null) };
+      const starterRes = await processWhatsAppInactivityFollowups();
+      expect(starterRes.nudgedCount).toBe(0);
+    });
+
+    it('schedules utility_booking_reminder for db.booking rows and sends utility_booking_confirmation without Job FK conflict', async () => {
+      const createdReminders: any[] = [];
+      const createdNotifLogs: any[] = [];
+      const bookingTime = new Date(Date.now() + 6 * 3600_000);
+
+      mockTenant.country = 'IN';
+      mockTenant.publicSlug = 'smile-dental';
+      mockTenant.settingsJson = JSON.stringify({
+        timezone: 'Asia/Kolkata',
+        bookingReminderHours: '24h',
+        activeGbpTitle: 'Smile Dental Clinic',
+      });
+
+      mockDb.jobVisit = { findMany: vi.fn(async () => []) };
+      mockDb.booking = {
+        findMany: vi.fn(async () => [
+          {
+            id: 'bk-rem-1',
+            title: 'Root Canal Consult',
+            status: 'confirmed',
+            customerId: null,
+            customerName: 'Neha',
+            customerPhone: '+919876543210',
+            customerEmail: null,
+            address: 'Bhopal Clinic',
+            scheduledAt: bookingTime,
+            tenantId: 'tenant-dental-1',
+          },
+        ]),
+      };
+      mockDb.tenant.findMany = vi.fn(async () => [mockTenant]);
+      mockDb.customer = {
+        findMany: vi.fn(async () => []),
+        findUnique: vi.fn(async () => null),
+      };
+      mockDb.scheduledMessage = {
+        findMany: vi.fn(async () => []),
+        create: vi.fn(async ({ data }: any) => {
+          createdReminders.push(data);
+          return { id: 'sm-bk-1', ...data };
+        }),
+      };
+
+      const remResult = await scheduleAppointmentReminders();
+      expect(remResult.scheduled).toBe(1);
+      expect(createdReminders[0].channel).toBe('whatsapp');
+      expect(createdReminders[0].bookingId).toBe('bk-rem-1');
+      expect(createdReminders[0].bodyText).not.toContain('Fieseros');
+      const remMeta = JSON.parse(createdReminders[0].metadataJson);
+      expect(remMeta.metaTemplateName).toBe('utility_booking_reminder');
+      expect(remMeta.metaTemplateParams).toHaveLength(6);
+
+      mockDb.notificationLog = {
+        create: vi.fn(async ({ data }: any) => {
+          createdNotifLogs.push(data);
+          return { id: 'nl-1', ...data };
+        }),
+      };
+      await notifyCustomerBookingConfirmed({
+        id: 'bk-rem-1',
+        bookingId: 'bk-rem-1',
+        bookingType: 'ai_auto',
+        title: 'Root Canal Consult',
+        customerName: 'Neha',
+        customerPhone: '+919876543210',
+        scheduledAt: bookingTime.toISOString(),
+        tenantId: 'tenant-dental-1',
+      });
+
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: '+919876543210',
+          type: 'template',
+          templateName: 'utility_booking_confirmation',
+        }),
+      );
+      expect(createdNotifLogs[0].jobId).toBeUndefined();
+    });
+
+    it('delivers Inbox WhatsApp text and PDF brochure document using conversation.customerPhone even when customerId is null', async () => {
+      mockDb.conversation.findUnique = vi.fn(async () => ({
+        id: 'conv-db-99',
+        conversationId: 'conv-wa-99',
+        tenantId: 'tenant-dental-1',
+        channel: 'whatsapp',
+        customerId: null,
+        customerPhone: '919876543210',
+      }));
+      mockDb.customer = { findUnique: vi.fn(async () => null) };
+      mockDb.inboxMessage = {
+        create: vi.fn(async ({ data }: any) => ({ id: 'msg-doc-1', createdAt: new Date(), ...data })),
+        update: vi.fn(async ({ data }: any) => ({ id: 'msg-doc-1', ...data })),
+      };
+      mockDb.conversation.update = vi.fn(async ({ data }: any) => ({ id: 'conv-db-99', ...data }));
+
+      const req = new NextRequest('http://localhost/api/omnichannel/conversations/conv-db-99/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'Please find our dental brochure attached.',
+          mediaUrl: 'https://cdn.example.com/brochures/smile.pdf',
+          mediaFilename: 'smile.pdf',
+        }),
+      });
+
+      const res = await inboxMessagePost(req, { params: Promise.resolve({ id: 'conv-db-99' }) });
+      expect([200, 201]).toContain(res.status);
+      expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: '919876543210',
+          type: 'document',
+          mediaUrl: 'https://cdn.example.com/brochures/smile.pdf',
+        }),
+      );
+    });
+
+    it('persists brochureUrl, bookingReminderHours, and followUp in workspace PATCH and wires mobile UI screens cleanly', async () => {
+      let savedSettings: any = {};
+      mockTenant.settingsJson = JSON.stringify({});
+      mockDb.tenant.updateMany = vi.fn(async ({ data }: any) => {
+        savedSettings = JSON.parse(data.settingsJson || '{}');
+        return { count: 1 };
+      });
+      mockDb.formAgent = {
+        findFirst: vi.fn(async () => ({ id: 'agent-1', configJson: '{}' })),
+        update: vi.fn(async () => ({ id: 'agent-1' })),
+      };
+
+      const patchReq = new NextRequest('http://localhost/api/bgos/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brochureUrl: 'https://cdn.example.com/brochures/clinic.pdf',
+          bookingReminderHours: '1h',
+          followUp: { enabled: true, delayMinutes: 90, languageMode: 'hinglish' },
+        }),
+      });
+      const patchRes = await workspacePatch(patchReq);
+      expect(patchRes.status).toBe(200);
+      expect(savedSettings.brochureUrl).toBe('https://cdn.example.com/brochures/clinic.pdf');
+      expect(savedSettings.bookingReminderHours).toBe('1h');
+      expect(savedSettings.followUp).toEqual({
+        enabled: true,
+        delayMinutes: 90,
+        languageMode: 'hinglish',
+      });
+
+      const callbackSrc = fs.readFileSync(
+        path.join(process.cwd(), 'src/app/api/whatsapp/callback/route.ts'),
+        'utf8',
+      );
+      const integrationsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/integrations.tsx'),
+        'utf8',
+      );
+      const setupSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/setup.tsx'),
+        'utf8',
+      );
+      const inboxSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/inbox.tsx'),
+        'utf8',
+      );
+      const automationsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/automations.tsx'),
+        'utf8',
+      );
+
+      expect(callbackSrc).toContain('customerPhone: from');
+      expect(callbackSrc).toContain('upsertWhatsAppInquiryLead');
+      expect(callbackSrc).toContain('resolveTenantLocale');
+      expect(integrationsSrc).toContain('/api/whatsapp/manual-config');
+      expect(integrationsSrc).toContain('/api/whatsapp/config');
+      expect(integrationsSrc).not.toContain("router.push('/(tabs)/reviews')");
+      expect(setupSrc).toContain('uploadFileToStorage');
+      expect(inboxSrc).toContain('links?.brochure');
+      expect(automationsSrc).toContain('bookingReminderHours');
+      expect(automationsSrc).not.toContain('?? true');
     });
   });
 });

@@ -383,11 +383,11 @@ export function LeadsView({ embedded = false }: { embedded?: boolean }) {
     const url =
       linkType === 'booking'
         ? resolveShareLink(links?.booking) || resolveShareLink(links?.profile)
-        : resolveShareLink(links?.profile) || resolveShareLink(links?.booking);
+        : resolveShareLink(links?.brochure) || resolveShareLink(links?.profile) || resolveShareLink(links?.booking);
     if (!url) {
       Alert.alert(
         linkType === 'booking' ? 'Booking Link Not Set' : 'Brochure Page Not Published',
-        'Enable your Digital Business Page or Booking Page in Tools first.',
+        'Upload your Brochure PDF or enable your Digital Business Page in Setup / Tools first.',
       );
       return;
     }

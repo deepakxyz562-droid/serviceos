@@ -446,6 +446,7 @@ function Thread({
   const [paused, setPaused] = useState(conversation.aiPaused);
   const [mode, setMode] = useState<'reply' | 'ai_reply'>('reply');
   const [text, setText] = useState('');
+  const [attachedMediaUrl, setAttachedMediaUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -486,16 +487,23 @@ function Thread({
   }
 
   async function send() {
-    if (!text.trim()) return;
+    if (!text.trim() && !attachedMediaUrl) return;
     setBusy(true);
     setError(null);
     try {
-      const content = text.trim();
+      const content = text.trim() || 'Sent attachment';
       const result = await apiRequest<BgosMessage>(
         `/api/omnichannel/conversations/${conversation.id}/messages`,
-        { method: 'POST', body: { content } }
+        {
+          method: 'POST',
+          body: {
+            content,
+            ...(attachedMediaUrl ? { mediaUrl: attachedMediaUrl } : {}),
+          },
+        }
       );
       setText('');
+      setAttachedMediaUrl(null);
       if (mode === 'reply') setPaused(true);
       if (result.delivery && !['delivered', 'in_app'].includes(result.delivery.status)) {
         setError(result.delivery.error || result.delivery.reason || 'Saved, delivery confirmation pending.');
@@ -574,15 +582,24 @@ function Thread({
               const name = conversation.customerName || 'there';
               const biz = businessName || 'our team';
               if (chip === 'Send Brochure') {
+                const brochurePdf = resolveWorkspaceLink(links?.brochure);
                 const profileUrl = resolveWorkspaceLink(links?.profile) || resolveWorkspaceLink(links?.booking);
-                if (!profileUrl) {
-                  Alert.alert('Brochure Link Not Ready', 'Publish your Digital Business Page or Booking link in Tools first.');
+                const targetUrl = brochurePdf || profileUrl;
+                if (!targetUrl) {
+                  Alert.alert('Brochure Link Not Ready', 'Upload a Brochure PDF in Setup or publish your Digital Business Page first.');
                   return;
                 }
-                setText(`Hi ${name}! Here is ${biz}'s service brochure, pricing & details: ${profileUrl}`);
+                if (brochurePdf) {
+                  setAttachedMediaUrl(brochurePdf);
+                  setText(`Hi ${name}! Please find ${biz}'s service brochure attached.`);
+                } else {
+                  setAttachedMediaUrl(null);
+                  setText(`Hi ${name}! Here is ${biz}'s service brochure, pricing & details: ${targetUrl}`);
+                }
                 return;
               }
               if (chip === 'Booking Link') {
+                setAttachedMediaUrl(null);
                 const bookingUrl = resolveWorkspaceLink(links?.booking) || resolveWorkspaceLink(links?.profile);
                 if (!bookingUrl) {
                   Alert.alert('Booking Link Not Ready', 'Set up your Online Booking Page in Tools first.');
@@ -591,6 +608,7 @@ function Thread({
                 setText(`Hi ${name}! You can view available time slots & book instantly here: ${bookingUrl}`);
                 return;
               }
+              setAttachedMediaUrl(null);
               setText(
                 chip === 'Get Quote'
                   ? 'Could you share the service you need so we can prepare a quote?'
@@ -615,6 +633,31 @@ function Thread({
         ))}
       </View>
 
+      {attachedMediaUrl ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 10,
+            backgroundColor: '#EFF6FF',
+            borderWidth: 1,
+            borderColor: '#BFDBFE',
+            marginBottom: 6,
+          }}
+        >
+          <MaterialIcons name="picture-as-pdf" size={16} color="#DC2626" />
+          <Text style={{ flex: 1, fontSize: 11.5, fontWeight: '700', color: '#1E3A8A' }} numberOfLines={1}>
+            PDF Brochure attached for WhatsApp delivery
+          </Text>
+          <Pressable onPress={() => setAttachedMediaUrl(null)} hitSlop={8}>
+            <MaterialIcons name="close" size={16} color="#64748B" />
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* 3-Mode Action Pill Bar: Reply, AI Reply, Note */}
       <View style={[ui.row, { justifyContent: 'space-between', backgroundColor: colors.surface, padding: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>
         <Chip label="✍️ Reply" selected={mode === 'reply'} onPress={() => setMode('reply')} />
@@ -632,9 +675,9 @@ function Thread({
       />
 
       <Action
-        label={busy ? 'Sending…' : 'Send Message'}
+        label={busy ? 'Sending…' : attachedMediaUrl ? 'Send Message + Brochure PDF' : 'Send Message'}
         icon="send"
-        disabled={busy || !text.trim()}
+        disabled={busy || (!text.trim() && !attachedMediaUrl)}
         onPress={send}
       />
     </Screen>

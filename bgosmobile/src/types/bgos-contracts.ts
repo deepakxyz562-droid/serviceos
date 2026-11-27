@@ -53,8 +53,14 @@ export interface BgosWorkspace {
     timeZone: string;
     locale: string;
   };
-  links: { profile: string | null; booking: string | null; form: string | null; review: string | null };
-  automations: { profileAssistant: boolean; offlineReply: boolean; gbp?: Record<string, boolean> };
+  links: { profile: string | null; booking: string | null; form: string | null; review: string | null; brochure?: string | null };
+  automations: {
+    profileAssistant: boolean;
+    offlineReply: boolean;
+    bookingReminderHours?: 'none' | '1h' | '24h' | '2d';
+    followUp?: { enabled: boolean; delayMinutes: number; languageMode: string };
+    gbp?: Record<string, boolean>;
+  };
   bookingPageConfig?: {
     businessName?: string;
     phone?: string;

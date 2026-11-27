@@ -57,6 +57,13 @@ const patch = z.object({
     pageVisibility: pageVisibilityPatchSchema.optional(),
   }).optional(),
   intakeFormId: z.string().optional(),
+  brochureUrl: z.string().nullable().optional(),
+  bookingReminderHours: z.enum(['none', '1h', '24h', '2d']).optional(),
+  followUp: z.object({
+    enabled: z.boolean().optional(),
+    delayMinutes: z.number().int().min(1).max(1440).optional(),
+    languageMode: z.enum(['auto', 'english', 'hinglish']).optional(),
+  }).optional(),
   clearSeededDummyServices: z.boolean().optional(),
   importGbpServices: z.boolean().optional(),
 }).strict();
@@ -221,6 +228,32 @@ export async function resolveWorkspaceData(
     const resolvedPlan = authPlanState.plan || rawPlanCode;
     const resolvedStatus = authPlanState.status || rawPlanStatus;
 
+    const activeAgentForFollowUp = db.formAgent?.findFirst
+      ? await db.formAgent
+          .findFirst({
+            where: { tenantId: user.tenantId, status: 'active' },
+            orderBy: { updatedAt: 'desc' },
+            select: { configJson: true },
+          })
+          .catch(() => null)
+      : null;
+    let agentFollowUp: { enabled?: boolean; delayMinutes?: number; languageMode?: string } = {};
+    if (activeAgentForFollowUp?.configJson) {
+      try {
+        const parsedCfg = JSON.parse(activeAgentForFollowUp.configJson);
+        agentFollowUp = parsedCfg?.settings?.followUp || {};
+      } catch {}
+    }
+    const followUpState = {
+      enabled: Boolean(agentFollowUp.enabled ?? settings.followUp?.enabled ?? false),
+      delayMinutes: Number(agentFollowUp.delayMinutes ?? settings.followUp?.delayMinutes ?? 120) || 120,
+      languageMode: String(agentFollowUp.languageMode || settings.followUp?.languageMode || 'auto'),
+    };
+    const brochureUrl = sanitizePublicImageUrl(settings.brochureUrl) || null;
+    const bookingReminderHours = (['none', '1h', '24h', '2d'].includes(settings.bookingReminderHours)
+      ? settings.bookingReminderHours
+      : '24h') as 'none' | '1h' | '24h' | '2d';
+
     const data: BgosWorkspace = {
       name: effectiveBusinessName,
       mode: isAgencyMode ? 'agency' : 'local',
@@ -263,10 +296,13 @@ export async function resolveWorkspaceData(
         booking: `https://bgos.site/${encodeURIComponent(businessSlug)}/book`,
         form: form?.slug ? `/f/${encodeURIComponent(form.slug)}` : null,
         review: tenant.googlePlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(tenant.googlePlaceId)}` : null,
+        brochure: brochureUrl,
       },
       automations: {
         profileAssistant: profile?.aiAgentEnabled === true,
         offlineReply: settings.autoReplyOffline?.enabled === true,
+        bookingReminderHours,
+        followUp: followUpState,
         gbp: settings.gbpAutomations || {
           replyToReviews: false,
           generatePosts: false,
@@ -335,6 +371,54 @@ export async function PATCH(request: NextRequest) {
     }
     if (input.data.offlineReply !== undefined) settings.autoReplyOffline = { ...settings.autoReplyOffline, enabled: input.data.offlineReply };
     if (input.data.gbpAutomations) settings.gbpAutomations = { ...(settings.gbpAutomations || {}), ...input.data.gbpAutomations };
+    if (input.data.bookingReminderHours !== undefined) {
+      settings.bookingReminderHours = input.data.bookingReminderHours;
+    }
+    if (input.data.brochureUrl !== undefined) {
+      if (input.data.brochureUrl && input.data.brochureUrl.trim()) {
+        const safeBrochure = sanitizePublicImageUrl(input.data.brochureUrl);
+        if (!safeBrochure) {
+          return NextResponse.json(
+            { error: 'Brochure PDF must be uploaded to cloud storage first.' },
+            { status: 400 },
+          );
+        }
+        settings.brochureUrl = safeBrochure;
+      } else {
+        settings.brochureUrl = null;
+      }
+    }
+    if (input.data.followUp) {
+      settings.followUp = { ...(settings.followUp || {}), ...input.data.followUp };
+      if (db.formAgent?.findFirst && db.formAgent?.update) {
+        const activeAgent = await db.formAgent
+          .findFirst({
+            where: { tenantId: user.tenantId, status: 'active' },
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true, configJson: true },
+          })
+          .catch(() => null);
+        if (activeAgent) {
+          let parsedCfg: Record<string, any> = {};
+          try {
+            parsedCfg = activeAgent.configJson ? JSON.parse(activeAgent.configJson) : {};
+          } catch {}
+          parsedCfg.settings = {
+            ...(parsedCfg.settings || {}),
+            followUp: {
+              ...(parsedCfg.settings?.followUp || {}),
+              ...input.data.followUp,
+            },
+          };
+          await db.formAgent
+            .update({
+              where: { id: activeAgent.id },
+              data: { configJson: JSON.stringify(parsedCfg) },
+            })
+            .catch(() => {});
+        }
+      }
+    }
 
     const cfg = input.data.bookingPageConfig;
     if (cfg) {

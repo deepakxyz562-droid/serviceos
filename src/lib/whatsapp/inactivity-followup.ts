@@ -93,13 +93,14 @@ export async function processWhatsAppInactivityFollowups(params?: {
   const minThreshold = new Date(now - queryFloorHours * 60 * 60 * 1000);
   const maxThreshold = new Date(now - maxHours * 60 * 60 * 1000);
 
-  // 1. Find conversations where the last customer interaction is within the quiet window
+  // 1. Find open WhatsApp conversations that have gone quiet (whether customer didn't reply to
+  // our last message ['outbound'] OR an inbound chat went unanswered ['inbound'])
   const quietConversations = await db.conversation.findMany({
     where: {
       channel: 'whatsapp',
       status: 'active',
       aiPaused: false,
-      lastDirection: 'inbound',
+      lastDirection: { in: ['outbound', 'inbound'] },
       lastMessageAt: {
         lte: minThreshold,
         gte: maxThreshold,
@@ -148,10 +149,38 @@ export async function processWhatsAppInactivityFollowups(params?: {
       continue;
     }
 
+    // Skip if customer already booked a future appointment
+    if (typeof (db as any)?.booking?.findFirst === 'function') {
+      const existingBooking = await (db as any).booking
+        .findFirst({
+          where: {
+            tenantId: conv.tenantId,
+            customerPhone: conv.customerPhone,
+            status: { in: ['confirmed', 'pending'] },
+            scheduledAt: { gte: new Date(now) },
+          },
+          select: { id: true },
+        })
+        .catch(() => null);
+      if (existingBooking) {
+        continue;
+      }
+    }
+
     const tenant = await db.tenant.findUnique({
       where: { id: conv.tenantId },
       include: { brandProfile: true },
     });
+
+    // Skip unpaid expired / free / non-WhatsApp starter workspaces cleanly
+    const tenantPlan = String((tenant as any)?.plan || '').toLowerCase();
+    const tenantStatus = String((tenant as any)?.planStatus || '').toLowerCase();
+    if (
+      (tenantStatus === 'expired' || tenantStatus === 'cancelled' || tenantStatus === 'suspended') ||
+      (tenantStatus === 'active' && (tenantPlan === 'free' || tenantPlan === 'starter'))
+    ) {
+      continue;
+    }
 
     const businessName = tenant?.brandProfile?.businessName || tenant?.name || 'our team';
     const customerName = conv.customerName || 'there';

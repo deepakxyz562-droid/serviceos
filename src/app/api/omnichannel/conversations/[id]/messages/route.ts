@@ -183,21 +183,15 @@ export async function POST(
           data: { metadataJson: JSON.stringify(dispatchMeta) },
         }).catch(() => {})
       } else {
-        // Resolve the customer to get a destination phone/email.
+        // Resolve destination contact (Customer row or direct phone saved on Conversation)
         const customer = conversation.customerId
           ? await db.customer.findUnique({ where: { id: conversation.customerId } })
           : null
+        const destinationPhone = customer?.phone || conversation.customerPhone || null
 
-        if (!customer) {
-          console.warn(`[omnichannel/reply] Conversation ${conversation.id} has no linked customer — message ${message.id} saved but not delivered.`)
-          dispatchMeta.dispatch = { channel, status: 'skipped', reason: 'no linked customer' }
-          await db.inboxMessage.update({
-            where: { id: message.id },
-            data: { metadataJson: JSON.stringify(dispatchMeta) },
-          }).catch(() => {})
-        } else if (channel === 'whatsapp') {
-          if (!customer.phone) {
-            console.warn(`[omnichannel/reply] Customer ${customer.id} has no phone — WhatsApp reply skipped (msg ${message.id}).`)
+        if (channel === 'whatsapp') {
+          if (!destinationPhone) {
+            console.warn(`[omnichannel/reply] Conversation ${conversation.id} has no customer phone — WhatsApp reply skipped (msg ${message.id}).`)
             dispatchMeta.dispatch = { channel, status: 'skipped', reason: 'customer has no phone' }
             await db.inboxMessage.update({
               where: { id: message.id },
@@ -205,10 +199,14 @@ export async function POST(
             }).catch(() => {})
           } else {
             const { sendWhatsAppMessage } = await import('@/lib/whatsapp-send')
+            const waType = mediaUrl ? (messageType === 'image' ? 'image' : 'document') : 'text'
             const result = await sendWhatsAppMessage({
               tenantId: conversation.tenantId || tenantId || undefined,
-              to: customer.phone,
+              to: destinationPhone,
               message: messageBody,
+              type: waType,
+              mediaUrl: mediaUrl || undefined,
+              mediaFilename: typeof body.mediaFilename === 'string' ? body.mediaFilename : undefined,
             })
             dispatchMeta.dispatch = {
               channel,
@@ -231,8 +229,8 @@ export async function POST(
             }
           }
         } else if (channel === 'sms') {
-          if (!customer.phone) {
-            console.warn(`[omnichannel/reply] Customer ${customer.id} has no phone — SMS reply skipped (msg ${message.id}).`)
+          if (!destinationPhone) {
+            console.warn(`[omnichannel/reply] Conversation ${conversation.id} has no customer phone — SMS reply skipped (msg ${message.id}).`)
             dispatchMeta.dispatch = { channel, status: 'skipped', reason: 'customer has no phone' }
             await db.inboxMessage.update({
               where: { id: message.id },
@@ -242,7 +240,7 @@ export async function POST(
             const { sendSmsMessage } = await import('@/lib/sms-send')
             const result = await sendSmsMessage({
               tenantId: conversation.tenantId || tenantId || undefined,
-              to: customer.phone,
+              to: destinationPhone,
               message: messageBody,
             })
             dispatchMeta.dispatch = {
