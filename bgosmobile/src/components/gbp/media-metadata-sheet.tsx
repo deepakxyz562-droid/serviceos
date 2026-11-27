@@ -147,7 +147,7 @@ export function MediaMetadataSheet({
   const isEditMode = Boolean(editingItem && (editingItem.postId || editingItem.id));
 
   // ── Branding & Toggle State ──
-  const [addBranding, setAddBranding] = useState<boolean>(true);
+  const [addBranding, setAddBranding] = useState<boolean>(false);
   const [isEditingDescription, setIsEditingDescription] = useState<boolean>(false);
   const [activeBullets, setActiveBullets] = useState<string[]>([]);
   const [activeHeadline, setActiveHeadline] = useState<string>('');
@@ -227,6 +227,7 @@ export function MediaMetadataSheet({
     sessionKeyRef.current += 1;
     const reqKey = sessionKeyRef.current;
     setErrorMsg(null);
+    setAddBranding(false);
     setIsEditingDescription(false);
     setScheduleMode(initialScheduleMode || (pendingAssets.length > 1 ? 'daily' : 'instant'));
     setPostDestination('photo_media');

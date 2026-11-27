@@ -9,7 +9,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -77,7 +76,6 @@ export function AiStudioFeed({
   industry,
   city = 'Patna',
   phone,
-  logoUrl,
   onSelectTemplate,
   onPublished,
   onBack,
@@ -85,7 +83,6 @@ export function AiStudioFeed({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<StudioTabKey>('all');
-  const [brandFrame, setBrandFrame] = useState(true);
   const [templates, setTemplates] = useState<StudioTemplateItem[]>([]);
   const [quota, setQuota] = useState<AiStudioQuota | null>(null);
   const [loading, setLoading] = useState(true);
@@ -632,16 +629,6 @@ export function AiStudioFeed({
 
         <View style={styles.navTitleWrap}>
           <Text style={styles.navTitleText}>AI Creative Studio</Text>
-        </View>
-
-        <View style={styles.brandSwitchWrap}>
-          <Text style={styles.brandSwitchLabel}>Brand Frame</Text>
-          <Switch
-            value={brandFrame}
-            onValueChange={setBrandFrame}
-            trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-            thumbColor={brandFrame ? '#009F50' : '#FFFFFF'}
-          />
         </View>
       </View>
 
@@ -1207,24 +1194,6 @@ export function AiStudioFeed({
                   resizeMode="cover"
                 />
 
-                {/* Brand Frame: Top Monogram/Logo Strip */}
-                {brandFrame && (
-                  <View style={styles.cardBrandBanner}>
-                    <View style={styles.cardMonogramBox}>
-                      {logoUrl ? (
-                        <Image source={{ uri: logoUrl }} style={styles.cardLogoImg} resizeMode="contain" />
-                      ) : (
-                        <Text style={styles.cardMonogramChar}>
-                          {(businessName || 'B').charAt(0).toUpperCase()}
-                        </Text>
-                      )}
-                    </View>
-                    <Text numberOfLines={1} style={styles.cardBrandTitle}>
-                      {businessName}
-                    </Text>
-                  </View>
-                )}
-
                 {/* Sleek Bottom Scrim with Headline & 1-Tap Use Pill */}
                 <View style={styles.cardContentOverlay}>
                   <Text numberOfLines={2} style={styles.cardHeadline}>
@@ -1271,7 +1240,8 @@ const styles = StyleSheet.create({
   navBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 8,
     paddingHorizontal: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -1285,24 +1255,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navTitleWrap: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
   navTitleText: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-  },
-  brandSwitchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  brandSwitchLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
   },
   createAiBannerWrap: {
     backgroundColor: '#FFFFFF',
@@ -1844,42 +1804,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     textTransform: 'uppercase',
-  },
-  cardBrandBanner: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 70,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  cardMonogramBox: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#22C55E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardMonogramChar: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  cardLogoImg: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  cardBrandTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   cardContentOverlay: {
     position: 'absolute',

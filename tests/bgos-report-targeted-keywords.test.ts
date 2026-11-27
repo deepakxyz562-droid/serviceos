@@ -223,7 +223,7 @@ describe('Targeted Keywords Auto-Seeding when Tracked Keywords are Empty', () =>
       const { scanPlacesGridFallback } = await import('@/lib/gbp/keyword-planner-free');
       const result = await scanPlacesGridFallback({
         keyword: 'swimming pool resort near me',
-        targetPlaceId: 'ChIJ_self_farm_1',
+        placeId: 'ChIJ_self_farm_1',
         centerLat: 28.6139,
         centerLng: 77.209,
         gridSize: 3,
@@ -321,7 +321,7 @@ describe('Targeted Keywords Auto-Seeding when Tracked Keywords are Empty', () =>
       expect(postJson.success).toBe(true);
       expect(postJson.skipped).toBe(false);
 
-      const getRes = await GET();
+      const getRes = await GET(new NextRequest('http://localhost:3000/api/gbp/rankings'));
       expect(getRes.status).toBe(200);
       const getJson = await getRes.json();
 

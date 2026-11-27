@@ -36,11 +36,16 @@ describe('Report Rank by Location, Media & AI Creative Studio UI Cleanups & Spee
     const sheet = readRel('bgosmobile/src/components/gbp/media-metadata-sheet.tsx');
     const tabsLayout = readRel('bgosmobile/app/(tabs)/_layout.tsx');
 
-    // Navbar & cards cleanup
+    // Navbar & cards cleanup (left-aligned title without left gap, no logo/brand name overlay on cards)
     expect(studio).not.toContain('<View style={styles.cardBadge}>');
+    expect(studio).not.toContain('<View style={styles.cardBrandBanner}>');
+    expect(studio).not.toContain('Brand Frame');
+    expect(studio).toContain("justifyContent: 'flex-start'");
     expect(studio).toContain('<View style={styles.navTitleWrap}>\n          <Text style={styles.navTitleText}>AI Creative Studio</Text>');
 
-    // Instant tap speed optimization
+    // Instant tap speed optimization & clean photo preview by default (no forced logo/brand banner overlay)
+    expect(sheet).toContain('useState<boolean>(false)');
+    expect(sheet).toContain('setAddBranding(false)');
     expect(sheet).toContain('cachedBusinessMetaByName');
     expect(sheet).toContain('{!selectedTemplate && !editingItem && pendingAssets.length === 0 ? (');
     expect(sheet).toContain('Studio photo already carries creative & caption');
