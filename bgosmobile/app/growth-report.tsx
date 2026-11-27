@@ -127,6 +127,7 @@ export default function GrowthReportScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshingRanks, setRefreshingRanks] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [period, setPeriod] = useState<'last_month' | 'this_month'>('last_month');
@@ -180,6 +181,22 @@ export default function GrowthReportScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleRefreshRanks = async () => {
+    if (refreshingRanks) return;
+    setRefreshingRanks(true);
+    try {
+      await apiRequest('/api/gbp/rankings', {
+        method: 'POST',
+        body: { mode: 'batch_keywords', force: true },
+      });
+      await loadReport(period, true);
+    } catch (e: any) {
+      Alert.alert('Rank Refresh Failed', e?.message || 'Could not measure keyword ranks right now.');
+    } finally {
+      setRefreshingRanks(false);
     }
   };
 
@@ -661,6 +678,32 @@ export default function GrowthReportScreen() {
                       </Pressable>
                       <Pressable
                         accessibilityRole="button"
+                        onPress={handleRefreshRanks}
+                        disabled={refreshingRanks}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 16,
+                          backgroundColor: '#EFF6FF',
+                          borderWidth: 1,
+                          borderColor: '#BFDBFE',
+                          opacity: refreshingRanks ? 0.6 : 1,
+                        }}
+                      >
+                        {refreshingRanks ? (
+                          <ActivityIndicator size="small" color="#2563EB" />
+                        ) : (
+                          <MaterialIcons name="refresh" size={13} color="#2563EB" />
+                        )}
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
+                          {refreshingRanks ? 'Scanning' : 'Refresh'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
                         onPress={() => setPeriod(period === 'last_month' ? 'this_month' : 'last_month')}
                         style={styles.filterPill}
                       >
@@ -710,7 +753,7 @@ export default function GrowthReportScreen() {
                         const hasChange = k.rankChange != null && Number.isFinite(Number(k.rankChange));
                         const changeVal = hasChange ? Number(k.rankChange) : null;
                         const isUp = changeVal != null && changeVal > 0;
-                        const isDown = changeVal != null && changeVal < 0;
+                        const isDownOrFlat = changeVal != null && changeVal <= 0;
 
                         return (
                           <View
@@ -744,19 +787,19 @@ export default function GrowthReportScreen() {
                                   paddingHorizontal: 8,
                                   paddingVertical: 3,
                                   borderRadius: 6,
-                                  backgroundColor: isUp ? '#DCFCE7' : isDown ? '#FEE2E2' : '#F1F5F9',
+                                  backgroundColor: isUp ? '#DCFCE7' : isDownOrFlat ? '#FEE2E2' : '#F1F5F9',
                                 }}
                               >
                                 <Text
                                   style={{
                                     fontSize: 11.5,
                                     fontWeight: '700',
-                                    color: isUp ? '#15803D' : isDown ? '#DC2626' : '#64748B',
+                                    color: isUp ? '#15803D' : isDownOrFlat ? '#DC2626' : '#64748B',
                                   }}
                                 >
                                   {isUp
                                     ? `▲ ${Math.abs(changeVal!).toFixed(1)}`
-                                    : isDown
+                                    : isDownOrFlat
                                       ? `▼ ${Math.abs(changeVal!).toFixed(1)}`
                                       : '~'}
                                 </Text>

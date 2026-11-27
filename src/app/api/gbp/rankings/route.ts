@@ -25,6 +25,7 @@ import {
   getGooglePlacesApiKey,
   scanGeminiGroundedSerpFallback,
   scanPlacesGridFallback,
+  scanTargetKeywordsBatch,
 } from '@/lib/gbp/keyword-planner-free';
 
 export const dynamic = 'force-dynamic';
@@ -290,16 +291,24 @@ export async function GET(request: NextRequest) {
   // Build real measured keyword list (never synthesize fake 1.4/1.6 ranks when empty)
   const measuredKeywordMap = new Map<string, { keyword: string; rank: number | null; rankChange: number | null }>();
   const rawScans: RankScan[] = Array.isArray(stored.measuredRankScans) ? stored.measuredRankScans : [];
-  const prevScan = rawScans.length >= 2 ? rawScans[rawScans.length - 2] : null;
+  const priorScans = rawScans.slice(0, -1).reverse();
   for (const k of summary.keywords) {
     if (!k?.keyword) continue;
+    const key = k.keyword.toLowerCase();
     const curr = typeof k.currentRank === 'number' ? Number(k.currentRank.toFixed(1)) : null;
-    const prevKw = prevScan?.keywords?.find((pk) => pk.keyword.toLowerCase() === k.keyword.toLowerCase());
+    let prevRank: number | null = null;
+    for (const ps of priorScans) {
+      const match = ps?.keywords?.find((pk) => pk.keyword.toLowerCase() === key);
+      if (typeof match?.rank === 'number' && match.rank > 0) {
+        prevRank = match.rank;
+        break;
+      }
+    }
     const delta =
-      curr != null && typeof prevKw?.rank === 'number'
-        ? Number((prevKw.rank - curr).toFixed(1))
+      curr != null && prevRank != null
+        ? Number((prevRank - curr).toFixed(1))
         : null;
-    measuredKeywordMap.set(k.keyword.toLowerCase(), {
+    measuredKeywordMap.set(key, {
       keyword: k.keyword,
       rank: curr,
       rankChange: delta,
@@ -637,14 +646,43 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // 1c. Batch-scan all active target keywords using $0/low-cost Google Places fallback
+  if (body?.mode === 'batch_keywords') {
+    const gate = await requireBgosEntitled(user);
+    if (!gate.ok) return gate.response;
+
+    try {
+      const result = await scanTargetKeywordsBatch({
+        tenantId: user.tenantId,
+        maxAgeMs: body?.force ? 0 : 10 * 60 * 1000,
+        keywords: Array.isArray(body?.keywords) ? body.keywords : undefined,
+      });
+      return NextResponse.json({
+        success: true,
+        ...result,
+        message: result.skipped
+          ? 'Targeted keyword ranks were scanned recently.'
+          : `Measured Maps ranks for ${result.keywords.length} targeted keyword(s).`,
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Failed to scan targeted keywords' },
+        { status: 400 },
+      );
+    }
+  }
+
   // 2. Maps Geo-Grid Scan (3x3 / 5x5)
   if (body?.mode === 'maps_grid') {
     const gate = await requireBgosEntitled(user);
     if (!gate.ok) return gate.response;
 
+    const hasDataForSeo = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+    const hasPlaces = Boolean(getGooglePlacesApiKey());
     const gridSize: 3 | 5 = Number(body.gridSize) === 5 ? 5 : 3;
     const ent = (gate as any).entitlement;
-    if (gridSize === 5 && ent && !ent.isTrial) {
+    // Paid DataForSEO 5x5 scans remain gated on Business/Enterprise; $0 Google Places fallback is allowed on all active/trial plans.
+    if (gridSize === 5 && hasDataForSeo && ent && !ent.isTrial) {
       const planCode = normalizeBgosPlanCode(ent.plan);
       if (!['business', 'enterprise'].includes(planCode)) {
         return NextResponse.json(
@@ -656,9 +694,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
-    const hasDataForSeo = !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
-    const hasPlaces = Boolean(getGooglePlacesApiKey());
 
     if (!hasDataForSeo && !hasPlaces) {
       return NextResponse.json(

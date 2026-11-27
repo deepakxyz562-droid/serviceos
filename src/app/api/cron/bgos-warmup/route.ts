@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { computeMarketingScore } from '@/lib/gbp/marketing-score';
 import { computeGbpAudit } from '@/lib/gbp/audit';
 import { ensureFreshCompetitorIntelligence } from '@/lib/gbp/competitor-intelligence';
+import { getGooglePlacesApiKey, scanTargetKeywordsBatch } from '@/lib/gbp/keyword-planner-free';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -31,12 +32,16 @@ async function handleWarmup(request: NextRequest) {
   let warmed = 0;
   let failed = 0;
 
+  const shouldBatchScanRanks = Boolean(getGooglePlacesApiKey());
   for (const { tenantId } of accounts) {
     try {
       await Promise.allSettled([
         computeMarketingScore(tenantId),
         computeGbpAudit(tenantId),
         ensureFreshCompetitorIntelligence(tenantId, { maxAgeMs: 24 * 60 * 60 * 1000 }),
+        ...(shouldBatchScanRanks
+          ? [scanTargetKeywordsBatch({ tenantId, maxAgeMs: 24 * 60 * 60 * 1000 })]
+          : []),
       ]);
       warmed++;
     } catch {

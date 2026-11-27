@@ -863,15 +863,22 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
       ? parsedReportSettings.measuredRankScans
       : [];
     const scanSummary = rankingSummary(storedRankScans);
-    const prevRankScan = storedRankScans.length >= 2 ? storedRankScans[storedRankScans.length - 2] : null;
+    const priorScans = storedRankScans.slice(0, -1).reverse();
     for (const k of scanSummary.keywords) {
       if (!k?.keyword) continue;
       const key = k.keyword.trim().toLowerCase();
       const curr = typeof k.currentRank === 'number' && k.currentRank > 0 ? Number(k.currentRank.toFixed(1)) : null;
-      const prevKw = prevRankScan?.keywords?.find((pk) => pk.keyword?.toLowerCase() === key);
+      let prevRank: number | null = null;
+      for (const ps of priorScans) {
+        const match = ps?.keywords?.find((pk) => pk.keyword?.toLowerCase() === key);
+        if (typeof match?.rank === 'number' && match.rank > 0) {
+          prevRank = match.rank;
+          break;
+        }
+      }
       const delta =
-        curr != null && typeof prevKw?.rank === 'number' && prevKw.rank > 0
-          ? Number((prevKw.rank - curr).toFixed(1))
+        curr != null && prevRank != null
+          ? Number((prevRank - curr).toFixed(1))
           : null;
       keywordMap.set(key, {
         keyword: k.keyword,
@@ -905,12 +912,7 @@ Write exactly 2 concise, executive sentences for the owner. Highlight one growth
     for (const k of trackedKeywords) {
       const key = String(k?.keyword || '').trim().toLowerCase();
       if (!key || keywordMap.has(key)) continue;
-      const rawR =
-        typeof k.mapsRank === 'number' && k.mapsRank > 0
-          ? k.mapsRank
-          : typeof k.position === 'number' && k.position > 0
-            ? Number(k.position)
-            : null;
+      const rawR = typeof k.mapsRank === 'number' && k.mapsRank > 0 ? k.mapsRank : null;
       keywordMap.set(key, {
         keyword: k.keyword,
         rank: rawR != null ? Number(rawR.toFixed(1)) : null,

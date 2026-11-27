@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -288,6 +288,8 @@ export function PerformancePanel({
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [selectedGridKeyword, setSelectedGridKeyword] = useState<string | null>(null);
   const [scanningGrid, setScanningGrid] = useState(false);
+  const [scanningRanks, setScanningRanks] = useState(false);
+  const autoBatchScanTriggeredRef = useRef(false);
 
   // Fetch competitors and keyword rankings
   const competitorsRes = useResource<{
@@ -443,6 +445,31 @@ export function PerformancePanel({
     () => Array.from(new Set(availableGridScans.map((s) => String(s.keyword || '')).filter(Boolean))),
     [availableGridScans],
   );
+
+  const runBatchKeywordScan = useCallback(async (force = false) => {
+    if (scanningRanks) return;
+    setScanningRanks(true);
+    try {
+      await apiRequest('/api/gbp/rankings', {
+        method: 'POST',
+        body: { mode: 'batch_keywords', force },
+      });
+      await rankingsRes.refresh();
+    } catch {
+      // Non-fatal: keep any cached/stored rows visible without blocking Performance tab
+    } finally {
+      setScanningRanks(false);
+    }
+  }, [scanningRanks, rankingsRes]);
+
+  // Auto-trigger initial batch rank scan once when keywords are tracked but none have a measured rank yet
+  useEffect(() => {
+    if (autoBatchScanTriggeredRef.current || scanningRanks || rankingsRes.loading) return;
+    if (keywordsList.length > 0 && keywordsList.every((k) => k.rank == null) && Boolean(rankingsRes.data?.placesConfigured)) {
+      autoBatchScanTriggeredRef.current = true;
+      void runBatchKeywordScan(false);
+    }
+  }, [keywordsList, rankingsRes.loading, rankingsRes.data?.placesConfigured, scanningRanks, runBatchKeywordScan]);
 
   async function runQuickGridScan() {
     const kw = (
@@ -792,21 +819,49 @@ export function PerformancePanel({
           SECTION 4: RANK FOR TARGETED KEYWORDS (Screenshots 2 & 3)
       ════════════════════════════════════════════════════════════════════════ */}
       <View style={{ gap: 12 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            Alert.alert(
-              'Rank for Targeted Keywords',
-              'Shows your average Google Maps rank (1.0 is top). Green ▲ means your rank improved compared to the previous scan; red ▼ means it dropped; ~ means no prior scan baseline.',
-            )
-          }
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}
-        >
-          <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
-            Rank for Targeted Keywords
-          </Text>
-          <MaterialIcons name="info-outline" size={17} color="#64748B" />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              Alert.alert(
+                'Rank for Targeted Keywords',
+                'Shows your average Google Maps rank (1.0 is top). Green ▲ means your rank improved compared to the previous scan; red ▼ means it dropped or held flat; ~ means no prior scan baseline.',
+              )
+            }
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>
+              Rank for Targeted Keywords
+            </Text>
+            <MaterialIcons name="info-outline" size={17} color="#64748B" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void runBatchKeywordScan(true)}
+            disabled={scanningRanks}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 16,
+              backgroundColor: '#EFF6FF',
+              borderWidth: 1,
+              borderColor: '#BFDBFE',
+              opacity: scanningRanks ? 0.6 : 1,
+            }}
+          >
+            {scanningRanks ? (
+              <ActivityIndicator size="small" color="#2563EB" />
+            ) : (
+              <MaterialIcons name="refresh" size={14} color="#2563EB" />
+            )}
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB' }}>
+              {scanningRanks ? 'Scanning...' : 'Refresh Ranks'}
+            </Text>
+          </Pressable>
+        </View>
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
           {/* Table Header */}
@@ -825,9 +880,10 @@ export function PerformancePanel({
             </View>
           ) : (
             displayedKeywords.map((kw, idx) => {
-              const rankChange = kw.rankChange ?? 0;
-              const isNeutral = rankChange === 0;
-              const isNegative = rankChange < 0;
+              const hasDelta = typeof kw.rankChange === 'number' && Number.isFinite(kw.rankChange);
+              const rankChange = hasDelta ? Number(kw.rankChange) : null;
+              const isUnbaselined = rankChange === null;
+              const isImproved = rankChange !== null && rankChange > 0;
               return (
                 <View
                   key={kw.keyword + idx}
@@ -854,14 +910,14 @@ export function PerformancePanel({
 
                   {/* Change Pill */}
                   <View style={{ width: 70, alignItems: 'flex-end' }}>
-                    {isNeutral ? (
+                    {isUnbaselined ? (
                       <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>~</Text>
                       </View>
                     ) : (
                       <View
                         style={{
-                          backgroundColor: isNegative ? '#FEE2E2' : '#DCFCE7',
+                          backgroundColor: isImproved ? '#DCFCE7' : '#FEE2E2',
                           paddingHorizontal: 6,
                           paddingVertical: 3,
                           borderRadius: 6,
@@ -870,8 +926,8 @@ export function PerformancePanel({
                           gap: 2,
                         }}
                       >
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: isNegative ? '#DC2626' : '#16A34A' }}>
-                          {isNegative ? '▼' : '▲'} {Math.abs(rankChange).toFixed(1)}
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: isImproved ? '#16A34A' : '#DC2626' }}>
+                          {isImproved ? '▲' : '▼'} {Math.abs(rankChange!).toFixed(1)}
                         </Text>
                       </View>
                     )}
