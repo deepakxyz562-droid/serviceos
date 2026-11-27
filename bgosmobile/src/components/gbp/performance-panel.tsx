@@ -5,8 +5,7 @@ import { useRouter } from 'expo-router';
 import { Action, Card, Empty, Field, colors, ui } from '../ui';
 import { apiRequest, ApiError } from '../../lib/api';
 import { useResource } from '../../hooks/use-resource';
-import { AiActionsFeed } from './ai-actions';
-import { SectionHeader, gbpColors } from './bits';
+import { SectionHeader } from './bits';
 import { GeoGridMap, type GeoGridPointItem } from './geo-grid-map';
 import type { AiAction, AnalyticsResult } from './types';
 
@@ -288,6 +287,7 @@ export function PerformancePanel({
   const [showAllCompetitors, setShowAllCompetitors] = useState(false);
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [selectedGridKeyword, setSelectedGridKeyword] = useState<string | null>(null);
+  const [scanningGrid, setScanningGrid] = useState(false);
 
   // Fetch competitors and keyword rankings
   const competitorsRes = useResource<{
@@ -443,6 +443,39 @@ export function PerformancePanel({
     () => Array.from(new Set(availableGridScans.map((s) => String(s.keyword || '')).filter(Boolean))),
     [availableGridScans],
   );
+
+  async function runQuickGridScan() {
+    const kw = (
+      geoGridData.keyword ||
+      rankingsRes.data?.autoDefaults?.suggestedKeywords?.[0] ||
+      keywordsList[0]?.keyword ||
+      ''
+    ).trim();
+    if (!kw) {
+      router.push('/seo-growth?tab=grid');
+      return;
+    }
+    setScanningGrid(true);
+    try {
+      await apiRequest('/api/gbp/rankings', {
+        method: 'POST',
+        body: {
+          mode: 'maps_grid',
+          keyword: kw,
+          placeId: rankingsRes.data?.autoDefaults?.placeId,
+          centerLat: rankingsRes.data?.autoDefaults?.centerLat,
+          centerLng: rankingsRes.data?.autoDefaults?.centerLng,
+          gridSize: 5,
+          radiusKm: 3,
+        },
+      });
+      await rankingsRes.refresh();
+    } catch {
+      router.push('/seo-growth?tab=grid');
+    } finally {
+      setScanningGrid(false);
+    }
+  }
 
   return (
     <View style={{ gap: 20 }}>
@@ -897,17 +930,15 @@ export function PerformancePanel({
           availableKeywords={availableGridKeywords}
           onSelectKeyword={(kw) => setSelectedGridKeyword(kw)}
           compact
-          onPressEmpty={() => router.push('/seo-growth?tab=grid')}
+          onPressEmpty={() => void runQuickGridScan()}
+          scanningEmpty={scanningGrid}
         />
       </View>
 
       {/* ════════════════════════════════════════════════════════════════════════
-          SECTION 6: AI ACTIONS FEED & WEEKLY SUMMARY
+          SECTION 6: WEEKLY EMAIL SUMMARY
       ════════════════════════════════════════════════════════════════════════ */}
       <View style={{ gap: 14 }}>
-        <SectionHeader title="✨ AI Growth Actions" icon="rocket-launch" iconColor={gbpColors.ai} />
-        <AiActionsFeed actions={aiActions} onOpenPosts={onOpenPosts} />
-
         {/* Weekly Email Summary Switch */}
         <Card style={{ gap: 10 }}>
           <SectionHeader title="Weekly email summary" icon="mail-outline" />

@@ -961,7 +961,7 @@ export default function GrowthReportScreen() {
               {/* AI Executive Briefing */}
               <View style={[styles.aiBriefingCard, { marginBottom: 16 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <MaterialIcons name="auto-awesome" size={18} color="#166534" />
+                  <MaterialIcons name="insights" size={18} color="#166534" />
                   <Text style={styles.aiBriefingTitle}>AI Growth Officer Executive Briefing</Text>
                 </View>
                 <Text style={styles.aiBriefingBody}>{report?.aiExecutiveSummary}</Text>

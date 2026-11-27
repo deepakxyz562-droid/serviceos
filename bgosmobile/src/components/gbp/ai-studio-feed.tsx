@@ -609,7 +609,7 @@ export function AiStudioFeed({
   }, [templates, activeTab, selectedFestival, festivalSearch]);
 
   const tabs: Array<{ id: StudioTabKey; label: string; icon: keyof typeof MaterialIcons.glyphMap; count: number }> = [
-    { id: 'all', label: 'All Designs', icon: 'auto-awesome', count: counts.total ?? 0 },
+    { id: 'all', label: 'All Designs', icon: 'collections', count: counts.total ?? 0 },
     { id: 'for_business', label: 'Core Services', icon: 'inventory', count: counts.for_business ?? 0 },
     { id: 'promotions', label: 'Special Offers', icon: 'local-offer', count: counts.promotions ?? 0 },
     { id: 'reviews', label: 'Highlights', icon: 'verified', count: counts.reviews ?? 0 },
@@ -631,7 +631,6 @@ export function AiStudioFeed({
         </Pressable>
 
         <View style={styles.navTitleWrap}>
-          <MaterialIcons name="auto-awesome" size={18} color="#009F50" />
           <Text style={styles.navTitleText}>AI Creative Studio</Text>
         </View>
 
@@ -745,7 +744,7 @@ export function AiStudioFeed({
           {/* Modal Header */}
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderTitleWrap}>
-              <MaterialIcons name="auto-awesome" size={20} color="#009F50" />
+              <MaterialIcons name="palette" size={20} color="#009F50" />
               <Text style={styles.modalHeaderTitle}>AI Photo &amp; Post Studio</Text>
             </View>
             <Pressable
@@ -1032,7 +1031,7 @@ export function AiStudioFeed({
               ) : (
                 <View style={styles.blankCanvasBox}>
                   <View style={styles.blankCanvasIconBox}>
-                    <MaterialIcons name="auto-awesome" size={24} color="#009F50" />
+                    <MaterialIcons name="add-photo-alternate" size={24} color="#009F50" />
                   </View>
                   <Text style={styles.blankCanvasTitle}>Ready to Create</Text>
                   <Text style={styles.blankCanvasSubtitle}>
@@ -1164,7 +1163,7 @@ export function AiStudioFeed({
           ListEmptyComponent={
             <View style={styles.emptySearchBox}>
               <MaterialIcons
-                name={activeTab === 'festivals' ? 'celebration' : 'auto-awesome'}
+                name={activeTab === 'festivals' ? 'celebration' : 'collections'}
                 size={44}
                 color="#94A3B8"
               />
@@ -1225,13 +1224,6 @@ export function AiStudioFeed({
                     </Text>
                   </View>
                 )}
-
-                {/* Badge Overlay */}
-                <View style={styles.cardBadge}>
-                  <Text numberOfLines={1} style={styles.cardBadgeText}>
-                    {item.badge || 'PRO'}
-                  </Text>
-                </View>
 
                 {/* Sleek Bottom Scrim with Headline & 1-Tap Use Pill */}
                 <View style={styles.cardContentOverlay}>

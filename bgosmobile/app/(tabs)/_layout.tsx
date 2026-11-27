@@ -21,7 +21,7 @@ import { useAuthStore } from '../../src/stores/auth-store';
 const visible = [
   ['index', 'Home', 'home'],
   ['reviews', 'Reviews', 'rate-review'],
-  ['marketing', 'Posts', 'auto-awesome'],
+  ['marketing', 'Posts', 'post-add'],
   ['photos', 'Media', 'photo-library'],
   ['tools', 'Tools', 'grid-view'],
 ] as const;
@@ -78,7 +78,7 @@ export default function TabLayout() {
                 if (isCenter) {
                   return (
                     <View style={[styles.centerAiPill, focused && styles.centerAiPillActive]}>
-                      <MaterialIcons name="auto-awesome" size={20} color="#FFFFFF" />
+                      <MaterialIcons name="post-add" size={21} color="#FFFFFF" />
                     </View>
                   );
                 }

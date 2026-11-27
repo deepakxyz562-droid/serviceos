@@ -1210,7 +1210,7 @@ export default function ReviewRepliesScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <MaterialIcons name="auto-awesome" size={18} color="#7C3AED" />
+                      <MaterialIcons name="rate-review" size={18} color="#7C3AED" />
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -2729,7 +2729,7 @@ export default function ReviewRepliesScreen() {
                     justifyContent: 'center',
                   }}
                 >
-                  <MaterialIcons name="auto-awesome" size={20} color="#7C3AED" />
+                  <MaterialIcons name="tune" size={20} color="#7C3AED" />
                 </View>
                 <View>
                   <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>

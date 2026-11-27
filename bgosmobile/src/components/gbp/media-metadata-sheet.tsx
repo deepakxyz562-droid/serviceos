@@ -106,12 +106,17 @@ const TEMPLATE_TABS: Array<{
   label: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }> = [
-  { id: 'all', label: 'All Designs', icon: 'auto-awesome' },
+  { id: 'all', label: 'All Designs', icon: 'collections' },
   { id: 'for_business', label: 'Core Services', icon: 'storefront' },
   { id: 'promotions', label: 'Special Offers', icon: 'local-offer' },
   { id: 'festivals', label: 'Festivals', icon: 'celebration' },
   { id: 'reviews', label: 'Highlights', icon: 'star' },
 ];
+
+const cachedBusinessMetaByName = new Map<
+  string,
+  { businessInfo?: BusinessInfoDetails; targetKeywords?: TargetKeywordItem[]; estimatedViews?: number }
+>();
 
 export function MediaMetadataSheet({
   visible,
@@ -227,6 +232,12 @@ export function MediaMetadataSheet({
     setPostDestination('photo_media');
 
     // Initial image selection
+    const cacheKey = (businessName || '').trim().toLowerCase() || 'default';
+    const cachedMeta = cachedBusinessMetaByName.get(cacheKey);
+    if (cachedMeta?.businessInfo) setBusinessInfo(cachedMeta.businessInfo);
+    if (cachedMeta?.targetKeywords?.length) setTargetKeywords(cachedMeta.targetKeywords);
+    if (typeof cachedMeta?.estimatedViews === 'number') setEstimatedViews(cachedMeta.estimatedViews);
+
     if (editingItem) {
       setCurrentPhotoUrl(resolvePhotoUrl(editingItem.thumbnailUrl || editingItem.url || null));
       if (editingItem.title) setTitle(editingItem.title);
@@ -237,6 +248,11 @@ export function MediaMetadataSheet({
       if (Array.isArray(selectedTemplate.platforms) && selectedTemplate.platforms.length > 0) {
         setSelectedPlatforms(selectedTemplate.platforms);
       }
+      // Studio photo already carries creative & caption — skip heavy template re-fetch
+      if (!cachedMeta?.businessInfo) {
+        void loadBusinessMetadata(reqKey);
+      }
+      return;
     } else if (pendingAssets.length > 0) {
       const first = pendingAssets[0];
       setActiveUploadItem(first);
@@ -244,8 +260,12 @@ export function MediaMetadataSheet({
       void handleUploadPending(first);
     }
 
-    void loadBusinessMetadata(reqKey);
-    void loadTemplates(templateTab, reqKey);
+    if (!cachedMeta?.businessInfo || pendingAssets.length > 0) {
+      void loadBusinessMetadata(reqKey);
+    }
+    if (!editingItem && pendingAssets.length === 0) {
+      void loadTemplates(templateTab, reqKey);
+    }
   }, [visible, editingItem, pendingAssets, selectedTemplate]);
 
   useEffect(() => {
@@ -322,6 +342,12 @@ export function MediaMetadataSheet({
       if (typeof res?.estimatedViews === 'number') {
         setEstimatedViews(res.estimatedViews);
       }
+      const cacheKey = (businessName || '').trim().toLowerCase() || 'default';
+      cachedBusinessMetaByName.set(cacheKey, {
+        businessInfo: res?.businessInfo,
+        targetKeywords: Array.isArray(res?.targetKeywords) && res.targetKeywords.length > 0 ? res.targetKeywords : undefined,
+        estimatedViews: typeof res?.estimatedViews === 'number' ? res.estimatedViews : undefined,
+      });
       if (!isEditMode && !selectedTemplate && !selectedTemplateId) {
         if (res?.title) setTitle(res.title);
         if (res?.description) setDescription(stripRawCtaLines(res.description));
@@ -801,12 +827,13 @@ export function MediaMetadataSheet({
                 </View>
               </View>
 
-              {/* ── CARD 2: READY CREATIVES PICKER (DHANDA / LOOKSY STUDIO GALLERY) ── */}
+              {/* ── CARD 2: READY CREATIVES PICKER (only when no photo/template pre-selected) ── */}
+              {!selectedTemplate && !editingItem && pendingAssets.length === 0 ? (
               <View style={styles.cardContainer}>
                 <View style={styles.templatesHeaderRow}>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="auto-awesome" size={18} color="#009F50" />
+                      <MaterialIcons name="collections" size={18} color="#009F50" />
                       <Text style={styles.templatesTitle}>Ready Creatives for You</Text>
                     </View>
                     <Text style={styles.templatesSub}>
@@ -906,6 +933,7 @@ export function MediaMetadataSheet({
                   </ScrollView>
                 )}
               </View>
+              ) : null}
 
               {/* ── CARD 3: TARGET KEYWORDS & MONTHLY SEARCH VOLUME (DHANDA STYLE) ── */}
               <View style={styles.cardContainer}>

@@ -408,11 +408,6 @@ export function ScheduledPhotosTimeline({
                   <MaterialIcons name="videocam" size={14} color="#FFFFFF" />
                 </View>
               ) : null}
-              <View style={styles.portraitOverlay}>
-                <Text style={styles.portraitTitle} numberOfLines={1}>
-                  {item.title || item.category || (item.source === 'google' ? 'Google Live' : 'Queued')}
-                </Text>
-              </View>
             </Pressable>
           ))}
         </ScrollView>
@@ -452,7 +447,7 @@ export function ScheduledPhotosTimeline({
         {onAiCreatePress ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Create AI Business Photo"
+            accessibilityLabel="AI Creative Studio"
             onPress={onAiCreatePress}
             style={({ pressed }) => [
               styles.aiCreateButton,
@@ -460,126 +455,13 @@ export function ScheduledPhotosTimeline({
               pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
             ]}
           >
-            <MaterialIcons name="auto-awesome" size={16} color="#6D28D9" />
+            <MaterialIcons name="palette" size={16} color="#6D28D9" />
             <Text style={styles.aiCreateButtonText} numberOfLines={1}>
-              AI Photo Studio
+              AI Creative Studio
             </Text>
           </Pressable>
         ) : null}
       </View>
-
-      {/* ── Ready Creatives for Your Business (Top 50 Matrix) ── */}
-      <View style={[styles.sectionHeader, { marginTop: 16 }]}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialIcons name="auto-awesome" size={17} color="#009F50" />
-            <Text style={styles.sectionTitle}>Ready Creatives for You</Text>
-          </View>
-          <Text style={styles.sectionSubtitle}>
-            Curated for {businessName} · 1-Tap to customize &amp; publish
-          </Text>
-        </View>
-        {onAiCreatePress ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open AI Studio"
-            onPress={onAiCreatePress}
-            hitSlop={8}
-          >
-            <Text style={styles.viewAllLink}>
-              {studioTotalCount > 0 ? `Studio (${studioTotalCount}) >` : 'Open Studio >'}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Bucket Filter Pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.bucketFilterTrack}
-      >
-        {[
-          { id: 'all', label: 'All Designs' },
-          { id: 'promotions', label: 'Special Offers' },
-          { id: 'for_business', label: 'Core Services' },
-          { id: 'reviews', label: 'Highlights' },
-          { id: 'festivals', label: 'Festivals' },
-        ].map((bucket) => {
-          const active = activeBucket === bucket.id;
-          return (
-            <Pressable
-              key={bucket.id}
-              onPress={() => setActiveBucket(bucket.id as any)}
-              style={[styles.bucketPill, active && styles.bucketPillActive]}
-            >
-              <Text style={[styles.bucketPillText, active && styles.bucketPillTextActive]}>
-                {bucket.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Horizontal Cards Scroll */}
-      {templatesLoading && readyTemplates.length === 0 ? (
-        <View style={styles.creativesLoadingBox}>
-          <ActivityIndicator size="small" color="#009F50" />
-        </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.creativesTrack}
-        >
-          {filteredTemplates.map((tpl) => {
-            const resolvedImg = resolveTemplateSource(tpl.photoUrl);
-            if (!resolvedImg) return null;
-            return (
-              <Pressable
-                key={tpl.id}
-                onPress={() => {
-                  if (onSelectTemplate) {
-                    onSelectTemplate(tpl);
-                  } else {
-                    onAiCreatePress?.();
-                  }
-                }}
-                style={styles.creativeCard}
-              >
-                <Image source={resolvedImg} style={styles.creativeImage} resizeMode="cover" />
-                <View style={styles.creativeTopBadge}>
-                  <Text numberOfLines={1} style={styles.creativeTopBadgeText}>
-                    {tpl.badge || 'Ready'}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${tpl.headline || 'creative'}`}
-                  hitSlop={8}
-                  disabled={busyActionId !== null}
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    handleDeleteReadyCreative(tpl);
-                  }}
-                  style={styles.creativeDeleteBtn}
-                >
-                  <MaterialIcons name="delete-outline" size={14} color="#FFFFFF" />
-                </Pressable>
-                <View style={styles.creativeOverlay}>
-                  <Text numberOfLines={2} style={styles.creativeTitle}>
-                    {tpl.headline}
-                  </Text>
-                  <View style={styles.creativeUseRow}>
-                    <Text style={styles.creativeUseText}>Use Design</Text>
-                    <MaterialIcons name="arrow-forward" size={13} color="#FFFFFF" />
-                  </View>
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
 
       <View style={styles.sectionDivider} />
 
@@ -702,7 +584,7 @@ export function ScheduledPhotosTimeline({
                             </Text>
                           </View>
                         ) : null}
-                        {item.category ? (
+                        {item.category && !/^(ADDITIONAL|COVER|PROFILE|LOGO)$/i.test(item.category.trim()) ? (
                           <View style={styles.catBadge}>
                             <Text style={styles.catBadgeText}>{item.category}</Text>
                           </View>

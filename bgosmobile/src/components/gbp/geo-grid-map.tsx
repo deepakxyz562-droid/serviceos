@@ -226,6 +226,7 @@ export function GeoGridMap({
   points,
   compact = false,
   onPressEmpty,
+  scanningEmpty = false,
   availableKeywords,
   onSelectKeyword,
 }: {
@@ -240,6 +241,7 @@ export function GeoGridMap({
   points: GeoGridPointItem[];
   compact?: boolean;
   onPressEmpty?: () => void;
+  scanningEmpty?: boolean;
   availableKeywords?: string[];
   onSelectKeyword?: (kw: string) => void;
 }) {
@@ -320,6 +322,7 @@ export function GeoGridMap({
         </Text>
         {onPressEmpty ? (
           <Pressable
+            disabled={scanningEmpty}
             onPress={onPressEmpty}
             style={{
               marginTop: 4,
@@ -330,10 +333,13 @@ export function GeoGridMap({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 6,
+              opacity: scanningEmpty ? 0.7 : 1,
             }}
           >
             <MaterialIcons name="radar" size={16} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Open Geo-Grid Scanner</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+              {scanningEmpty ? 'Scanning 5×5 Grid…' : 'Scan 5×5 Rank Grid'}
+            </Text>
           </Pressable>
         ) : null}
       </View>

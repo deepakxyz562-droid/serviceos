@@ -50,7 +50,7 @@ export default function SeoGrowthScreen() {
   const [optimizingAll, setOptimizingAll] = useState(false);
 
   const [gridKeyword, setGridKeyword] = useState('');
-  const [gridSize, setGridSize] = useState<3 | 5>(3);
+  const [gridSize, setGridSize] = useState<3 | 5>(5);
   const [radiusKm, setRadiusKm] = useState<number>(3);
   const [scanningGrid, setScanningGrid] = useState(false);
   const [scanningOrganic, setScanningOrganic] = useState(false);

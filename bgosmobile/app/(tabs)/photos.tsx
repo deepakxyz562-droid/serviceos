@@ -357,7 +357,7 @@ export default function PhotosScreen() {
           <View style={styles.helpModalCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialIcons name="auto-awesome" size={20} color={colors.brand} />
+                <MaterialIcons name="photo-library" size={20} color={colors.brand} />
                 <Text style={styles.helpModalTitle}>Media &amp; AI SEO Guide</Text>
               </View>
               <Pressable accessibilityRole="button" onPress={() => setHelpOpen(false)} style={styles.helpCloseBtn}>
