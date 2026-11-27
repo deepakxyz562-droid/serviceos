@@ -21,7 +21,7 @@ import { useResource } from '../src/hooks/use-resource';
 import { applyWorkspaceSession, type SessionResponse } from '../src/stores/auth-store';
 import type { WorkspaceListItem } from '../src/components/navigation/workspace-switcher-section';
 import { apiRequest, ApiError } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
+import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { WEB_URL } from '../src/lib/constants';
 
 interface GbpProfile {
@@ -313,27 +313,21 @@ export default function SelectProfileScreen() {
   async function handleConnectGoogle() {
     setConnectingGoogle(true);
     const returnUrl = 'bgos://select-profile';
+    const ticket = await getMobileHandoffTicket();
+    const ticketSuffix = ticket ? `&ticket=${encodeURIComponent(ticket)}` : '';
+    const buildConnectUrl = () =>
+      `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=select-profile` +
+      `&redirectUri=${encodeURIComponent(returnUrl)}` +
+      `&originHost=${encodeURIComponent(WEB_URL)}` +
+      ticketSuffix;
     try {
-      const token = await getToken();
-      const url =
-        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=select-profile` +
-        `&redirectUri=${encodeURIComponent(returnUrl)}` +
-        `&originHost=${encodeURIComponent(WEB_URL)}` +
-        (token ? `&auth=${encodeURIComponent(token)}` : '');
-
-      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(buildConnectUrl(), returnUrl);
       if (result.type === 'success' && result.url) {
         await handleOAuthReturn(result.url);
       }
     } catch {
       try {
-        const token = await getToken();
-        const url =
-          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=select-profile` +
-          `&redirectUri=${encodeURIComponent(returnUrl)}` +
-          `&originHost=${encodeURIComponent(WEB_URL)}` +
-          (token ? `&auth=${encodeURIComponent(token)}` : '');
-        await Linking.openURL(url);
+        await Linking.openURL(buildConnectUrl());
       } catch {
         Alert.alert('Error', 'Could not open Google connect. Please connect from BGOS Web.');
       }

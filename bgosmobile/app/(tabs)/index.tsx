@@ -486,26 +486,11 @@ export default function HomeScreen() {
     error: bootstrap.error,
     refresh: bootstrap.refresh,
   };
-  const shouldFetchDirectPlace = Boolean(
-    bootstrap.data?.gbpPlace?.isConnected &&
-      (!bootstrap.data.gbpPlace.metrics || bootstrap.data.gbpPlace.metrics.totalViews === 0),
-  );
-  const gbpPlaceDirect = useResource<GbpPlaceResult>(
-    '/api/gbp/place',
-    0,
-    shouldFetchDirectPlace,
-  );
   const gbpPlace = {
-    data: (gbpPlaceDirect.data ?? bootstrap.data?.gbpPlace ?? null) as GbpPlaceResult | null,
-    loading: bootstrap.loading || gbpPlaceDirect.loading,
-    error: bootstrap.error || gbpPlaceDirect.error,
-    refresh: async () => {
-      await Promise.all(
-        [bootstrap.refresh(), gbpPlaceDirect.refresh()].map((p) =>
-          Promise.resolve(p).catch(() => {}),
-        ),
-      );
-    },
+    data: (bootstrap.data?.gbpPlace ?? null) as GbpPlaceResult | null,
+    loading: bootstrap.loading,
+    error: bootstrap.error,
+    refresh: bootstrap.refresh,
   };
   const discover = {
     data: bootstrap.data?.discover ?? null,
@@ -533,13 +518,17 @@ export default function HomeScreen() {
     data: { responses: new Array(bootstrap.data?.stats?.submissionsCount || 0) },
     refresh: bootstrap.refresh,
   };
+  const publishedPostsCount = bootstrap.data?.stats?.publishedSocialPosts || 0;
+  const scheduledPostsCount = bootstrap.data?.stats?.scheduledSocialPosts || 0;
+  const socialPostsData = useMemo(
+    () => [
+      ...Array.from({ length: publishedPostsCount }, (_, i) => ({ id: `pub_${i}`, status: 'published' })),
+      ...Array.from({ length: scheduledPostsCount }, (_, i) => ({ id: `sch_${i}`, status: 'scheduled' })),
+    ],
+    [publishedPostsCount, scheduledPostsCount],
+  );
   const socialPosts = {
-    data: {
-      data: [
-        ...Array.from({ length: bootstrap.data?.stats?.publishedSocialPosts || 0 }, (_, i) => ({ id: `pub_${i}`, status: 'published' })),
-        ...Array.from({ length: bootstrap.data?.stats?.scheduledSocialPosts || 0 }, (_, i) => ({ id: `sch_${i}`, status: 'scheduled' })),
-      ],
-    },
+    data: { data: socialPostsData },
     refresh: bootstrap.refresh,
   };
   const reviewQueue = {
@@ -578,13 +567,13 @@ export default function HomeScreen() {
 
   // ── Real Weekly Reviews & Urgency Telemetry (Video 1 & 3 Benchmark) ──
   const reviewItems = reviews.data?.reviews || [];
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const thisWeekReviewsCount = useMemo(() => {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return reviewItems.filter((r) => {
       const dt = r.createTime || r.createdAt || r.publishedAt;
       return dt && new Date(dt).getTime() >= sevenDaysAgo;
     }).length;
-  }, [reviewItems, sevenDaysAgo]);
+  }, [reviewItems]);
 
   const lastReviewDate = useMemo(() => {
     if (reviewItems.length === 0) return null;
@@ -717,7 +706,7 @@ export default function HomeScreen() {
   const address = formatDisplayAddress(rawAddress);
   const city = extractCityOrLocality(address, (place as any)?.city || (workspace.data as any)?.tenant?.city);
   const category = place?.category || 'Local Business';
-  const completionScore = place?.completionScore ?? 76;
+  const completionScore = place?.completionScore ?? growthActions.data?.readinessScore ?? 0;
 
   const businessLogoUrl = workspace.data?.bookingPageConfig?.logoUrl || null;
   useEffect(() => {

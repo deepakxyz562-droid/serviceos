@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Linking,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -367,12 +369,14 @@ function LeadsScreen() {
     });
   }
 
+  const leadRows = resource.data?.leads || [];
+
   return (
     <Screen
       title="Leads & CRM"
       subtitle="Pipeline stages, quick follow-up & customer history."
       showBack={true}
-      onRefresh={resource.refresh}
+      scrollable={false}
       rightAction={
         <Action
           compact
@@ -385,55 +389,68 @@ function LeadsScreen() {
         />
       }
     >
-      <Field
-        label="Search leads"
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Search by name, phone, email or tag…"
-      />
-
-      {/* Pipeline Status Filter Chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={ui.row}>
-          {['all', ...leadStages].map((s) => (
-            <Chip
-              key={s}
-              label={s === 'all' ? 'All Leads' : leadLabels[s]}
-              count={s === 'all' && typeof resource.data?.pagination?.total === 'number' ? resource.data.pagination.total : undefined}
-              selected={stage === s}
-              onPress={() => {
-                setStage(s);
-                setPage(1);
-              }}
-            />
-          ))}
-        </View>
-      </ScrollView>
-
-      {savedNotice ? <Text accessibilityLiveRegion="polite" style={{color:'#007840',fontWeight:'600'}}>{savedNotice}</Text> : null}
-      <ErrorNotice message={error || resource.error} retry={resource.refresh} />
-
-      {resource.loading ? (
-        <Loading />
-      ) : !resource.data?.leads.length ? (
-        !resource.error && (
-          <Empty
-            title="No leads in this pipeline stage"
-            detail="Capture inquiries automatically through Call Tracker and forms, or create leads manually."
-            actionLabel="＋ Create First Lead"
-            onAction={() => setOpen(true)}
+      <FlatList
+        data={leadRows}
+        keyExtractor={(l) => l.id}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 60 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={resource.loading}
+            onRefresh={() => void resource.refresh()}
+            tintColor={colors.brand}
           />
-        )
-      ) : (
-        <Card style={{ padding: 0 }}>
-          {resource.data.leads.map((l, i) => (
-            <View
-              key={l.id}
-              style={[
-                styles.leadRow,
-                { borderBottomWidth: i === resource.data!.leads.length - 1 ? 0 : 1 },
-              ]}
-            >
+        }
+        ListHeaderComponent={
+          <View style={{ gap: 10, marginBottom: 4 }}>
+            <Field
+              label="Search leads"
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search by name, phone, email or tag…"
+            />
+
+            {/* Pipeline Status Filter Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={ui.row}>
+                {['all', ...leadStages].map((s) => (
+                  <Chip
+                    key={s}
+                    label={s === 'all' ? 'All Leads' : leadLabels[s]}
+                    count={s === 'all' && typeof resource.data?.pagination?.total === 'number' ? resource.data.pagination.total : undefined}
+                    selected={stage === s}
+                    onPress={() => {
+                      setStage(s);
+                      setPage(1);
+                    }}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+
+            {savedNotice ? <Text accessibilityLiveRegion="polite" style={{color:'#007840',fontWeight:'600'}}>{savedNotice}</Text> : null}
+            <ErrorNotice message={error || resource.error} retry={resource.refresh} />
+          </View>
+        }
+        ListEmptyComponent={
+          resource.loading ? (
+            <Loading />
+          ) : !resource.error ? (
+            <Empty
+              title="No leads in this pipeline stage"
+              detail="Capture inquiries automatically through Call Tracker and forms, or create leads manually."
+              actionLabel="＋ Create First Lead"
+              onAction={() => setOpen(true)}
+            />
+          ) : undefined
+        }
+        renderItem={({ item: l }) => (
+          <Card style={{ padding: 0, marginBottom: 8 }}>
+            <View style={[styles.leadRow, { borderBottomWidth: 0 }]}>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
@@ -480,28 +497,28 @@ function LeadsScreen() {
                 ) : null}
               </View>
             </View>
-          ))}
-        </Card>
-      )}
-
-      {/* Pagination */}
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <Action
-          label="Previous"
-          secondary
-          disabled={page === 1 || resource.loading}
-          onPress={() => setPage(page - 1)}
-        />
-        <Text style={ui.caption}>
-          Page {page} of {resource.data?.pagination?.totalPages || 1}
-        </Text>
-        <Action
-          label="Next"
-          secondary
-          disabled={resource.loading || page >= (resource.data?.pagination?.totalPages || 1)}
-          onPress={() => setPage(page + 1)}
-        />
-      </View>
+          </Card>
+        )}
+        ListFooterComponent={
+          <View style={[ui.row, { justifyContent: 'space-between', marginTop: 6 }]}>
+            <Action
+              label="Previous"
+              secondary
+              disabled={page === 1 || resource.loading}
+              onPress={() => setPage(page - 1)}
+            />
+            <Text style={ui.caption}>
+              Page {page} of {resource.data?.pagination?.totalPages || 1}
+            </Text>
+            <Action
+              label="Next"
+              secondary
+              disabled={resource.loading || page >= (resource.data?.pagination?.totalPages || 1)}
+              onPress={() => setPage(page + 1)}
+            />
+          </View>
+        }
+      />
 
       {/* Add Lead Modal */}
       <Modal

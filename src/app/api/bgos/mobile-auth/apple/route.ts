@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issueAuthTokens, getRefreshSessionMetadata } from '@/lib/auth';
 import { applyRateLimit, oauthLimiter, rateLimitResponse, getClientIp } from '@/lib/rate-limit';
-import { decodeAppleIdentityToken } from '@/lib/bgos-apple-auth';
+import { verifyAppleIdentityToken } from '@/lib/bgos-apple-auth';
 import { ensureBgosTenantAndWorkspace, resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { ProductAccessError } from '@/lib/product-access';
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const { identityToken, user: appleUserId, email: clientEmail, fullName } = parsed.data;
 
-  const appleVerified = decodeAppleIdentityToken(identityToken);
+  const appleVerified = await verifyAppleIdentityToken(identityToken);
   if (!appleVerified) {
     return NextResponse.json({ error: 'Could not verify Apple identity token' }, { status: 401 });
   }

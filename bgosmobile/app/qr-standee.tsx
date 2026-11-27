@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Screen, Card, ui, colors } from '../src/components/ui';
 import { apiRequest } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
+import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { WEB_URL } from '../src/lib/constants';
 
 interface StandeeTemplate {
@@ -209,7 +209,7 @@ export default function QrStandeeScreen() {
           return;
         }
       }
-      const token = await getToken();
+      const ticket = await getMobileHandoffTicket();
       const params = new URLSearchParams({
         format: 'html',
         templateId: selectedTemplateId,
@@ -220,7 +220,7 @@ export default function QrStandeeScreen() {
         showRating: String(showRating),
         showContact: String(showContact),
       });
-      if (token) params.set('auth', token);
+      if (ticket) params.set('ticket', ticket);
       const printableUrl = `${WEB_URL}/api/bgos/qr/standee?${params.toString()}`;
 
       // Open in device default system browser (Safari/Chrome) where AirPrint and Save as PDF work natively
@@ -237,24 +237,21 @@ export default function QrStandeeScreen() {
 
   const handleShareStandee = async () => {
     try {
-      const token = await getToken();
-      const params = new URLSearchParams({
-        format: 'html',
-        templateId: selectedTemplateId,
-        size: selectedSize,
-        target: qrTarget,
-        headline,
-        subheadline,
-        showRating: String(showRating),
-        showContact: String(showContact),
-      });
-      if (token) params.set('auth', token);
-      const printableUrl = `${WEB_URL}/api/bgos/qr/standee?${params.toString()}`;
+      const targetUrl =
+        activeTargetUrl ||
+        data?.pageUrl ||
+        data?.reviewUrl ||
+        data?.mapsUrl ||
+        '';
+      if (!targetUrl) {
+        Alert.alert('Notice', 'Standee link is still loading.');
+        return;
+      }
 
       await Share.share({
-        title: `${data?.businessName || 'Business'} - Print-Ready QR Standee (${selectedSize.toUpperCase()})`,
-        message: `Print-ready QR standee for ${data?.businessName || 'our business'}:\n\nPrint or Save PDF: ${printableUrl}\n\nDirect QR link: ${activeTargetUrl}`,
-        url: printableUrl,
+        title: `${data?.businessName || 'Business'} - QR Standee (${selectedSize.toUpperCase()})`,
+        message: `Scan or open link for ${data?.businessName || 'our business'}:\n${targetUrl}`,
+        url: targetUrl,
       });
     } catch {
       Alert.alert('Notice', 'Could not open share dialogue.');

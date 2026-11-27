@@ -97,6 +97,7 @@ vi.mock('@/app/api/bgos/workspace/route', () => ({
 
 vi.mock('@/lib/gbp/marketing-score', () => ({
   computeMarketingScore: vi.fn(async () => ({ overallScore: 80, reviewCount: 1 })),
+  readHistory: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/gbp/audit', () => ({

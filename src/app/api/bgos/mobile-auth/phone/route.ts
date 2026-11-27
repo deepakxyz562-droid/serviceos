@@ -15,19 +15,27 @@ const phoneInputSchema = z.object({
   product: z.string().optional().default('bgos'),
 });
 
-const FIREBASE_API_KEY =
-  process.env.BGOS_FIREBASE_WEB_API_KEY ||
-  process.env.NEXT_PUBLIC_BGOS_FIREBASE_API_KEY ||
-  process.env.FIREBASE_WEB_API_KEY ||
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930';
+function resolveFirebaseConfig() {
+  const apiKey =
+    process.env.BGOS_FIREBASE_WEB_API_KEY ||
+    process.env.NEXT_PUBLIC_BGOS_FIREBASE_API_KEY ||
+    process.env.FIREBASE_WEB_API_KEY ||
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const projectId =
+    process.env.BGOS_FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_BGOS_FIREBASE_PROJECT_ID ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
-const FIREBASE_PROJECT_ID =
-  process.env.BGOS_FIREBASE_PROJECT_ID ||
-  process.env.NEXT_PUBLIC_BGOS_FIREBASE_PROJECT_ID ||
-  process.env.FIREBASE_PROJECT_ID ||
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
-  'fir-rn-49534';
+  if ((!apiKey || !projectId) && process.env.NODE_ENV === 'production' && !process.env.VITEST) {
+    throw new Error('[mobile-auth/phone] Firebase API key and project ID env vars must be configured in production.');
+  }
+
+  return {
+    apiKey: apiKey || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930',
+    projectId: projectId || 'fir-rn-49534',
+  };
+}
 
 interface FirebaseLookupUser {
   localId: string;
@@ -62,19 +70,20 @@ async function verifyFirebaseIdToken(idToken: string): Promise<{
     }
     if (!payload || typeof payload !== 'object') return null;
 
-    const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
-    if (payload.iss !== expectedIssuer || payload.aud !== FIREBASE_PROJECT_ID) {
+    const { apiKey: firebaseApiKey, projectId: firebaseProjectId } = resolveFirebaseConfig();
+    const expectedIssuer = `https://securetoken.google.com/${firebaseProjectId}`;
+    if (payload.iss !== expectedIssuer || payload.aud !== firebaseProjectId) {
       console.warn('[Firebase Auth] Issuer/Aud mismatch:', {
         iss: payload.iss,
         aud: payload.aud,
-        expectedProjectId: FIREBASE_PROJECT_ID,
+        expectedProjectId: firebaseProjectId,
       });
       return null;
     }
 
     // 2. Cryptographic verification via Google Identity Toolkit
     const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

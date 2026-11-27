@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Constants from 'expo-constants';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +23,9 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../src/stores/auth-store';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { BGOS_SUPPORT_EMAIL, BGOS_SUPPORT_WHATSAPP_DIGITS } from '../src/lib/constants';
+import { getToken } from '../src/lib/auth';
+import { loadJson, saveJson } from '../src/lib/device-storage';
+import { API_BASE_URL, BGOS_SUPPORT_EMAIL, BGOS_SUPPORT_WHATSAPP_DIGITS } from '../src/lib/constants';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 import { TutorialVideoModal, type TutorialVideoId } from '../src/components/gbp/tutorial-video-modal';
 
@@ -45,14 +48,72 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuthStore();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const billingRes = useResource<{
+    entitlement?: {
+      status?: string;
+      plan?: string;
+      isTrial?: boolean;
+      trialDaysLeft?: number;
+      trialEndsAt?: string | null;
+      currentPeriodEnd?: string | null;
+    };
+  }>('/api/bgos/billing');
+  const notifPrefRes = useResource<{
+    pushEnabled?: boolean;
+    inAppEnabled?: boolean;
+    typePrefsJson?: string;
+  }>('/api/notifications/preferences');
 
-  // App preferences state
+  // App preferences state (persisted locally + server notification preferences)
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [fontSizeIndex, setFontSizeIndex] = useState(1); // Default = 1.0
   const [darkMode, setDarkMode] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [reviewAlerts, setReviewAlerts] = useState(true);
   const [growthTips, setGrowthTips] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  useEffect(() => {
+    void loadJson<{ language?: string; fontSizeIndex?: number; darkMode?: boolean }>('bgos_app_settings_v1').then((saved) => {
+      if (!saved) return;
+      if (saved.language) setSelectedLanguage(saved.language);
+      if (typeof saved.fontSizeIndex === 'number') setFontSizeIndex(saved.fontSizeIndex);
+      if (typeof saved.darkMode === 'boolean') setDarkMode(saved.darkMode);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!notifPrefRes.data) return;
+    if (typeof notifPrefRes.data.pushEnabled === 'boolean') {
+      setPushEnabled(notifPrefRes.data.pushEnabled);
+    }
+    try {
+      const parsed = JSON.parse(notifPrefRes.data.typePrefsJson || '{}') as Record<string, boolean>;
+      if (typeof parsed.reviewAlerts === 'boolean') setReviewAlerts(parsed.reviewAlerts);
+      if (typeof parsed.growthTips === 'boolean') setGrowthTips(parsed.growthTips);
+    } catch {}
+  }, [notifPrefRes.data]);
+
+  function persistLocalPreferences(next: { language?: string; fontSizeIndex?: number; darkMode?: boolean }) {
+    void saveJson('bgos_app_settings_v1', {
+      language: next.language ?? selectedLanguage,
+      fontSizeIndex: next.fontSizeIndex ?? fontSizeIndex,
+      darkMode: next.darkMode ?? darkMode,
+    });
+  }
+
+  function persistNotificationPrefs(next: { pushEnabled?: boolean; reviewAlerts?: boolean; growthTips?: boolean }) {
+    const nextPush = next.pushEnabled ?? pushEnabled;
+    const nextReviews = next.reviewAlerts ?? reviewAlerts;
+    const nextTips = next.growthTips ?? growthTips;
+    void apiRequest('/api/notifications/preferences', {
+      method: 'PUT',
+      body: {
+        pushEnabled: nextPush,
+        typePrefsJson: JSON.stringify({ reviewAlerts: nextReviews, growthTips: nextTips }),
+      },
+    }).catch(() => {});
+  }
 
   // Modals state
   const [languageModalOpen, setLanguageModalOpen] = useState(false);
@@ -187,32 +248,46 @@ export default function SettingsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Subscription Banner Card (Screenshot 3) */}
+        {/* 1. Subscription Banner Card (live entitlement) */}
         <View style={styles.subscriptionCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <MaterialIcons name="auto-awesome" size={17} color="#8B5CF6" />
               <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
-                BGOS Subscription
+                {billingRes.data?.entitlement?.plan
+                  ? `BGOS ${billingRes.data.entitlement.plan.toUpperCase()} Plan`
+                  : 'BGOS Subscription'}
               </Text>
             </View>
             <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>Active</Text>
+              <Text style={styles.activeBadgeText}>
+                {billingRes.data?.entitlement?.isTrial
+                  ? `Trial (${billingRes.data.entitlement.trialDaysLeft ?? 0}d)`
+                  : (billingRes.data?.entitlement?.status || workspace.data?.plan?.status || 'Active').toUpperCase()}
+              </Text>
             </View>
           </View>
           <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: '500' }}>
-            Expires on Nov 13, 2027
+            {(() => {
+              const endIso =
+                billingRes.data?.entitlement?.currentPeriodEnd ||
+                billingRes.data?.entitlement?.trialEndsAt;
+              if (!endIso) {
+                return billingRes.loading ? 'Checking subscription status...' : 'Manage plan details below';
+              }
+              return `Renews / ends ${new Date(endIso).toLocaleDateString()}`;
+            })()}
           </Text>
         </View>
 
-        {/* 2. Review Request Limits Card (Screenshot 2) */}
+        {/* 2. Plan & Limits Card */}
         <View style={styles.limitsCard}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
-              Review Request Limits
+              Workspace Plan &amp; Quotas
             </Text>
             <Text style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
-              Daily 0/20 used • 20 left
+              {workspace.data?.name || 'Active workspace'}
             </Text>
           </View>
 
@@ -350,6 +425,7 @@ export default function SettingsScreen() {
                       onPress={() => {
                         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setFontSizeIndex(idx);
+                        persistLocalPreferences({ fontSizeIndex: idx });
                       }}
                       style={[
                         styles.sliderDot,
@@ -373,8 +449,9 @@ export default function SettingsScreen() {
               onValueChange={(val) => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setDarkMode(val);
+                persistLocalPreferences({ darkMode: val });
                 if (val) {
-                  Alert.alert('Dark Mode', 'Dark mode preference will be applied in the upcoming release.');
+                  Alert.alert('Dark Mode', 'Preference saved. Full dark theme palette rollout is in progress.');
                 }
               }}
               trackColor={{ false: '#E2E8F0', true: '#93C5FD' }}
@@ -445,7 +522,9 @@ export default function SettingsScreen() {
             <MaterialIcons name="navigation" size={22} color="#FFFFFF" style={{ transform: [{ rotate: '45deg' }] }} />
           </View>
           <Text style={styles.appNameText}>BGOS</Text>
-          <Text style={styles.appVersionText}>Version 1.0.0 (Build 34)</Text>
+          <Text style={styles.appVersionText}>
+            Version {Constants.expoConfig?.version || '1.0.0'}
+          </Text>
         </View>
       </ScrollView>
 
@@ -468,7 +547,9 @@ export default function SettingsScreen() {
                     key={lang.code}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedLanguage(lang.label.split(' ')[0]);
+                      const nextLang = lang.label.split(' ')[0];
+                      setSelectedLanguage(nextLang);
+                      persistLocalPreferences({ language: nextLang });
                       setLanguageModalOpen(false);
                     }}
                     style={[
@@ -577,7 +658,10 @@ export default function SettingsScreen() {
                 </View>
                 <Switch
                   value={pushEnabled}
-                  onValueChange={(v) => setPushEnabled(v)}
+                  onValueChange={(v) => {
+                    setPushEnabled(v);
+                    persistNotificationPrefs({ pushEnabled: v });
+                  }}
                   trackColor={{ false: '#E2E8F0', true: '#BBF7D0' }}
                   thumbColor={pushEnabled ? '#059669' : '#FFFFFF'}
                 />
@@ -589,7 +673,10 @@ export default function SettingsScreen() {
                 </View>
                 <Switch
                   value={reviewAlerts}
-                  onValueChange={(v) => setReviewAlerts(v)}
+                  onValueChange={(v) => {
+                    setReviewAlerts(v);
+                    persistNotificationPrefs({ reviewAlerts: v });
+                  }}
                   trackColor={{ false: '#E2E8F0', true: '#BBF7D0' }}
                   thumbColor={reviewAlerts ? '#059669' : '#FFFFFF'}
                 />
@@ -601,7 +688,10 @@ export default function SettingsScreen() {
                 </View>
                 <Switch
                   value={growthTips}
-                  onValueChange={(v) => setGrowthTips(v)}
+                  onValueChange={(v) => {
+                    setGrowthTips(v);
+                    persistNotificationPrefs({ growthTips: v });
+                  }}
                   trackColor={{ false: '#E2E8F0', true: '#BBF7D0' }}
                   thumbColor={growthTips ? '#059669' : '#FFFFFF'}
                 />
@@ -674,18 +764,37 @@ export default function SettingsScreen() {
               </View>
 
               <Pressable
-                onPress={() => {
-                  setDataSettingsModalOpen(false);
-                  Alert.alert(
-                    'Export Customer Data',
-                    'A CSV export link will be sent to your registered account email within 5 minutes.'
-                  );
+                disabled={exportingCsv}
+                onPress={async () => {
+                  setExportingCsv(true);
+                  try {
+                    const token = await getToken();
+                    const res = await fetch(`${API_BASE_URL}/api/contacts/export?format=csv`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                    });
+                    if (!res.ok) {
+                      throw new Error(`Export failed (${res.status})`);
+                    }
+                    const csv = await res.text();
+                    setDataSettingsModalOpen(false);
+                    await Share.share({
+                      title: 'BGOS Customer Contacts (.csv)',
+                      message: csv,
+                    });
+                  } catch (err) {
+                    Alert.alert(
+                      'Export Failed',
+                      err instanceof Error ? err.message : 'Unable to export customer contacts right now.',
+                    );
+                  } finally {
+                    setExportingCsv(false);
+                  }
                 }}
-                style={styles.exportDataBtn}
+                style={[styles.exportDataBtn, exportingCsv && { opacity: 0.65 }]}
               >
                 <MaterialIcons name="download" size={18} color="#0F172A" />
                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
-                  Export All Customer Contacts (.csv)
+                  {exportingCsv ? 'Exporting CSV...' : 'Export All Customer Contacts (.csv)'}
                 </Text>
               </Pressable>
             </View>

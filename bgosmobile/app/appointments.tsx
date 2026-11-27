@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -149,7 +149,7 @@ function AppointmentsScreen() {
       title="Appointments"
       subtitle="Calendar schedule, customer bookings & rescheduling."
       showBack={true}
-      onRefresh={resource.refresh}
+      scrollable={false}
       rightAction={
         <Action
           compact
@@ -162,224 +162,244 @@ function AppointmentsScreen() {
         />
       }
     >
-      <ErrorNotice message={error || resource.error} retry={resource.refresh} />
-
-      {/* Quick Share Online Booking Link Banner */}
-      {liveBookingUrl && (
-        <Card style={{ padding: 12, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name="event-available" size={18} color="#009F50" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
-                  Online Booking Page
-                </Text>
-                <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B' }}>
-                  {liveBookingUrl}
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Pressable
-                onPress={() => {
-                  const waText = encodeURIComponent(`Hello! You can view our services and schedule an appointment online here: ${liveBookingUrl}`);
-                  void Linking.openURL(`https://wa.me/?text=${waText}`);
-                }}
-                hitSlop={8}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  backgroundColor: '#25D366',
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 14,
-                }}
-              >
-                <MaterialIcons name="chat" size={13} color="#FFFFFF" />
-                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>WhatsApp</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  void Share.share({ message: liveBookingUrl, url: liveBookingUrl });
-                }}
-                hitSlop={8}
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  padding: 6,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                }}
-              >
-                <MaterialIcons name="share" size={16} color="#0F172A" />
-              </Pressable>
-
-              <Pressable
-                onPress={() => router.push('/booking-page')}
-                hitSlop={8}
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  padding: 6,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                }}
-              >
-                <MaterialIcons name="tune" size={16} color="#0F172A" />
-              </Pressable>
-            </View>
-          </View>
-        </Card>
-      )}
-
-      {/* Month Navigator (Screens 19 & 14 in mockups) */}
-      <Card style={{ padding: 14 }}>
-        <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 14 }]}>
-          <Text style={[ui.heading, { fontSize: 18 }]}>{monthYearLabel}</Text>
-          <View style={[ui.row, { gap: 6 }]}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setWeekOffset((prev) => prev - 1)}
-              style={styles.navArrow}
-            >
-              <MaterialIcons name="chevron-left" size={24} color={colors.ink} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setWeekOffset((prev) => prev + 1)}
-              style={styles.navArrow}
-            >
-              <MaterialIcons name="chevron-right" size={24} color={colors.ink} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Circular Horizontal Day Strip (Screen 19) */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {days.map((d) => {
-              const isSelected = localDay(d) === activeDayKey;
-              const isToday = localDay(d) === localDay(new Date());
-
-              return (
-                <Pressable
-                  key={localDay(d)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  onPress={() => setSelectedDate(d)}
-                  style={[
-                    styles.dayPill,
-                    isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
-                  ]}
-                >
-                  <Text style={[styles.dayText, isSelected && { color: '#FFFFFF' }]}>
-                    {d.toLocaleDateString([], { weekday: 'short' })}
-                  </Text>
-                  <View
-                    style={[
-                      styles.dateCircle,
-                      isSelected && { backgroundColor: '#FFFFFF' },
-                      isToday && !isSelected && { backgroundColor: colors.soft },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dateNumber,
-                        isSelected ? { color: colors.brand } : { color: colors.ink },
-                      ]}
-                    >
-                      {d.getDate()}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </Card>
-
-      {/* Agenda Section */}
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <Text style={ui.heading}>
-          Agenda for {selectedDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-        </Text>
-        <Badge label={`${filtered.length} Bookings`} accent />
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-        <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-          {(['all', 'confirmed', 'pending', 'completed', 'cancelled'] as const).map((statusKey) => {
-            const active = statusFilter === statusKey;
-            return (
-              <Pressable
-                key={statusKey}
-                onPress={() => setStatusFilter(statusKey)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: active ? colors.brand : '#FFFFFF',
-                  borderWidth: 1,
-                  borderColor: active ? colors.brand : '#E2E8F0',
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '700',
-                    color: active ? '#FFFFFF' : '#475569',
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {statusKey}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
-
-      {resource.loading ? (
-        <Loading />
-      ) : !filtered.length ? (
-        <View>
-          <Empty
-            title="No bookings for this date"
-            detail="Time slots are open. Book an appointment or share your direct booking link."
-            actionLabel="＋ Book New Appointment"
-            onAction={() => setBookModal(true)}
+      <FlatList
+        data={filtered}
+        keyExtractor={(b) => b.id}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 60 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={resource.loading}
+            onRefresh={() => void resource.refresh()}
+            tintColor={colors.brand}
           />
-          <View style={{ alignItems: 'center', marginTop: 12 }}>
-            <Pressable
-              onPress={() => router.push('/booking-page')}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: '#EFF6FF',
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: '#BFDBFE',
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <MaterialIcons name="tune" size={16} color="#1D4ED8" />
-              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1D4ED8' }}>
-                Manage Booking Page & Services
+        }
+        ListHeaderComponent={
+          <View style={{ gap: 12 }}>
+            <ErrorNotice message={error || resource.error} retry={resource.refresh} />
+
+            {/* Quick Share Online Booking Link Banner */}
+            {liveBookingUrl && (
+              <Card style={{ padding: 12, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="event-available" size={18} color="#009F50" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                        Online Booking Page
+                      </Text>
+                      <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B' }}>
+                        {liveBookingUrl}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Pressable
+                      onPress={() => {
+                        const waText = encodeURIComponent(`Hello! You can view our services and schedule an appointment online here: ${liveBookingUrl}`);
+                        void Linking.openURL(`https://wa.me/?text=${waText}`);
+                      }}
+                      hitSlop={8}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        backgroundColor: '#25D366',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 14,
+                      }}
+                    >
+                      <MaterialIcons name="chat" size={13} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>WhatsApp</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        void Share.share({ message: liveBookingUrl, url: liveBookingUrl });
+                      }}
+                      hitSlop={8}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        padding: 6,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                      }}
+                    >
+                      <MaterialIcons name="share" size={16} color="#0F172A" />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => router.push('/booking-page')}
+                      hitSlop={8}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        padding: 6,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                      }}
+                    >
+                      <MaterialIcons name="tune" size={16} color="#0F172A" />
+                    </Pressable>
+                  </View>
+                </View>
+              </Card>
+            )}
+
+            {/* Month Navigator (Screens 19 & 14 in mockups) */}
+            <Card style={{ padding: 14 }}>
+              <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 14 }]}>
+                <Text style={[ui.heading, { fontSize: 18 }]}>{monthYearLabel}</Text>
+                <View style={[ui.row, { gap: 6 }]}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setWeekOffset((prev) => prev - 1)}
+                    style={styles.navArrow}
+                  >
+                    <MaterialIcons name="chevron-left" size={24} color={colors.ink} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setWeekOffset((prev) => prev + 1)}
+                    style={styles.navArrow}
+                  >
+                    <MaterialIcons name="chevron-right" size={24} color={colors.ink} />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Circular Horizontal Day Strip (Screen 19) */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {days.map((d) => {
+                    const isSelected = localDay(d) === activeDayKey;
+                    const isToday = localDay(d) === localDay(new Date());
+
+                    return (
+                      <Pressable
+                        key={localDay(d)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setSelectedDate(d)}
+                        style={[
+                          styles.dayPill,
+                          isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
+                        ]}
+                      >
+                        <Text style={[styles.dayText, isSelected && { color: '#FFFFFF' }]}>
+                          {d.toLocaleDateString([], { weekday: 'short' })}
+                        </Text>
+                        <View
+                          style={[
+                            styles.dateCircle,
+                            isSelected && { backgroundColor: '#FFFFFF' },
+                            isToday && !isSelected && { backgroundColor: colors.soft },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.dateNumber,
+                              isSelected ? { color: colors.brand } : { color: colors.ink },
+                            ]}
+                          >
+                            {d.getDate()}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </Card>
+
+            {/* Agenda Section */}
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <Text style={ui.heading}>
+                Agenda for {selectedDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
               </Text>
-            </Pressable>
+              <Badge label={`${filtered.length} Bookings`} accent />
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                {(['all', 'confirmed', 'pending', 'completed', 'cancelled'] as const).map((statusKey) => {
+                  const active = statusFilter === statusKey;
+                  return (
+                    <Pressable
+                      key={statusKey}
+                      onPress={() => setStatusFilter(statusKey)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: active ? colors.brand : '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: active ? colors.brand : '#E2E8F0',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: active ? '#FFFFFF' : '#475569',
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {statusKey}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
-        </View>
-      ) : (
-        filtered.map((b) => (
-          <Card key={b.id} style={{ gap: 10 }}>
+        }
+        ListEmptyComponent={
+          resource.loading ? (
+            <Loading />
+          ) : (
+            <View>
+              <Empty
+                title="No bookings for this date"
+                detail="Time slots are open. Book an appointment or share your direct booking link."
+                actionLabel="＋ Book New Appointment"
+                onAction={() => setBookModal(true)}
+              />
+              <View style={{ alignItems: 'center', marginTop: 12 }}>
+                <Pressable
+                  onPress={() => router.push('/booking-page')}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#EFF6FF',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: '#BFDBFE',
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <MaterialIcons name="tune" size={16} color="#1D4ED8" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1D4ED8' }}>
+                    Manage Booking Page & Services
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )
+        }
+        renderItem={({ item: b }) => (
+          <Card style={{ gap: 10, marginBottom: 4 }}>
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
               <View style={[ui.row, { gap: 8 }]}>
                 <View style={[ui.iconTile, { width: 34, height: 34 }]}>
@@ -465,10 +485,17 @@ function AppointmentsScreen() {
               </View>
             )}
           </Card>
-        ))
-      )}
-
-      {!!resource.data?.pagination?.totalPages && resource.data.pagination.totalPages > 1 && <View style={[ui.row,{gap:12}]}><Action secondary label="Previous page" disabled={bookingPage===1} onPress={()=>setBookingPage(p=>p-1)}/><Text style={ui.caption}>Page {bookingPage}</Text><Action secondary label="Next page" disabled={bookingPage>=resource.data.pagination.totalPages} onPress={()=>setBookingPage(p=>p+1)}/></View>}
+        )}
+        ListFooterComponent={
+          resource.data?.pagination?.totalPages && resource.data.pagination.totalPages > 1 ? (
+            <View style={[ui.row, { gap: 12, marginTop: 8 }]}>
+              <Action secondary label="Previous page" disabled={bookingPage === 1} onPress={() => setBookingPage((p) => p - 1)} />
+              <Text style={ui.caption}>Page {bookingPage}</Text>
+              <Action secondary label="Next page" disabled={bookingPage >= resource.data.pagination.totalPages} onPress={() => setBookingPage((p) => p + 1)} />
+            </View>
+          ) : undefined
+        }
+      />
       {/* Book New Appointment Modal */}
       <Modal visible={bookModal} animationType="slide" onRequestClose={() => {if(!busy)setBookModal(false);}}>
         <Screen

@@ -61,11 +61,9 @@ export async function POST(request: NextRequest) {
   // ─── 2. Resolve the webhook secret ──────────────────────────────────────
   const cfg = await getCreemConfig();
   if (!cfg || !cfg.webhookSecret) {
-    // Without a configured secret we cannot verify the signature — fail
-    // closed. (We still return 200 so Creem doesn't keep retrying; the
-    // superadmin needs to set a secret before webhooks will work.)
-    console.warn('[creem/webhook] no webhook secret configured — ignoring event');
-    return NextResponse.json({ received: false, reason: 'no secret configured' });
+    // Fail closed when Creem webhook secret is not configured.
+    console.warn('[creem/webhook] no webhook secret configured — rejecting event');
+    return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 401 });
   }
 
   // ─── 3. Verify the signature ────────────────────────────────────────────

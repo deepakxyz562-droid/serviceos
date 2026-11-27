@@ -30,6 +30,14 @@ vi.mock('@/lib/supabase-storage', () => ({
   uploadFile: vi.fn(),
 }));
 
+vi.mock('@/lib/business-intelligence/service', () => ({
+  getBusinessIntelligence: vi.fn(async () => ({
+    businessName: { value: 'Delhi Farm Pool & Resort' },
+    businessCategory: { value: 'Farmhouse & Pool Retreat' },
+    location: { value: { formattedAddress: 'Delhi, India', city: 'Delhi' } },
+  })),
+}));
+
 describe('GBP AI Post Creation & Dual-Edit Support', () => {
   beforeEach(() => {
     vi.clearAllMocks();

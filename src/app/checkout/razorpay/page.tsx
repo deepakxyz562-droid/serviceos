@@ -88,7 +88,28 @@ function RazorpayCheckoutContent() {
   const planCode = (searchParams.get('plan') || 'starter').toLowerCase();
   const billingCycle = searchParams.get('billingCycle') === 'yearly' ? 'yearly' : 'monthly';
   const token = searchParams.get('token');
+  const ticket = searchParams.get('ticket');
   const customAmount = Number(searchParams.get('amount'));
+
+  // Exchange 60s mobile handoff ticket for HTTP-only session cookie once (and await before authenticated calls)
+  const handoffPromiseRef = React.useRef<Promise<void> | null>(null);
+  const ensureTicketExchanged = React.useCallback(() => {
+    if (!ticket || token) return Promise.resolve();
+    if (!handoffPromiseRef.current) {
+      handoffPromiseRef.current = fetch('/api/bgos/mobile-auth/handoff', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+      })
+        .then(() => undefined)
+        .catch(() => undefined);
+    }
+    return handoffPromiseRef.current;
+  }, [ticket, token]);
+
+  useEffect(() => {
+    void ensureTicketExchanged();
+  }, [ensureTicketExchanged]);
 
   const plan = PLAN_INFO[planCode] || {
     name: `${planCode.toUpperCase()} Plan`,
@@ -141,25 +162,28 @@ function RazorpayCheckoutContent() {
     setVerifying(true);
     setError(null);
 
-    fetch('/api/verify-payment', {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({
-        ...(orderId ? { razorpay_order_id: orderId } : {}),
-        ...(paymentLinkId
-          ? {
-              razorpay_payment_link_id: paymentLinkId,
-              razorpay_payment_link_reference_id: paymentLinkRefId,
-              razorpay_payment_link_status: paymentLinkStatus || 'paid',
-            }
-          : {}),
-        razorpay_payment_id: paymentId,
-        razorpay_signature: signature,
-        planCode,
-        billingCycle,
-      }),
-    })
-      .then(async (res) => {
+    void (async () => {
+      await ensureTicketExchanged();
+      if (cancelled) return;
+      try {
+        const res = await fetch('/api/verify-payment', {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            ...(orderId ? { razorpay_order_id: orderId } : {}),
+            ...(paymentLinkId
+              ? {
+                  razorpay_payment_link_id: paymentLinkId,
+                  razorpay_payment_link_reference_id: paymentLinkRefId,
+                  razorpay_payment_link_status: paymentLinkStatus || 'paid',
+                }
+              : {}),
+            razorpay_payment_id: paymentId,
+            razorpay_signature: signature,
+            planCode,
+            billingCycle,
+          }),
+        });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (res.ok && data.success) {
@@ -170,20 +194,19 @@ function RazorpayCheckoutContent() {
         } else {
           setError(data.error || 'Payment signature verification failed. Please retry.');
         }
-      })
-      .catch((err: any) => {
+      } catch (err: any) {
         if (!cancelled) {
           setError(err?.message || 'Unable to verify payment with the server.');
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setVerifying(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [searchParams, authHeaders, planCode, billingCycle]);
+  }, [searchParams, authHeaders, planCode, billingCycle, ensureTicketExchanged]);
 
   const userPrefill = React.useMemo(() => {
     let email = searchParams.get('email') || '';
@@ -212,6 +235,7 @@ function RazorpayCheckoutContent() {
     }, 4500);
 
     try {
+      await ensureTicketExchanged();
       // 1. Create Razorpay Subscription (monthly/yearly auto-pay) or Order fallback
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',

@@ -17,7 +17,7 @@ import {
 } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
+import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { WEB_URL } from '../src/lib/constants';
 import { useAuthStore } from '../src/stores/auth-store';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
@@ -356,27 +356,21 @@ function GrowthScreen() {
     setConnecting(true);
     setError(null);
     const returnUrl = 'bgos://gbp-callback';
+    const ticket = await getMobileHandoffTicket();
+    const ticketSuffix = ticket ? `&ticket=${encodeURIComponent(ticket)}` : '';
+    const buildConnectUrl = () =>
+      `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
+      `&redirectUri=${encodeURIComponent(returnUrl)}` +
+      `&originHost=${encodeURIComponent(WEB_URL)}` +
+      ticketSuffix;
     try {
-      const token = await getToken();
-      const url =
-        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
-        `&redirectUri=${encodeURIComponent(returnUrl)}` +
-        `&originHost=${encodeURIComponent(WEB_URL)}` +
-        (token ? `&auth=${encodeURIComponent(token)}` : '');
-
-      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(buildConnectUrl(), returnUrl);
       if (result.type === 'success' && result.url) {
         handleOAuthReturn(result.url);
       }
     } catch {
       try {
-        const token = await getToken();
-        const url =
-          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=growth` +
-          `&redirectUri=${encodeURIComponent(returnUrl)}` +
-          `&originHost=${encodeURIComponent(WEB_URL)}` +
-          (token ? `&auth=${encodeURIComponent(token)}` : '');
-        await Linking.openURL(url);
+        await Linking.openURL(buildConnectUrl());
       } catch {
         setError('Could not open Google connect. Please connect from BGOS Web.');
         return;

@@ -185,30 +185,46 @@ export async function GET(request: NextRequest) {
 }
 
 // ─── DELETE /api/forms/responses ──────────────────────────────────────────────
-// Delete one or multiple form response records
+// Delete one or multiple form response records scoped strictly to the caller's tenant
 export async function DELETE(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
+    const authUser = await getAuthUser(request);
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    if (!authUser.tenantId && !authUser.isSuperAdmin) {
+      return NextResponse.json({ error: 'Tenant access required' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const tenantFilter =
+      !authUser.isSuperAdmin && authUser.tenantId
+        ? { OR: [{ tenantId: authUser.tenantId }, { form: { tenantId: authUser.tenantId } }] }
+        : {};
 
     if (id) {
-      await db.formResponse.delete({ where: { id } });
+      const result = await db.formResponse.deleteMany({
+        where: { id, ...tenantFilter },
+      });
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      }
       return NextResponse.json({ success: true, message: 'Submission deleted' });
     }
 
     const body = await request.json().catch(() => ({}));
-    const ids: string[] = body.ids || [];
+    const ids: string[] = Array.isArray(body?.ids) ? body.ids : [];
 
     if (ids.length > 0) {
-      await db.formResponse.deleteMany({
-        where: { id: { in: ids } },
+      const result = await db.formResponse.deleteMany({
+        where: { id: { in: ids }, ...tenantFilter },
       });
-      return NextResponse.json({ success: true, message: `${ids.length} submissions deleted` });
+      return NextResponse.json({
+        success: true,
+        count: result.count,
+        message: `${result.count} submissions deleted`,
+      });
     }
 
     return NextResponse.json({ error: 'Submission ID or IDs required' }, { status: 400 });

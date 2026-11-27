@@ -328,63 +328,67 @@ export async function listUserBgosWorkspaces(
     subByWsId.set(sub.workspaceId, sub);
   }
 
-  const summaries = await Promise.all(
-    allWorkspaces
-      .filter((w) => Boolean(w.tenant) && !w.tenant?.suspendedAt)
-      .map(async (w) => {
-        const tenant = w.tenant!;
-        const settings = parseWorkspaceJson(tenant.settingsJson);
-        const sub = subByWsId.get(w.id) || null;
+  // Batch live-activity checks across all workspaces in O(1) queries (avoiding 7*N N+1 counts)
+  const validWorkspaces = allWorkspaces.filter((w) => Boolean(w.tenant) && !w.tenant?.suspendedAt);
+  const allTenantIds = Array.from(new Set(validWorkspaces.map((w) => w.tenant!.id)));
+  const activeTenantIds = new Set<string>();
+  if (allTenantIds.length > 0) {
+    const collectActive = async (rowsPromise: Promise<Array<{ tenantId?: string | null }>>) => {
+      const rows = await rowsPromise.catch(() => []);
+      for (const r of rows) {
+        if (r?.tenantId) activeTenantIds.add(r.tenantId);
+      }
+    };
+    await Promise.all([
+      collectActive(db.lead.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.customer.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.booking.findMany({ where: { tenantId: { in: allTenantIds }, deletedAt: null }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.conversation.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.publicChatSession.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.review.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+      collectActive(db.socialPost.findMany({ where: { tenantId: { in: allTenantIds } }, select: { tenantId: true }, distinct: ['tenantId'] })),
+    ]);
+  }
 
-        const boundGbpLocationId =
-          typeof settings.boundGbpLocationId === 'string' && settings.boundGbpLocationId
-            ? settings.boundGbpLocationId
-            : typeof settings.activeGbpLocationId === 'string' && settings.activeGbpLocationId
-              ? settings.activeGbpLocationId
-              : null;
+  const summaries = validWorkspaces.map((w) => {
+    const tenant = w.tenant!;
+    const settings = parseWorkspaceJson(tenant.settingsJson);
+    const sub = subByWsId.get(w.id) || null;
 
-        const activity = await hasWorkspaceLiveActivity(tenant.id).catch(() => ({
-          hasActivity: false,
-          reason: null,
-          counts: {
-            leads: 0,
-            customers: 0,
-            bookings: 0,
-            conversations: 0,
-            publicChats: 0,
-            reviews: 0,
-            posts: 0,
-          },
-        }));
+    const boundGbpLocationId =
+      typeof settings.boundGbpLocationId === 'string' && settings.boundGbpLocationId
+        ? settings.boundGbpLocationId
+        : typeof settings.activeGbpLocationId === 'string' && settings.activeGbpLocationId
+          ? settings.activeGbpLocationId
+          : null;
 
-        const isCurrent =
-          effectiveCurrentWsId ? w.id === effectiveCurrentWsId : tenant.id === effectiveCurrentTenantId;
-        const entitlement = evaluateBgosEntitlement({
-          tenant,
-          productSubscription: sub,
-        });
+    const isCurrent =
+      effectiveCurrentWsId ? w.id === effectiveCurrentWsId : tenant.id === effectiveCurrentTenantId;
+    const entitlement = evaluateBgosEntitlement({
+      tenant,
+      productSubscription: sub,
+    });
 
-        return {
-          workspaceId: w.id,
-          tenantId: tenant.id,
-          name: tenant.name || w.name,
-          slug: tenant.slug || w.slug,
-          industry: tenant.industry || w.industry || null,
-          logo: tenant.logo || w.logo || null,
-          boundGbpLocationId,
-          boundBusinessName: boundGbpLocationId ? tenant.name || w.name : null,
-          planTier: entitlement.plan || sub?.plan || tenant.plan || 'starter',
-          subscriptionStatus: entitlement.status || sub?.status || tenant.planStatus || 'trial',
-          trialEndsAt: entitlement.trialEndsAt ?? (sub?.trialEndsAt || tenant.trialEndsAt)?.toISOString?.() ?? null,
-          entitled: entitlement.entitled,
-          trialExpired: entitlement.trialExpired,
-          trialDaysLeft: entitlement.trialDaysLeft,
-          isCurrent,
-          hasLiveActivity: activity.hasActivity,
-          publicBusinessUrl: buildPublicBusinessPath(tenant.slug || w.slug),
-        } satisfies BgosWorkspaceSummary;
-      }),
-  );
+    return {
+      workspaceId: w.id,
+      tenantId: tenant.id,
+      name: tenant.name || w.name,
+      slug: tenant.slug || w.slug,
+      industry: tenant.industry || w.industry || null,
+      logo: tenant.logo || w.logo || null,
+      boundGbpLocationId,
+      boundBusinessName: boundGbpLocationId ? tenant.name || w.name : null,
+      planTier: entitlement.plan || sub?.plan || tenant.plan || 'starter',
+      subscriptionStatus: entitlement.status || sub?.status || tenant.planStatus || 'trial',
+      trialEndsAt: entitlement.trialEndsAt ?? (sub?.trialEndsAt || tenant.trialEndsAt)?.toISOString?.() ?? null,
+      entitled: entitlement.entitled,
+      trialExpired: entitlement.trialExpired,
+      trialDaysLeft: entitlement.trialDaysLeft,
+      isCurrent,
+      hasLiveActivity: activeTenantIds.has(tenant.id),
+      publicBusinessUrl: buildPublicBusinessPath(tenant.slug || w.slug),
+    } satisfies BgosWorkspaceSummary;
+  });
 
   return summaries.sort((a, b) => {
     if (a.isCurrent && !b.isCurrent) return -1;

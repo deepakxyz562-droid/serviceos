@@ -1,6 +1,6 @@
 import { Alert, Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { getToken } from './auth';
+import { getMobileHandoffTicket } from './handoff';
 import { WEB_URL } from './constants';
 
 export type SocialConnectPlatform =
@@ -13,16 +13,16 @@ export type SocialConnectPlatform =
 
 /**
  * Shared mobile OAuth launcher matching the Channels screen (`app/integrations.tsx`).
- * Uses the signed-in session token (`?auth=`) + `originHost` + mobile deep-link callback
- * so every social OAuth provider authenticates uniformly without duplicating URL builders.
+ * Uses a short-lived single-use mobile handoff ticket (`?ticket=`) + `originHost`
+ * + mobile deep-link callback so long-lived bearer JWTs never touch browser URLs.
  */
 export async function connectSocialPlatform(
   platform: SocialConnectPlatform,
   options?: { returnView?: string; oauthPath?: string },
 ): Promise<{ error?: string }> {
-  const token = await getToken().catch(() => null);
+  const ticket = await getMobileHandoffTicket();
   const returnUrl = 'bgos://gbp-callback';
-  const authQuery = token ? `&auth=${encodeURIComponent(token)}` : '';
+  const authQuery = ticket ? `&ticket=${encodeURIComponent(ticket)}` : '';
   const returnView = options?.returnView || 'growth';
   const basePath = options?.oauthPath || `/api/oauth/${platform}`;
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { encryptToken, maskEncryptedToken } from '@/lib/social/crypto';
+import { decryptToken, encryptToken, maskEncryptedToken } from '@/lib/social/crypto';
 import { logActivity } from '@/lib/activity-log';
 import { invalidatePlacePayloadCacheForTenant } from '@/lib/social/google-connection-state';
 import type { SocialPlatform } from '@/lib/social/types';
@@ -256,15 +256,39 @@ export async function DELETE(request: NextRequest) {
     // Verify ownership before soft-deleting.
     const existing = await db.socialAccount.findFirst({
       where: { id: accountId, tenantId },
-      select: { id: true, platform: true, accountName: true },
+      select: {
+        id: true,
+        platform: true,
+        accountName: true,
+        accessToken: true,
+        refreshToken: true,
+      },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
     }
 
+    // Best-effort upstream Google OAuth token revocation before clearing stored credentials.
+    if (existing.platform === 'googlebusiness') {
+      const tokenCandidate = existing.refreshToken || existing.accessToken;
+      if (tokenCandidate) {
+        try {
+          const plaintext = decryptToken(tokenCandidate);
+          if (plaintext) {
+            await fetch(
+              `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(plaintext)}`,
+              { method: 'POST', signal: AbortSignal.timeout(4000) },
+            ).catch(() => {});
+          }
+        } catch {
+          // Ignore decryption failure on rotated keys — still wipe local row.
+        }
+      }
+    }
+
     await db.socialAccount.update({
       where: { id: accountId },
-      data: { isActive: false },
+      data: { isActive: false, accessToken: '', refreshToken: null },
     });
 
     await logActivity({

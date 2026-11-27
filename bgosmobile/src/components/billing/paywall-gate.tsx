@@ -16,7 +16,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Brand, colors } from '../ui';
 import { useResource } from '../../hooks/use-resource';
 import { apiRequest } from '../../lib/api';
-import { getToken } from '../../lib/auth';
+import { getMobileHandoffTicket } from '../../lib/handoff';
 import { useAuthStore } from '../../stores/auth-store';
 import { PAYMENT_WEB_URL, WEB_URL } from '../../lib/constants';
 import { detectDeviceCountryAndTimezone } from '../../lib/country-codes';
@@ -101,6 +101,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
   const billingRes = useResource<BillingResponse>('/api/bgos/billing', 0, true, 15000);
   const workspaceRes = useResource<{ name?: string }>('/api/bgos/workspace', 0, true, 15000);
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [region, setRegion] = useState<'india' | 'international'>(() => {
     try {
       return detectDeviceCountryAndTimezone().country.code === 'IN' ? 'india' : 'international';
@@ -129,9 +130,13 @@ export function PaywallGate({ children }: PaywallGateProps) {
   const sub = billingRes.data?.subscription;
   const ent = billingRes.data?.entitlement;
 
-  // If billing is still loading on first mount, let children render briefly until check completes
+  // Block guarded UI with a loading spinner until initial entitlement check resolves
   if (billingRes.loading && !billingRes.data) {
-    return <>{children}</>;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color={colors.brand} />
+      </View>
+    );
   }
 
   // Never show "Complete Payment to Continue" when billing could not be fetched/verified
@@ -214,7 +219,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
       if (region === 'international') {
         const res = await apiRequest<{ url?: string; error?: string }>('/api/bgos/billing', {
           method: 'POST',
-          body: { plan: planCode },
+          body: { plan: planCode, billingCycle },
         });
         if (!res?.url) {
           throw new Error(res?.error || 'Could not start online checkout. Please try again.');
@@ -227,11 +232,12 @@ export function PaywallGate({ children }: PaywallGateProps) {
         return;
       }
 
-      const token = await getToken();
+      const ticket = await getMobileHandoffTicket();
       const params = new URLSearchParams();
       params.set('plan', planCode);
+      params.set('billingCycle', billingCycle);
       params.set('product', 'bgos');
-      if (token) params.set('token', token);
+      if (ticket) params.set('ticket', ticket);
       if (user?.email) params.set('email', user.email);
       if (user?.name) params.set('name', user.name);
       const checkoutUrl = `${PAYMENT_WEB_URL}/checkout/razorpay?${params.toString()}`;
@@ -247,6 +253,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
         try {
           const fallbackParams = new URLSearchParams();
           fallbackParams.set('plan', planCode);
+          fallbackParams.set('billingCycle', billingCycle);
           fallbackParams.set('product', 'bgos');
           if (user?.email) fallbackParams.set('email', user.email);
           await Linking.openURL(`${PAYMENT_WEB_URL}/checkout/razorpay?${fallbackParams.toString()}`);
@@ -289,12 +296,44 @@ export function PaywallGate({ children }: PaywallGateProps) {
           ) : null}
         </View>
 
+        {/* Billing Cycle Toggle */}
+        <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 4, gap: 4 }}>
+          {(['monthly', 'yearly'] as const).map((cycle) => {
+            const active = billingCycle === cycle;
+            return (
+              <Pressable
+                key={cycle}
+                onPress={() => setBillingCycle(cycle)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 9,
+                  alignItems: 'center',
+                  backgroundColor: active ? '#FFFFFF' : 'transparent',
+                }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: active ? '#0F172A' : '#64748B' }}>
+                  {cycle === 'monthly' ? 'Monthly Billing' : 'Yearly · Save 2 Months'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {/* Pricing Cards */}
         <View style={styles.cardsContainer}>
           {PLANS.map((plan) => {
             const isBusy = activatingPlan === plan.code;
+            const amount =
+              region === 'india'
+                ? billingCycle === 'yearly'
+                  ? plan.priceInr * 10
+                  : plan.priceInr
+                : billingCycle === 'yearly'
+                  ? plan.priceUsd * 10
+                  : plan.priceUsd;
             const priceText =
-              region === 'india' ? `₹${plan.priceInr.toLocaleString('en-IN')}` : `$${plan.priceUsd}`;
+              region === 'india' ? `₹${amount.toLocaleString('en-IN')}` : `$${amount}`;
             const gatewayReady =
               region === 'india'
                 ? billingRes.data?.gateways?.razorpay !== false
@@ -322,7 +361,13 @@ export function PaywallGate({ children }: PaywallGateProps) {
                   <View style={styles.priceContainer}>
                     <Text style={styles.priceText}>{priceText}</Text>
                     <Text style={styles.periodText}>
-                      {region === 'india' ? '/ month' : 'USD / month'}
+                      {billingCycle === 'yearly'
+                        ? region === 'india'
+                          ? '/ year'
+                          : 'USD / year'
+                        : region === 'india'
+                          ? '/ month'
+                          : 'USD / month'}
                     </Text>
                   </View>
                 </View>
@@ -353,7 +398,7 @@ export function PaywallGate({ children }: PaywallGateProps) {
                       <MaterialIcons name="payment" size={18} color="#FFFFFF" />
                       <Text style={styles.payButtonText}>
                         {gatewayReady
-                          ? `Subscribe for ${priceText}/mo`
+                          ? `Subscribe for ${priceText}/${billingCycle === 'yearly' ? 'yr' : 'mo'}`
                           : 'Checkout Unavailable'}
                       </Text>
                     </View>

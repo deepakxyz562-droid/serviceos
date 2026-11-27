@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Screen, Card, Action, Badge, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
+import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { useAuthStore } from '../src/stores/auth-store';
 import { PAYMENT_WEB_URL, WEB_URL } from '../src/lib/constants';
 import { detectDeviceCountryAndTimezone } from '../src/lib/country-codes';
@@ -204,12 +204,12 @@ export default function MyPlanScreen() {
         return;
       }
 
-      const token = await getToken();
+      const ticket = await getMobileHandoffTicket();
       const params = new URLSearchParams();
       params.set('plan', planCode);
       params.set('billingCycle', billingCycle);
       params.set('product', 'bgos');
-      if (token) params.set('token', token);
+      if (ticket) params.set('ticket', ticket);
       if (user?.email) params.set('email', user.email);
       if (user?.name) params.set('name', user.name);
       const checkoutUrl = `${PAYMENT_WEB_URL}/checkout/razorpay?${params.toString()}`;

@@ -52,26 +52,27 @@ let devWarned = false;
  * can set a long random hex string OR a short passphrase — both work.
  */
 function getKey(): Buffer {
-  const raw =
+  const configured =
     process.env.SOCIAL_CRYPTO_KEY ||
     process.env.ENCRYPTION_KEY ||
-    process.env.NEXTAUTH_SECRET ||
-    DEV_FALLBACK_KEY;
+    process.env.NEXTAUTH_SECRET;
 
-  if (
-    !process.env.SOCIAL_CRYPTO_KEY &&
-    !process.env.ENCRYPTION_KEY &&
-    !process.env.NEXTAUTH_SECRET &&
-    !devWarned
-  ) {
-    console.warn(
-      '[social/crypto] WARNING: SOCIAL_CRYPTO_KEY, ENCRYPTION_KEY, and NEXTAUTH_SECRET are all unset. ' +
-        'Using insecure dev-only key — DO NOT use in production.',
-    );
-    devWarned = true;
+  if (!configured) {
+    if (process.env.NODE_ENV === 'production' && !process.env.VITEST) {
+      throw new Error(
+        '[social/crypto] Fatal: SOCIAL_CRYPTO_KEY, ENCRYPTION_KEY, or NEXTAUTH_SECRET must be set in production.',
+      );
+    }
+    if (!devWarned) {
+      console.warn(
+        '[social/crypto] WARNING: SOCIAL_CRYPTO_KEY, ENCRYPTION_KEY, and NEXTAUTH_SECRET are all unset. ' +
+          'Using insecure dev-only key — DO NOT use in production.',
+      );
+      devWarned = true;
+    }
   }
 
-  return createHash('sha256').update(raw).digest();
+  return createHash('sha256').update(configured || DEV_FALLBACK_KEY).digest();
 }
 
 /**

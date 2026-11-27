@@ -46,28 +46,61 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const agentId = searchParams.get('id');
     const agentSlug = searchParams.get('slug');
-    const user = await getAuthUser();
+    const user = await getAuthUser(request);
 
     // Fetch a single agent
     if (agentId || agentSlug) {
-      const identifier = agentId || agentSlug!;
-      const whereClause: any = {
-        OR: [{ id: identifier }, { slug: identifier }],
-      };
-      if (user?.tenantId) {
-        whereClause.OR = [
-          { id: identifier },
-          { slug: identifier },
-        ];
+      if (agentId && !user?.tenantId && !user?.isSuperAdmin) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
       }
+
+      const identifier = agentId || agentSlug!;
+      const whereClause: any = agentId
+        ? {
+            id: agentId,
+            ...(!user?.isSuperAdmin && user?.tenantId ? { tenantId: user.tenantId } : {}),
+          }
+        : {
+            OR: [{ id: identifier }, { slug: identifier }],
+          };
 
       const agent = await db.formAgent.findFirst({ where: whereClause });
 
       if (agent) {
-        // Merge DB row with the configJson (which contains the full FormAgentData)
+        const isOwner = Boolean(
+          user?.isSuperAdmin || (user?.tenantId && agent.tenantId && agent.tenantId === user.tenantId),
+        );
         const config = parseConfigJson(agent.configJson);
         const effectiveAvatar = config.avatarUrl || (config.style as any)?.avatarUrl || agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
         const effectiveBrandColor = config.brandColor || (config.style as any)?.letterColor || (config.style as any)?.primaryColor || agent.brandColor || DEFAULT_FORM_AGENT.brandColor;
+
+        // Public slug lookups receive strictly non-sensitive widget presentation fields.
+        if (!isOwner) {
+          if (agentId) {
+            return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+          }
+          return NextResponse.json({
+            agent: {
+              id: agent.id,
+              slug: agent.slug,
+              name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
+              roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
+              avatarUrl: effectiveAvatar,
+              statusText: agent.statusText || config.statusText || 'Online',
+              brandColor: effectiveBrandColor,
+              voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
+              welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
+              greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
+              style: {
+                ...DEFAULT_FORM_AGENT.style,
+                ...(config.style || {}),
+              } as FormAgentData['style'],
+              updatedAt: toIsoString(agent.updatedAt),
+            },
+          });
+        }
+
+        // Merge DB row with the configJson for authenticated tenant owner
         const merged: FormAgentData = {
           ...DEFAULT_FORM_AGENT,
           ...config,

@@ -48,6 +48,20 @@ export default function ToolsScreen() {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [localeModalOpen, setLocaleModalOpen] = useState(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const socialAccountsRes = useResource<{ data?: Array<{ platform: string; isActive?: boolean }> }>(
+    '/api/social/accounts',
+    0,
+    openGroup === 'Channels',
+  );
+  const whatsappConfigRes = useResource<{ isConfigured?: boolean }>('/api/whatsapp/config', 0, openGroup === 'Channels');
+  const activePlatforms = new Set(
+    (socialAccountsRes.data?.data || [])
+      .filter((a) => a && a.isActive !== false)
+      .map((a) => String(a.platform || '').toLowerCase()),
+  );
+  const gbpConnected = activePlatforms.has('googlebusiness');
+  const waConnected = Boolean(whatsappConfigRes.data?.isConfigured);
+  const metaConnected = activePlatforms.has('facebook') || activePlatforms.has('instagram');
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ open?: string }>();
@@ -392,7 +406,15 @@ export default function ToolsScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.success }}>Active</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: gbpConnected ? colors.success : colors.muted,
+              }}
+            >
+              {socialAccountsRes.loading ? 'Checking...' : gbpConnected ? 'Connected' : 'Not Connected'}
+            </Text>
           </View>
 
           <View
@@ -413,11 +435,19 @@ export default function ToolsScreen() {
                   Meta WhatsApp Cloud API
                 </Text>
                 <Text style={{ fontSize: 10, color: colors.muted }}>
-                  Review requests & lead follow-up
+                  Review requests &amp; lead follow-up
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>Enabled</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: waConnected ? colors.brand : colors.muted,
+              }}
+            >
+              {whatsappConfigRes.loading ? 'Checking...' : waConnected ? 'Configured' : 'Setup Needed'}
+            </Text>
           </View>
 
           <View
@@ -435,14 +465,22 @@ export default function ToolsScreen() {
               <MaterialIcons name="public" size={20} color="#1877F2" />
               <View>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
-                  Facebook & Instagram
+                  Facebook &amp; Instagram
                 </Text>
                 <Text style={{ fontSize: 10, color: colors.muted }}>
                   Cross-post promotional campaigns
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.muted }}>Available</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '600',
+                color: metaConnected ? colors.success : colors.muted,
+              }}
+            >
+              {socialAccountsRes.loading ? 'Checking...' : metaConnected ? 'Connected' : 'Connect'}
+            </Text>
           </View>
         </View>
 

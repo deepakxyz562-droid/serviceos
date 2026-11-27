@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
 import { getAuthUser } from '@/lib/auth';
+import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { db } from '@/lib/db';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
 import { fetchGoogleBusinessPlaceDetails } from '@/lib/social/adapters/googlebusiness';
@@ -432,7 +433,22 @@ function buildStandeePrintableHtml(businessName: string, svg: string): string {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    let user = await getAuthUser(request);
+    const ticketParam = new URL(request.url).searchParams.get('ticket');
+    if ((!user || !user.tenantId) && ticketParam) {
+      const verified = verifyHandoffTicket(ticketParam);
+      if (verified) {
+        user = {
+          id: verified.userId,
+          email: verified.email,
+          name: null,
+          role: verified.role as any,
+          tenantId: verified.tenantId,
+          workspaceId: null,
+          avatar: null,
+        };
+      }
+    }
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }

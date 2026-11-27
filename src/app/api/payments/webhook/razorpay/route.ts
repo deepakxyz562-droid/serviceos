@@ -213,22 +213,29 @@ export async function POST(request: NextRequest) {
 
       // 2. CRM Tenant Invoice Payment
       if (invoiceId) {
-        if (tenantId && signature) {
-          const tenant = await db.tenant.findUnique({
-            where: { id: tenantId },
-            select: { settingsJson: true },
-          });
-          const settings = parsePaymentSettings(tenant?.settingsJson);
-          const secret = settings.razorpay?.webhookSecret || settings.razorpay?.keySecret;
-
-          if (secret && !verifyRazorpayWebhookSig(rawBody, signature, secret)) {
-            console.warn('[razorpay-webhook] Signature verification failed');
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-          }
+        if (!tenantId || !signature) {
+          console.warn('[razorpay-webhook] CRM invoice webhook missing tenantId or signature');
+          return NextResponse.json({ error: 'Signature verification required' }, { status: 401 });
         }
 
-        const invoice = await db.invoice.findUnique({
-          where: { id: invoiceId },
+        const tenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { settingsJson: true },
+        });
+        const settings = parsePaymentSettings(tenant?.settingsJson);
+        const secret =
+          settings.razorpay?.webhookSecret ||
+          settings.razorpay?.keySecret ||
+          process.env.RAZORPAY_WEBHOOK_SECRET ||
+          process.env.RAZORPAY_KEY_SECRET;
+
+        if (!secret || !verifyRazorpayWebhookSig(rawBody, signature, secret)) {
+          console.warn('[razorpay-webhook] CRM invoice signature verification failed');
+          return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+        }
+
+        const invoice = await db.invoice.findFirst({
+          where: { id: invoiceId, tenantId },
           select: { id: true, status: true, notes: true },
         });
 

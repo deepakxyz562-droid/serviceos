@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { resolveWorkspaceData } from '@/app/api/bgos/workspace/route';
-import { computeMarketingScore } from '@/lib/gbp/marketing-score';
+import * as marketingScoreLib from '@/lib/gbp/marketing-score';
 import { computeGbpAudit } from '@/lib/gbp/audit';
 import { googleReviewScope } from '@/lib/social/google-review-scope';
 import { prepareGoogleAccount } from '@/lib/social/google-account-helper';
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     const [
       workspace,
       marketingScore,
+      weekHistory,
       auditResult,
       googleAccount,
       todayBookings,
@@ -73,7 +74,12 @@ export async function GET(request: NextRequest) {
       socialAccounts,
     ] = await Promise.all([
       resolveWorkspaceData(user, request).catch(() => null),
-      computeMarketingScore(tenantId).catch(() => null),
+      typeof marketingScoreLib.computeMarketingScore === 'function'
+        ? marketingScoreLib.computeMarketingScore(tenantId).catch(() => null)
+        : Promise.resolve(null),
+      typeof (marketingScoreLib as any).readHistory === 'function'
+        ? (marketingScoreLib as any).readHistory(tenantId, 7).catch(() => [])
+        : Promise.resolve([]),
       computeGbpAudit(tenantId).catch(() => null),
       prepareGoogleAccount(tenantId).catch(() => null),
       rpcSummary
@@ -118,6 +124,7 @@ export async function GET(request: NextRequest) {
       scheduledSocialPosts,
       pendingInvites,
       sentInvites,
+      unreadMessagesCount,
       tenantDetails,
     ] = await Promise.all([
       rpcSummary && !Object.keys(reviewScope || {}).length
@@ -151,6 +158,17 @@ export async function GET(request: NextRequest) {
       rpcSummary
         ? Promise.resolve(rpcSummary.sentInvites ?? 0)
         : db.scheduledMessage.count({ where: { tenantId, messageType: 'review_request', status: 'sent' } }).catch(() => 0),
+      typeof (db as any).omnichannelConversation?.count === 'function'
+        ? (db as any).omnichannelConversation
+            .count({
+              where: {
+                tenantId,
+                ...(workspaceId ? { workspaceId } : {}),
+                unreadCount: { gt: 0 },
+              },
+            })
+            .catch(() => 0)
+        : Promise.resolve(0),
       db.tenant.findUnique({
         where: { id: tenantId },
         select: {
@@ -182,7 +200,13 @@ export async function GET(request: NextRequest) {
 
     // Resolve Discover Google Account info
     let googleEmail = '';
-    let activeProfile: { id: string; name: string; shortId: string; initial: string } | null = null;
+    let activeProfile: {
+      id: string;
+      name: string;
+      shortId: string;
+      initial: string;
+      isBoundToCurrentWorkspace: boolean;
+    } | null = null;
     if (socialAccounts.length > 0) {
       const sa = socialAccounts[0];
       let meta: Record<string, any> = {};
@@ -190,12 +214,20 @@ export async function GET(request: NextRequest) {
         meta = typeof sa.metadata === 'string' ? JSON.parse(sa.metadata) : (sa.metadata || {});
       } catch {}
       googleEmail = meta.googleEmail || '';
+      const pId = String(sa.accountId || sa.accountName || 'gbp');
       const pName = String(meta.locationTitle || sa.accountName || tenantDetails?.name || 'Google Business');
+      const boundLocId =
+        typeof tenantSettings.boundGbpLocationId === 'string' && tenantSettings.boundGbpLocationId
+          ? tenantSettings.boundGbpLocationId
+          : typeof tenantSettings.activeGbpLocationId === 'string' && tenantSettings.activeGbpLocationId
+            ? tenantSettings.activeGbpLocationId
+            : '';
       activeProfile = {
-        id: String(sa.accountId || sa.accountName || 'gbp'),
+        id: pId,
         name: pName,
         shortId: String(sa.accountId || '').slice(-6) || 'active',
         initial: pName.charAt(0).toUpperCase() || 'B',
+        isBoundToCurrentWorkspace: !boundLocId || pId === boundLocId,
       };
     }
 
@@ -253,22 +285,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fallback estimation if profile is brand new or performance API is aggregating
-    if (perfMetrics.totalViews === 0) {
-      const baseReviews = (marketingScore?.reviewCount && marketingScore.reviewCount > 0) ? marketingScore.reviewCount : 8;
-      const sImp = baseReviews * 18 + 45;
-      const mImp = baseReviews * 26 + 75;
-      perfMetrics.searchImpressions = sImp;
-      perfMetrics.mapsImpressions = mImp;
-      perfMetrics.mapsViews = mImp;
-      perfMetrics.totalViews = sImp + mImp;
-      perfMetrics.callClicks = Math.max(3, Math.round(baseReviews * 1.8));
-      perfMetrics.directionRequests = Math.max(5, Math.round(baseReviews * 2.4));
-      perfMetrics.websiteClicks = Math.max(4, Math.round(baseReviews * 1.4));
-      perfMetrics.bookings = Math.max(1, Math.round(baseReviews * 0.4));
-      perfMetrics.conversations = Math.max(2, Math.round(baseReviews * 0.8));
-    }
-
     if (!perfMetrics.monthlyTrends) {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const now = new Date();
@@ -277,63 +293,71 @@ export async function GET(request: NextRequest) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         months.push(monthNames[d.getMonth()]);
       }
-      const weights = [0.11, 0.13, 0.15, 0.18, 0.20, 0.23];
-      const trendViews = weights.map((w) => Math.round(perfMetrics.totalViews * w * 0.95 + 10));
-      const trendCalls = weights.map((w) => Math.max(1, Math.round(perfMetrics.callClicks * w * 1.1)));
-      const trendDirections = weights.map((w) => Math.max(1, Math.round(perfMetrics.directionRequests * w * 1.1)));
-      const trendWebsite = weights.map((w) => Math.max(1, Math.round(perfMetrics.websiteClicks * w * 1.1)));
-      const trendBookings = weights.map((w) => Math.max(0, Math.round((perfMetrics.bookings || 2) * w * 1.1)));
-      const trendInteractions = trendCalls.map((c, i) => c + trendDirections[i] + trendWebsite[i] + trendBookings[i]);
-
+      const zeroSeries = months.map(() => 0);
       perfMetrics.monthlyTrends = {
         months,
-        views: trendViews,
-        calls: trendCalls,
-        directions: trendDirections,
-        website: trendWebsite,
-        bookings: trendBookings,
-        interactions: trendInteractions,
+        views: zeroSeries,
+        calls: zeroSeries,
+        directions: zeroSeries,
+        website: zeroSeries,
+        bookings: zeroSeries,
+        interactions: zeroSeries,
       };
     }
 
     if (!perfMetrics.last30Days) {
       perfMetrics.last30Days = {
-        views: Math.round(perfMetrics.totalViews * 0.24),
-        totalViews: Math.round(perfMetrics.totalViews * 0.24),
-        searches: Math.round(perfMetrics.searchImpressions * 0.24),
-        searchImpressions: Math.round(perfMetrics.searchImpressions * 0.24),
-        mapsImpressions: Math.round(perfMetrics.mapsImpressions * 0.24),
+        views: 0,
+        totalViews: 0,
+        searches: 0,
+        searchImpressions: 0,
+        mapsImpressions: 0,
         calls: perfMetrics.callClicks,
         callClicks: perfMetrics.callClicks,
         directions: perfMetrics.directionRequests,
         directionRequests: perfMetrics.directionRequests,
         websiteClicks: perfMetrics.websiteClicks,
         website: perfMetrics.websiteClicks,
-        bookings: perfMetrics.bookings || 1,
-        conversations: perfMetrics.conversations || 1,
+        bookings: perfMetrics.bookings,
+        conversations: perfMetrics.conversations,
       };
     }
 
-    // Build consolidated GbpPlace object
+    // Build consolidated GbpPlace object (aligned with both flat and nested mobile schema)
+    const resolvedTitle =
+      tenantSettings.activeGbpTitle ||
+      activeProfile?.name ||
+      tenantDetails?.brandProfile?.businessName ||
+      tenantDetails?.name ||
+      '';
+    const resolvedCategory = tenantDetails?.brandProfile?.industry || 'Local Business';
+    const resolvedAddress = tenantDetails?.address || '';
+    const resolvedPhone = tenantDetails?.phone || tenantDetails?.whatsappPhone || '';
+    const resolvedMapsUri = tenantDetails?.googlePlaceId
+      ? `https://maps.google.com/?cid=${tenantDetails.googlePlaceId}`
+      : null;
+
     const gbpPlace = {
       isConnected: Boolean(googleAccount),
       isVerified: Boolean(googleAccount),
       accountEmail: googleEmail || null,
       locationId: activeProfile?.id || null,
-      name:
-        tenantSettings.activeGbpTitle ||
-        activeProfile?.name ||
-        tenantDetails?.brandProfile?.businessName ||
-        tenantDetails?.name ||
-        '',
-      phone: tenantDetails?.phone || tenantDetails?.whatsappPhone || '',
-      address: tenantDetails?.address || '',
-      category: tenantDetails?.brandProfile?.industry || 'Local Business',
+      name: resolvedTitle,
+      phone: resolvedPhone,
+      address: resolvedAddress,
+      category: resolvedCategory,
       rating: avgRating,
       reviewCount: totalReviewsCount,
-      googleMapsUri: tenantDetails?.googlePlaceId
-        ? `https://maps.google.com/?cid=${tenantDetails.googlePlaceId}`
-        : null,
+      googleMapsUri: resolvedMapsUri,
+      place: {
+        title: resolvedTitle,
+        category: resolvedCategory,
+        address: resolvedAddress,
+        phone: resolvedPhone,
+        placeId: tenantDetails?.googlePlaceId || null,
+        mapsUrl: resolvedMapsUri,
+        completionScore: auditResult?.score ?? 0,
+      },
       metrics: {
         totalViews: perfMetrics.totalViews,
         searchImpressions: perfMetrics.searchImpressions,
@@ -363,8 +387,8 @@ export async function GET(request: NextRequest) {
         !(c.id === 'optimized_description' && (dismissedIds.includes('business_description') || dismissedIds.includes('optimized_description'))),
     );
     const growthActions = {
-      readinessScore: auditResult?.score ?? 78,
-      readinessGrade: auditResult?.grade ?? 'B',
+      readinessScore: auditResult?.score ?? 0,
+      readinessGrade: auditResult?.grade ?? 'C',
       totalDone: checks.filter((c) => c.passed).length,
       totalTarget: checks.length,
       leftCount: missingChecks.length,
@@ -411,7 +435,7 @@ export async function GET(request: NextRequest) {
 
     const payload = {
       workspace,
-      marketingScore,
+      marketingScore: marketingScore ? { ...marketingScore, weekHistory } : null,
       growthActions,
       gbpPlace,
       discover: {
@@ -420,7 +444,7 @@ export async function GET(request: NextRequest) {
         activeProfile,
       },
       stats: {
-        unreadMessages: 0,
+        unreadMessages: unreadMessagesCount,
         totalLeads: totalLeadsCount,
         submissionsCount: totalSubmissionsCount,
         publishedSocialPosts,

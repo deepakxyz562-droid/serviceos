@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import {
   Alert,
+  FlatList,
   Linking,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -113,7 +115,8 @@ function InboxScreen() {
     <Screen
       title="Unified Inbox"
       subtitle="Omnichannel conversations, visitor radar & support tickets."
-      onRefresh={inbox.refresh}
+      onRefresh={activeTab !== 'inbox' ? inbox.refresh : undefined}
+      scrollable={activeTab !== 'inbox'}
       showBack={true}
       rightAction={
         <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
@@ -123,7 +126,13 @@ function InboxScreen() {
       }
     >
       {/* 3 Top Segment Switchers: Inbox, Engage (Visitors), Tickets */}
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+      <View
+        style={[
+          ui.row,
+          { justifyContent: 'space-between' },
+          activeTab === 'inbox' ? { paddingHorizontal: 16, paddingTop: 12 } : undefined,
+        ]}
+      >
         <Chip
           label="Conversations"
           count={rawList.length}
@@ -142,137 +151,156 @@ function InboxScreen() {
         />
       </View>
 
-      <ErrorNotice message={inbox.error} retry={inbox.refresh} />
+      {activeTab !== 'inbox' ? <ErrorNotice message={inbox.error} retry={inbox.refresh} /> : null}
 
-      {/* CONVERSATIONS INBOX TAB */}
+      {/* CONVERSATIONS INBOX TAB (Virtualized FlatList) */}
       {activeTab === 'inbox' && (
-        <>
-          <Field
-            label="Search conversations"
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by customer name or message…"
-          />
-
-          {/* Dynamic Channel Filter Pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={ui.row}>
-              {[
-                { key: 'all', label: 'All', count: rawList.length },
-                { key: 'whatsapp', label: 'WhatsApp', count: channelCounts['whatsapp'] || 0 },
-                { key: 'instagram', label: 'Instagram', count: channelCounts['instagram'] || 0 },
-                { key: 'messenger', label: 'Messenger', count: channelCounts['messenger'] || 0 },
-                { key: 'calls', label: 'Calls', count: channelCounts['calls'] || 0 },
-                { key: 'sms', label: 'SMS', count: channelCounts['sms'] || 0 },
-                { key: 'team', label: 'Needs Human', count: rawList.filter((c) => c.aiPaused).length },
-              ].map((ch) => (
-                <Chip
-                  key={ch.key}
-                  label={ch.label}
-                  count={ch.count}
-                  selected={channelFilter === ch.key}
-                  onPress={() => setChannelFilter(ch.key)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          {inbox.loading ? (
-            <Loading />
-          ) : !items.length ? (
-            <Empty
-              title="You're all caught up"
-              detail="No customer conversations matching this filter. New inquiries from connected channels will appear here automatically."
-              actionLabel="Share Direct Chat Link"
-              onAction={shareChatLink}
+        <FlatList
+          data={items}
+          keyExtractor={(c) => c.id}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: 64 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={inbox.loading}
+              onRefresh={() => void inbox.refresh()}
+              tintColor={colors.brand}
             />
-          ) : (
-            <Card style={{ padding: 0 }}>
-              {items.map((c, i) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open conversation with ${c.customerName}`}
-                  key={c.id}
-                  onPress={() => setSelected(c)}
-                  style={[
-                    ui.menuRow,
-                    {
-                      paddingHorizontal: 16,
-                      borderBottomWidth: i === items.length - 1 ? 0 : 1,
-                      backgroundColor: c.unreadCount > 0 ? '#F0FDF4' : 'transparent',
-                    },
-                  ]}
-                >
-                  <View style={{ position: 'relative' }}>
-                    <Avatar name={c.customerName || 'Customer'} size={46} />
-                    <View
-                      style={[
-                        styles.channelBadgeSmall,
-                        {
-                          backgroundColor:
-                            (c.channel || '').toLowerCase() === 'whatsapp'
-                              ? '#25D366'
-                              : (c.channel || '').toLowerCase() === 'instagram'
-                              ? '#E1306C'
-                              : colors.brand,
-                        },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={
+          }
+          ListHeaderComponent={
+            <View style={{ gap: 10, marginBottom: 4 }}>
+              <ErrorNotice message={inbox.error} retry={inbox.refresh} />
+              <Field
+                label="Search conversations"
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search by customer name or message…"
+              />
+
+              {/* Dynamic Channel Filter Pills */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={ui.row}>
+                  {[
+                    { key: 'all', label: 'All', count: rawList.length },
+                    { key: 'whatsapp', label: 'WhatsApp', count: channelCounts['whatsapp'] || 0 },
+                    { key: 'instagram', label: 'Instagram', count: channelCounts['instagram'] || 0 },
+                    { key: 'messenger', label: 'Messenger', count: channelCounts['messenger'] || 0 },
+                    { key: 'calls', label: 'Calls', count: channelCounts['calls'] || 0 },
+                    { key: 'sms', label: 'SMS', count: channelCounts['sms'] || 0 },
+                    { key: 'team', label: 'Needs Human', count: rawList.filter((c) => c.aiPaused).length },
+                  ].map((ch) => (
+                    <Chip
+                      key={ch.key}
+                      label={ch.label}
+                      count={ch.count}
+                      selected={channelFilter === ch.key}
+                      onPress={() => setChannelFilter(ch.key)}
+                    />
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          }
+          ListEmptyComponent={
+            inbox.loading ? (
+              <Loading />
+            ) : (
+              <Empty
+                title="You're all caught up"
+                detail="No customer conversations matching this filter. New inquiries from connected channels will appear here automatically."
+                actionLabel="Share Direct Chat Link"
+                onAction={shareChatLink}
+              />
+            )
+          }
+          renderItem={({ item: c }) => (
+            <Card style={{ padding: 0, marginBottom: 6 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open conversation with ${c.customerName}`}
+                onPress={() => setSelected(c)}
+                style={[
+                  ui.menuRow,
+                  {
+                    paddingHorizontal: 16,
+                    borderBottomWidth: 0,
+                    backgroundColor: c.unreadCount > 0 ? '#F0FDF4' : 'transparent',
+                  },
+                ]}
+              >
+                <View style={{ position: 'relative' }}>
+                  <Avatar name={c.customerName || 'Customer'} size={46} />
+                  <View
+                    style={[
+                      styles.channelBadgeSmall,
+                      {
+                        backgroundColor:
                           (c.channel || '').toLowerCase() === 'whatsapp'
-                            ? 'chat'
+                            ? '#25D366'
                             : (c.channel || '').toLowerCase() === 'instagram'
-                            ? 'camera-alt'
-                            : 'language'
-                        }
-                        size={11}
-                        color="#FFFFFF"
-                      />
-                    </View>
+                            ? '#E1306C'
+                            : colors.brand,
+                      },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={
+                        (c.channel || '').toLowerCase() === 'whatsapp'
+                          ? 'chat'
+                          : (c.channel || '').toLowerCase() === 'instagram'
+                          ? 'camera-alt'
+                          : 'language'
+                      }
+                      size={11}
+                      color="#FFFFFF"
+                    />
                   </View>
+                </View>
 
-                  <View style={{ flex: 1 }}>
-                    <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                      <Text style={ui.heading}>{c.customerName || 'Customer'}</Text>
-                      <Text style={ui.caption}>
-                        {c.lastMessageTime
-                          ? new Date(c.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : 'Recent'}
-                      </Text>
-                    </View>
-
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        ui.caption,
-                        {
-                          color: c.unreadCount > 0 ? colors.ink : colors.muted,
-                          fontWeight: c.unreadCount > 0 ? '700' : '400',
-                        },
-                      ]}
-                    >
-                      {c.lastMessage || 'New inquiry received'}
+                <View style={{ flex: 1 }}>
+                  <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                    <Text style={ui.heading}>{c.customerName || 'Customer'}</Text>
+                    <Text style={ui.caption}>
+                      {c.lastMessageTime
+                        ? new Date(c.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'Recent'}
                     </Text>
-
-                    <View style={[ui.row, { marginTop: 4, gap: 6 }]}>
-                      <Badge label={c.channel || 'Web'} accent={(c.channel || '').toLowerCase() === 'whatsapp'} />
-                      {c.aiPaused ? <Badge label="With Team" danger /> : <Badge label="AI Active" success />}
-                    </View>
                   </View>
 
-                  {c.unreadCount > 0 ? (
-                    <View style={styles.unreadCircle}>
-                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{c.unreadCount}</Text>
-                    </View>
-                  ) : (
-                    <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
-                  )}
-                </Pressable>
-              ))}
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      ui.caption,
+                      {
+                        color: c.unreadCount > 0 ? colors.ink : colors.muted,
+                        fontWeight: c.unreadCount > 0 ? '700' : '400',
+                      },
+                    ]}
+                  >
+                    {c.lastMessage || 'New inquiry received'}
+                  </Text>
+
+                  <View style={[ui.row, { marginTop: 4, gap: 6 }]}>
+                    <Badge label={c.channel || 'Web'} accent={(c.channel || '').toLowerCase() === 'whatsapp'} />
+                    {c.aiPaused ? <Badge label="With Team" danger /> : <Badge label="AI Active" success />}
+                  </View>
+                </View>
+
+                {c.unreadCount > 0 ? (
+                  <View style={styles.unreadCircle}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{c.unreadCount}</Text>
+                  </View>
+                ) : (
+                  <MaterialIcons name="chevron-right" size={20} color={colors.muted} />
+                )}
+              </Pressable>
             </Card>
           )}
-        </>
+        />
       )}
 
       {activeTab === 'engage' && (

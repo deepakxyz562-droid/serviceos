@@ -107,7 +107,7 @@ export async function resolveWorkspaceData(
         },
       },
     });
-    if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    if (!tenant) return null;
     const settings = parse(tenant.settingsJson);
     const locationBilling = await resolveInstallCountryAndBilling({
       request: request ?? null,

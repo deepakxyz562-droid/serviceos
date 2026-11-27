@@ -79,51 +79,45 @@ export function WeeklyScoreLineChart({
           </View>
         ))}
 
-        {/* Connecting line and Day Nodes across the bottom */}
+        {/* Day nodes positioned vertically by actual score (0..100%) */}
         <View
           style={{
             position: 'absolute',
             left: 42,
             right: 8,
+            top: 4,
             bottom: 4,
             flexDirection: 'row',
-            alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          {/* Continuous blue line */}
-          <View
-            style={{
-              position: 'absolute',
-              left: 4,
-              right: 4,
-              height: 2.5,
-              backgroundColor: '#2563EB',
-              top: 6,
-            }}
-          />
-
-          {scoresByDay.map(({ day, score }) => (
-            <View key={day} style={{ alignItems: 'center', zIndex: 2 }}>
-              <View
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: 7,
-                  backgroundColor: '#2563EB',
-                  borderWidth: 2.5,
-                  borderColor: '#FFFFFF',
-                  shadowColor: '#2563EB',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 2,
-                }}
-              />
-              <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#64748B', marginTop: 6 }}>
-                {day}
-              </Text>
-            </View>
-          ))}
+          {scoresByDay.map(({ day, score }) => {
+            const clamped = Math.max(0, Math.min(100, score));
+            const dotBottom = 20 + Math.round((clamped / 100) * Math.max(20, chartHeight - 38));
+            return (
+              <View key={day} style={{ alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: dotBottom,
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    backgroundColor: clamped > 0 ? '#2563EB' : '#CBD5E1',
+                    borderWidth: 2.5,
+                    borderColor: '#FFFFFF',
+                    shadowColor: '#2563EB',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 2,
+                  }}
+                />
+                <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#64748B' }}>
+                  {day}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </View>
     </View>

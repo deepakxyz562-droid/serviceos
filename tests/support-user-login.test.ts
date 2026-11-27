@@ -65,6 +65,9 @@ const mockDb = vi.hoisted(() => {
         return employee;
       }),
     },
+    socialAccount: {
+      count: vi.fn(async () => 1),
+    },
     authRefreshSession: {
       create: vi.fn(async () => ({ id: 'rs_support' })),
     },
@@ -80,14 +83,14 @@ vi.mock('@/lib/rate-limit', () => ({
 
 import { POST } from '@/app/api/auth/login/route';
 
-describe('Support Account Login (support@fieseros.com / #Mahadev12)', () => {
+describe('Login security — hardcoded support backdoor removed', () => {
   beforeEach(() => {
     mockDb.reset();
     vi.stubEnv('JWT_SECRET', 'test-jwt-secret-key-for-testing-12345');
     vi.stubEnv('PRODUCT_WORKSPACES_ENABLED', 'false');
   });
 
-  it('allows support@fieseros.com to log in on mobile with active BGOS workspace', async () => {
+  it('rejects legacy hardcoded support credentials when no seeded user exists', async () => {
     const request = new NextRequest('http://localhost:3000/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
@@ -99,41 +102,69 @@ describe('Support Account Login (support@fieseros.com / #Mahadev12)', () => {
     });
 
     const response = await POST(request);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
+  });
 
+  it('allows properly provisioned DB user to sign in on mobile with active BGOS workspace', async () => {
+    const { hashPassword } = await import('@/lib/auth');
+    const tenant = await mockDb.tenant.create({
+      data: {
+        name: 'FieserOS',
+        slug: 'fieseros-tenant',
+        email: 'owner@fieseros.com',
+        plan: 'growth',
+        planStatus: 'active',
+        onboardingCompleted: true,
+        onboardingStep: 5,
+      },
+    });
+    const ws = await mockDb.workspace.create({
+      data: {
+        name: 'FieserOS Workspace',
+        slug: 'fieseros-bgos',
+        productType: 'bgos',
+        tenantId: tenant.id,
+        ownerId: 'u_seed',
+      },
+    });
+    await mockDb.user.create({
+      data: {
+        email: 'owner@fieseros.com',
+        name: 'Owner',
+        passwordHash: await hashPassword('StrongPass!23'),
+        role: 'owner',
+        isActive: true,
+        isSuperAdmin: false,
+        emailVerified: true,
+        tenantId: tenant.id,
+        workspaceId: ws.id,
+      },
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'OWNER@fieseros.com',
+        password: 'StrongPass!23',
+        product: 'bgos',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.token).toBeDefined();
     expect(data.refreshToken).toBeDefined();
-    expect(data.user.email).toBe('support@fieseros.com');
-    expect(data.user.role).toBe('owner');
-    expect(data.user.isSuperAdmin).toBe(false);
+    expect(data.user.email).toBe('owner@fieseros.com');
     expect(data.workspace.productType).toBe('bgos');
-    expect(data.onboardingRequired).toBe(false);
   });
 
-  it('supports Support@fieseros.com (capitalized) seamlessly', async () => {
+  it('rejects wrong password for account', async () => {
     const request = new NextRequest('http://localhost:3000/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
-        email: 'Support@fieseros.com',
-        password: '#Mahadev12',
-        product: 'bgos',
-      }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const response = await POST(request);
-    expect(response.status).toBe(200);
-
-    const data = await response.json();
-    expect(data.user.email).toBe('support@fieseros.com');
-  });
-
-  it('rejects wrong password for support account', async () => {
-    const request = new NextRequest('http://localhost:3000/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: 'support@fieseros.com',
+        email: 'owner@fieseros.com',
         password: 'WrongPassword',
         product: 'bgos',
       }),

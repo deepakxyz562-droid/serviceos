@@ -612,6 +612,42 @@ export async function activateBgosSubscription(input: ActivateBgosSubscriptionIn
     .findFirst({ where: { tenantId: input.tenantId }, orderBy: { createdAt: 'desc' } })
     .catch(() => null);
 
+  // Idempotency guard: if this provider payment/order capture was already logged and
+  // the tenant is already active on this plan, return cleanly without zeroing aiUsageCount
+  // or appending duplicate billing audit events.
+  if (
+    (input.providerPaymentId || input.providerOrderId) &&
+    typeof (db as any).billingEvent?.findFirst === 'function'
+  ) {
+    const dedupeWhere = input.providerPaymentId
+      ? {
+          tenantId: input.tenantId,
+          type: 'capture',
+          status: 'success',
+          paypalCaptureId: input.providerPaymentId,
+        }
+      : {
+          tenantId: input.tenantId,
+          type: 'capture',
+          status: 'success',
+          paypalOrderId: input.providerOrderId,
+        };
+    const priorCapture = await (db as any).billingEvent
+      .findFirst({ where: dedupeWhere, select: { id: true } })
+      .catch(() => null);
+    if (
+      priorCapture &&
+      existingSub &&
+      String(existingSub.status || '').toLowerCase() === 'active' &&
+      normalizeBgosPlanCode(existingSub.plan) === effectivePlan
+    ) {
+      return {
+        plan: effectivePlan,
+        endDate: existingSub.endDate instanceof Date ? existingSub.endDate : endDate,
+      };
+    }
+  }
+
   let subscriptionId: string | null = existingSub?.id ?? null;
 
   if (existingSub) {

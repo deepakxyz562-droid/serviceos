@@ -33,9 +33,41 @@ vi.mock('../bgosmobile/src/components/ui', () => ({
   },
 }));
 
+vi.mock('react-native', () => {
+  const clean = ({
+    style: _style,
+    contentContainerStyle: _ccs,
+    showsVerticalScrollIndicator: _svsi,
+    keyboardShouldPersistTaps: _kst,
+    numberOfLines: _nol,
+    ...rest
+  }: any) => rest;
+  return {
+    View: ({ children, ...props }: any) => React.createElement('div', clean(props), children),
+    Text: ({ children, ...props }: any) => React.createElement('span', clean(props), children),
+    ScrollView: ({ children, ...props }: any) => React.createElement('div', clean(props), children),
+    Pressable: ({ children, onPress, disabled, ...props }: any) =>
+      React.createElement('button', { type: 'button', onClick: disabled ? undefined : onPress, disabled, ...clean(props) }, children),
+    ActivityIndicator: (props: any) => React.createElement('div', { 'data-testid': 'activity-indicator', ...clean(props) }),
+    StyleSheet: { create: (s: any) => s, flatten: (s: any) => s },
+    Alert: { alert: vi.fn() },
+    Linking: { openURL: vi.fn() },
+    Platform: { OS: 'ios' },
+    AppState: { addEventListener: vi.fn(() => ({ remove: vi.fn() })) },
+  };
+});
+
+vi.mock('@expo/vector-icons', () => ({
+  MaterialIcons: (props: any) => React.createElement('span', { 'data-icon': props.name }),
+}));
+
 vi.mock('expo-web-browser', () => ({
   openBrowserAsync: vi.fn(),
   WebBrowserPresentationStyle: { PAGE_SHEET: 'pageSheet' },
+}));
+
+vi.mock('../bgosmobile/src/components/navigation/workspace-switcher-section', () => ({
+  WorkspaceSwitcherSection: () => React.createElement('div', { 'data-testid': 'ws-switcher' }),
 }));
 
 import { PaywallGate } from '../bgosmobile/src/components/billing/paywall-gate';
@@ -131,5 +163,34 @@ describe('bgosmobile PaywallGate verification & paywall state safety', () => {
     expect(screen.queryByTestId('protected-app')).toBeNull();
     expect(screen.getByText(/Complete Payment to Continue/i)).toBeTruthy();
     expect(screen.getByText(/Signed in as: deepakxyz7890@gmail\.com/i)).toBeTruthy();
+  });
+
+  it('switches plan pricing when toggling Yearly · Save 2 Months billing cycle', () => {
+    mocks.billingState.data = {
+      subscription: { plan: 'starter', status: 'expired' },
+      entitlement: {
+        entitled: false,
+        isTrial: false,
+        isPaid: false,
+        trialExpired: true,
+        trialDaysLeft: 0,
+        status: 'expired',
+        plan: 'starter',
+      },
+      defaultRegion: 'global',
+      gateways: { razorpay: true, creem: true },
+    };
+
+    render(
+      <PaywallGate>
+        <div data-testid="protected-app">Business Dashboard</div>
+      </PaywallGate>,
+    );
+
+    expect(screen.getByText('$29')).toBeTruthy();
+    expect(screen.getByText('$79')).toBeTruthy();
+    fireEvent.click(screen.getByText(/Yearly · Save 2 Months/i));
+    expect(screen.getByText('$290')).toBeTruthy();
+    expect(screen.getByText('$790')).toBeTruthy();
   });
 });

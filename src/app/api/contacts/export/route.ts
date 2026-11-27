@@ -5,8 +5,8 @@ import { getAuthUser } from '@/lib/auth';
 // GET /api/contacts/export - Export contacts
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const tag = searchParams.get('tag');
 
     const where: Record<string, unknown> = {
-      tenantId: user.tenantId || undefined,
+      tenantId: user.tenantId,
     };
 
     if (ids) {

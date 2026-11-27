@@ -213,21 +213,41 @@ CREATE INDEX IF NOT EXISTS "TriggerExecution_createdAt_idx" ON "TriggerExecution
 -- Row Level Security (RLS) Policies
 -- ============================================
 
--- Enable RLS on all new tables
-ALTER TABLE "CommunicationProvider" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Contact" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Form" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "FormResponse" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "WorkflowAutomation" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "TriggerExecution" ENABLE ROW LEVEL SECURITY;
+-- Enable RLS & harden privileges on base tables (skipping table-only RLS on views while still revoking public grants)
+DO $$
+DECLARE
+  t text;
+  rel_kind "char";
+  tables text[] := ARRAY[
+    'CommunicationProvider',
+    'Contact',
+    'Form',
+    'FormResponse',
+    'WorkflowAutomation',
+    'TriggerExecution'
+  ];
+BEGIN
+  FOREACH t IN ARRAY tables LOOP
+    SELECT c.relkind INTO rel_kind
+    FROM pg_catalog.pg_class c
+    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = t
+    LIMIT 1;
 
--- Service role can do everything (using service role key bypasses RLS, but add policy for clarity)
-CREATE POLICY "Service role full access on CommunicationProvider" ON "CommunicationProvider" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access on Contact" ON "Contact" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access on Form" ON "Form" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access on FormResponse" ON "FormResponse" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access on WorkflowAutomation" ON "WorkflowAutomation" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access on TriggerExecution" ON "TriggerExecution" FOR ALL USING (true) WITH CHECK (true);
+    IF rel_kind IN ('r', 'p', 'v', 'm', 'f') THEN
+      EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC, anon, authenticated', t);
+      EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
+      IF rel_kind IN ('r', 'p') THEN
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+        EXECUTE format('DROP POLICY IF EXISTS "Service role full access on %s" ON public.%I', t, t);
+        EXECUTE format(
+          'CREATE POLICY "Service role full access on %s" ON public.%I FOR ALL TO service_role USING (true) WITH CHECK (true)',
+          t, t
+        );
+      END IF;
+    END IF;
+  END LOOP;
+END $$;
 
 -- Auto-update updatedAt trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()

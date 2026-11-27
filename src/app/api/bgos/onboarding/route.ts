@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
     }
 
     const nextStep = typeof step === 'number' ? Math.min(Math.max(step, 1), 5) : tenant.onboardingStep;
-    const shouldComplete = complete === true || step === 5;
+    const shouldComplete = complete === true;
 
     await db.tenant.update({
       where: { id: user.tenantId },

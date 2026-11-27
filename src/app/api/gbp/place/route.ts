@@ -571,19 +571,7 @@ export async function GET(request: NextRequest) {
         .catch(() => {});
     }
 
-    let totalViews = searchImpressions + mapsImpressions;
-    if (totalViews === 0) {
-      const baseReviewMultiplier = resolvedTotalReviews > 0 ? resolvedTotalReviews : 8;
-      const sImp = baseReviewMultiplier * 18 + 45;
-      const mImp = baseReviewMultiplier * 26 + 75;
-      searchImpressions = sImp;
-      mapsImpressions = mImp;
-      totalViews = sImp + mImp;
-      callClicks = Math.max(3, Math.round(baseReviewMultiplier * 1.8));
-      directionRequests = Math.max(5, Math.round(baseReviewMultiplier * 2.4));
-      websiteClicks = Math.max(4, Math.round(baseReviewMultiplier * 1.4));
-      bookings = Math.max(1, Math.round(baseReviewMultiplier * 0.4));
-    }
+    const totalViews = searchImpressions + mapsImpressions;
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
@@ -592,38 +580,31 @@ export async function GET(request: NextRequest) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push(monthNames[d.getMonth()]);
     }
-    const monthlyWeights = [0.11, 0.13, 0.15, 0.18, 0.20, 0.23];
-    const trendViews = monthlyWeights.map((w) => Math.round(totalViews * w * 0.95 + 10));
-    const trendCalls = monthlyWeights.map((w) => Math.max(1, Math.round(callClicks * w * 1.1)));
-    const trendDirections = monthlyWeights.map((w) => Math.max(1, Math.round(directionRequests * w * 1.1)));
-    const trendWebsite = monthlyWeights.map((w) => Math.max(1, Math.round(websiteClicks * w * 1.1)));
-    const trendBookings = monthlyWeights.map((w) => Math.max(0, Math.round((bookings || 2) * w * 1.1)));
-    const trendInteractions = trendCalls.map((c, i) => c + trendDirections[i] + trendWebsite[i] + trendBookings[i]);
-
+    const zeroSeries = months.map(() => 0);
     const monthlyTrends = {
       months,
-      views: trendViews,
-      calls: trendCalls,
-      directions: trendDirections,
-      website: trendWebsite,
-      bookings: trendBookings,
-      interactions: trendInteractions,
+      views: zeroSeries,
+      calls: zeroSeries,
+      directions: zeroSeries,
+      website: zeroSeries,
+      bookings: zeroSeries,
+      interactions: zeroSeries,
     };
 
     const effectiveLast30Days = last30Days || {
-      views: Math.round(totalViews * 0.24),
-      totalViews: Math.round(totalViews * 0.24),
-      searches: Math.round(searchImpressions * 0.24),
-      searchImpressions: Math.round(searchImpressions * 0.24),
-      mapsImpressions: Math.round(mapsImpressions * 0.24),
+      views: 0,
+      totalViews: 0,
+      searches: 0,
+      searchImpressions: 0,
+      mapsImpressions: 0,
       calls: callClicks,
-      callClicks: callClicks,
+      callClicks,
       directions: directionRequests,
-      directionRequests: directionRequests,
+      directionRequests,
       website: websiteClicks,
-      websiteClicks: websiteClicks,
-      bookings: bookings || 1,
-      conversations: Math.max(1, Math.round(callClicks * 0.5)),
+      websiteClicks,
+      bookings,
+      conversations: 0,
     };
 
     const { score, missing } = computeCompleteness(

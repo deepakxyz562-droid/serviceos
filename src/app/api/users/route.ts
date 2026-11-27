@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser, hashPassword } from '@/lib/auth';
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
         ? `phone_${phoneDigits}@bgos.site`
         : `staff_${Date.now()}@bgos.site`);
 
-    // Check if user already exists by email or phone
+    // Check if user already exists within current tenant or globally (prevent cross-tenant hijack)
     let existing = await db.user.findUnique({ where: { email: effectiveEmail } });
     if (!existing && normalizedPhone && typeof (db.user as any).findFirst === 'function') {
       const pv = buildPhoneVariants(normalizedPhone);
@@ -130,6 +131,13 @@ export async function POST(request: NextRequest) {
       existing = await db.user.findFirst({
         where: { OR: orConditions },
       });
+    }
+
+    if (existing && existing.tenantId && existing.tenantId !== authUser.tenantId) {
+      return NextResponse.json(
+        { error: 'A user with this email or phone already belongs to another workspace.' },
+        { status: 409 },
+      );
     }
 
     const tenant = await db.tenant.findUnique({
@@ -145,8 +153,8 @@ export async function POST(request: NextRequest) {
       ? role
       : 'staff';
 
-    // Generate a temporary password (10 characters: alphanumeric)
-    const tempPassword = Math.random().toString(36).slice(-5) + Math.random().toString(36).slice(-5);
+    // Generate a cryptographically secure temporary password
+    const tempPassword = randomBytes(9).toString('base64url');
     const passwordHash = await hashPassword(tempPassword);
 
     let user: any;

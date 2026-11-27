@@ -62,7 +62,6 @@ export async function GET(request: NextRequest) {
         OR: [
           { tenantId: user.tenantId },
           { tenantId: null, workspaceId: user.workspaceId || undefined },
-          { tenantId: 'preview' },
         ],
       });
       if (searchParams.get('customerId')) {

@@ -4,10 +4,8 @@ import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
-import { usePendingReplies } from '../../src/hooks/use-pending-replies';
 import { ProtectedRoute } from '../../src/components/navigation/protected-route';
 import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banner';
-import { useAuthStore } from '../../src/stores/auth-store';
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar (strictly 5 visible tabs;
@@ -28,8 +26,6 @@ const visible = [
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const pendingReplies = usePendingReplies(60000);
-  const tenantId = useAuthStore((s) => s.user?.tenantId || 'default');
 
   const tabHeight = Platform.select({
     ios: insets.bottom > 0 ? 60 + insets.bottom : 64,
@@ -39,7 +35,7 @@ export default function TabLayout() {
 
   return (
     <ProtectedRoute>
-      <View key={tenantId} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
         headerShown: false,

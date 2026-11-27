@@ -19,7 +19,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Action, Card, ErrorNotice, Field, Loading, Screen, colors, ui } from '../src/components/ui';
 import { useAuthStore } from '../src/stores/auth-store';
 import { apiRequest } from '../src/lib/api';
-import { getToken } from '../src/lib/auth';
+import { getMobileHandoffTicket } from '../src/lib/handoff';
 import { WEB_URL } from '../src/lib/constants';
 import { gbpColors, StarRow } from '../src/components/gbp/bits';
 
@@ -415,32 +415,27 @@ export default function SetupScreen() {
     }
   }, [localParams.error, localParams.google, handleOAuthReturnUrl]);
 
-  // Google Connect OAuth
+  // Google Connect OAuth (uses short-lived single-use handoff ticket)
   async function handleConnectGoogle() {
     setConnectingGoogle(true);
     setError(null);
     const returnUrl = 'bgos://gbp-callback';
+    const ticket = await getMobileHandoffTicket();
+    const ticketSuffix = ticket ? `&ticket=${encodeURIComponent(ticket)}` : '';
+    const buildConnectUrl = () =>
+      `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=setup` +
+      `&redirectUri=${encodeURIComponent(returnUrl)}` +
+      `&originHost=${encodeURIComponent(WEB_URL)}` +
+      ticketSuffix;
     try {
-      const token = await getToken();
-      const url =
-        `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=setup` +
-        `&redirectUri=${encodeURIComponent(returnUrl)}` +
-        `&originHost=${encodeURIComponent(WEB_URL)}` +
-        (token ? `&auth=${encodeURIComponent(token)}` : '');
-
+      const url = buildConnectUrl();
       const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
       if (result.type === 'success' && result.url) {
         handleOAuthReturnUrl(result.url);
       }
     } catch {
       try {
-        const token = await getToken();
-        const url =
-          `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=setup` +
-          `&redirectUri=${encodeURIComponent(returnUrl)}` +
-          `&originHost=${encodeURIComponent(WEB_URL)}` +
-          (token ? `&auth=${encodeURIComponent(token)}` : '');
-        await Linking.openURL(url);
+        await Linking.openURL(buildConnectUrl());
       } catch {
         setError('Could not open Google connect. Please connect from BGOS Web.');
       }
@@ -471,6 +466,7 @@ export default function SetupScreen() {
           offerings: offeringsList,
           aboutText,
           keywords: selectedKeywords,
+          attributes: selectedAttributes,
           hours: hoursState,
           automations: {
             autoReplyReviews,
@@ -479,8 +475,6 @@ export default function SetupScreen() {
             enableChatbot,
           },
         },
-      }).catch((err) => {
-        console.warn('[SetupScreen] saveProgress API error (tolerated):', err);
       });
 
       if (complete) {
@@ -526,26 +520,37 @@ export default function SetupScreen() {
       setUploadedPdfName(file.name);
       setUploadedPdfSize(file.size ? `${(file.size / 1024).toFixed(0)} KB` : null);
 
-      // Smart service extraction from document context
-      const ind = (locationCategory || data?.industry || '').toLowerCase();
-      let extracted: string[] = [];
-      if (ind.includes('cafe') || ind.includes('food') || ind.includes('restaurant')) {
-        extracted = ['Specialty Espresso', 'Signature Sandwiches', 'Handcrafted Pastries', 'Cold Pressed Juices'];
-      } else if (ind.includes('plumb') || ind.includes('pipe')) {
-        extracted = ['Emergency Leak Repair', 'Drain Cleaning', 'Water Heater Replacement', 'Pipe Inspection'];
-      } else if (ind.includes('dental') || ind.includes('health') || ind.includes('clinic')) {
-        extracted = ['Comprehensive Oral Exam', 'Teeth Cleaning & Polishing', 'Root Canal Therapy', 'Orthodontic Consultation'];
-      } else if (ind.includes('salon') || ind.includes('spa') || ind.includes('beauty')) {
-        extracted = ['Hair Styling & Treatment', 'Deep Cleansing Facial', 'Hydrating Therapy', 'Deluxe Manicure'];
-      } else {
-        extracted = ['Standard Consultation', 'Premium Service Package', 'Emergency Repair Dispatch', 'Annual Maintenance Plan'];
+      const categoryQuery = (locationCategory || data?.industry || '').trim();
+      if (!categoryQuery) {
+        Alert.alert(
+          'Brochure Attached',
+          `Attached "${file.name}". Select a business category first or add services manually below.`,
+        );
+        return;
       }
 
-      setOfferingsList((prev) => Array.from(new Set([...prev, ...extracted])));
-      Alert.alert(
-        'Brochure Processed',
-        `Successfully extracted services from ${file.name}! You can review and edit them below.`
-      );
+      const suggestRes = await apiRequest<{ services?: string[] }>('/api/gbp/services/suggest', {
+        method: 'POST',
+        body: {
+          category: categoryQuery,
+          businessName: locationName || data?.businessName || undefined,
+          city: locationAddress || undefined,
+        },
+      }).catch(() => ({ services: [] as string[] }));
+
+      const suggested = Array.isArray(suggestRes?.services) ? suggestRes.services.slice(0, 8) : [];
+      if (suggested.length > 0) {
+        setOfferingsList((prev) => Array.from(new Set([...prev, ...suggested])));
+        Alert.alert(
+          'Brochure Attached & Services Suggested',
+          `Attached "${file.name}" and added AI-suggested offerings for ${categoryQuery}. Review or edit them below.`,
+        );
+      } else {
+        Alert.alert(
+          'Brochure Attached',
+          `Attached "${file.name}". Automatic PDF parsing runs when saved — review or add your services below.`,
+        );
+      }
     } catch (err) {
       console.warn('[setup] DocumentPicker error:', err);
       Alert.alert('Upload Error', 'Could not open document picker. Please try again.');
@@ -1213,18 +1218,13 @@ export default function SetupScreen() {
                   placeholderTextColor={colors.muted}
                 />
                 <Pressable
-                  onPress={() => {
-                    const bName = data?.businessName || 'Our business';
-                    const offStr = offeringsList.slice(0, 3).join(', ') || 'quality services';
-                    setAboutText(
-                      `${bName} offers ${offStr} with a strong commitment to local customer satisfaction, verified service excellence, and dependable results.`
-                    );
-                  }}
+                  onPress={handleAiAutoFillProfile}
+                  disabled={aiFilling}
                   style={styles.aiGenerateButton}
                 >
                   <MaterialIcons name="auto-awesome" size={14} color={colors.aiPurple} />
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.aiPurple }}>
-                    Auto-Generate Description with AI
+                    {aiFilling ? 'Generating with AI...' : 'Auto-Generate Description with AI'}
                   </Text>
                 </Pressable>
               </View>
