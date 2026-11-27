@@ -411,6 +411,8 @@ export function InboxView({ embedded = false }: { embedded?: boolean }) {
         {selected && (
           <Thread
             conversation={selected}
+            links={workspace.data?.links}
+            businessName={workspace.data?.name}
             close={() => {
               setSelected(null);
               inbox.refresh();
@@ -422,7 +424,24 @@ export function InboxView({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function Thread({ conversation, close }: { conversation: BgosConversation; close: () => void }) {
+function resolveWorkspaceLink(raw?: string | null): string | null {
+  if (!raw || !raw.trim()) return null;
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${WEB_URL.replace(/\/$/, '')}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
+}
+
+function Thread({
+  conversation,
+  links,
+  businessName,
+  close,
+}: {
+  conversation: BgosConversation;
+  links?: BgosWorkspace['links'];
+  businessName?: string;
+  close: () => void;
+}) {
   const thread = useResource<BgosMessage[]>(`/api/omnichannel/conversations/${conversation.id}/messages`, 15000);
   const [paused, setPaused] = useState(conversation.aiPaused);
   const [mode, setMode] = useState<'reply' | 'ai_reply'>('reply');
@@ -546,22 +565,52 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
           )}
         </View>
       </ScrollView>
-      {/* Quick Action Chips (Screenshot 1 & 3 Parity) */}
+      {/* Quick Action Chips (including Brochure & Booking Links) */}
       <View style={[ui.row, { flexWrap: 'wrap', gap: 6, marginVertical: 6 }]}>
-        {['Get Quote', 'Book Appointment', 'Ask a Question'].map((chip) => (
+        {(['Get Quote', 'Book Appointment', 'Ask a Question', 'Send Brochure', 'Booking Link'] as const).map((chip) => (
           <Pressable
             key={chip}
-            onPress={() => setText(chip === 'Get Quote' ? 'Could you share the service you need so we can prepare a quote?' : chip === 'Book Appointment' ? 'What date and time would you prefer for your appointment?' : 'How can we help you today?')}
+            onPress={() => {
+              const name = conversation.customerName || 'there';
+              const biz = businessName || 'our team';
+              if (chip === 'Send Brochure') {
+                const profileUrl = resolveWorkspaceLink(links?.profile) || resolveWorkspaceLink(links?.booking);
+                if (!profileUrl) {
+                  Alert.alert('Brochure Link Not Ready', 'Publish your Digital Business Page or Booking link in Tools first.');
+                  return;
+                }
+                setText(`Hi ${name}! Here is ${biz}'s service brochure, pricing & details: ${profileUrl}`);
+                return;
+              }
+              if (chip === 'Booking Link') {
+                const bookingUrl = resolveWorkspaceLink(links?.booking) || resolveWorkspaceLink(links?.profile);
+                if (!bookingUrl) {
+                  Alert.alert('Booking Link Not Ready', 'Set up your Online Booking Page in Tools first.');
+                  return;
+                }
+                setText(`Hi ${name}! You can view available time slots & book instantly here: ${bookingUrl}`);
+                return;
+              }
+              setText(
+                chip === 'Get Quote'
+                  ? 'Could you share the service you need so we can prepare a quote?'
+                  : chip === 'Book Appointment'
+                    ? 'What date and time would you prefer for your appointment?'
+                    : 'How can we help you today?',
+              );
+            }}
             style={{
               paddingHorizontal: 10,
               paddingVertical: 5,
               borderRadius: 14,
-              backgroundColor: colors.soft,
+              backgroundColor: chip === 'Send Brochure' || chip === 'Booking Link' ? '#ECFDF5' : colors.soft,
               borderWidth: 1,
-              borderColor: colors.line,
+              borderColor: chip === 'Send Brochure' || chip === 'Booking Link' ? '#86EFAC' : colors.line,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>{chip}</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: chip === 'Send Brochure' || chip === 'Booking Link' ? '#047857' : colors.brand }}>
+              {chip}
+            </Text>
           </Pressable>
         ))}
       </View>

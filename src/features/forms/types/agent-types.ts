@@ -336,6 +336,13 @@ export interface FormAgentData {
       chimeSound: boolean;
       showPoweredBy: boolean;
     };
+
+    // 9. WhatsApp Quiet-Chat Auto Follow-Up & Language Mode
+    followUp?: {
+      enabled: boolean;
+      delayMinutes: number;
+      languageMode: 'auto' | 'english' | 'hinglish';
+    };
   };
 
   // ── Visual Designer & CSS Tokens (Screenshot 2) ──

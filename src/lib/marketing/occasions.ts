@@ -120,6 +120,8 @@ export async function generateOccasionCampaignDraft(params: {
   city: string;
   actorId?: string;
   generateImage?: boolean;
+  tone?: 'english' | 'hinglish';
+  customOffer?: string;
 }): Promise<{
   occasion: MarketingOccasion;
   campaignTitle: string;
@@ -131,16 +133,23 @@ export async function generateOccasionCampaignDraft(params: {
   targetAudience: string;
 }> {
   const occasion = ANNUAL_OCCASIONS.find((o) => o.id === params.occasionId) || ANNUAL_OCCASIONS[0];
+  const tone = params.tone === 'hinglish' ? 'hinglish' : 'english';
+  const offerAngle = params.customOffer?.trim() || occasion.suggestedDiscount;
+
+  const toneDirective =
+    tone === 'hinglish'
+      ? `Write the WhatsApp Message in warm, natural Hinglish (conversational Hindi + English in Latin script, e.g. "Hi {FirstName}! 👋 Long weekend aa raha hai — aapke liye special ${offerAngle} hai!").`
+      : `Write the WhatsApp Message in clear, warm, conversational English.`;
 
   const prompt = `You are an elite WhatsApp and direct-response marketing copywriter.
 Create a high-converting promotional campaign for:
 Business: "${params.businessName}" (${params.industry} in ${params.city})
 Occasion Theme: "${occasion.title}" - ${occasion.tagline}
-Offer / Angle: ${occasion.suggestedDiscount}
+Offer / Angle: ${offerAngle}
 Call to Action: "${occasion.suggestedCta}"
 
 Requirements:
-1. WhatsApp Message: 2-3 short, punchy paragraphs with friendly emojis. Include a greeting like "Hi {FirstName}!", state the seasonal occasion, mention the exclusive offer, and ask a direct low-friction question (e.g. "Would you like us to reserve a priority slot for you this week?").
+1. WhatsApp Message: 2-3 short, punchy paragraphs with friendly emojis. Include a greeting like "Hi {FirstName}!", state the seasonal occasion, mention the exclusive offer, and ask a direct low-friction question (e.g. "Would you like us to reserve a priority slot for you this week?"). ${toneDirective}
 2. Email Subject: Catchy, curiosity-inducing subject line under 60 characters.
 3. Poster Prompt: A clean, commercial advertising photography prompt for Cloudflare Flux-1 graphic generation.
 
@@ -179,7 +188,9 @@ Output strictly valid JSON with keys:
   const campaignTitle = draftResult.campaignTitle || `${occasion.title} - Special Offer`;
   const whatsappMessage =
     draftResult.whatsappMessage ||
-    `Hi {FirstName}! 👋\n\nStill planning your next visit to ${params.businessName}? With ${occasion.title} coming up, we're giving our top clients an exclusive ${occasion.suggestedDiscount}.\n\nReply directly to this chat and our AI assistant will reserve your preferred time slot instantly! 🌟`;
+    (tone === 'hinglish'
+      ? `Hi {FirstName}! 👋\n\n${occasion.title} aa raha hai! ${params.businessName} (${params.city}) mein humare valued clients ke liye exclusive ${offerAngle} available hai.\n\nReply karein aur main aapka priority slot abhi book kar deta hoon! 🌟`
+      : `Hi {FirstName}! 👋\n\nStill planning your next visit to ${params.businessName}? With ${occasion.title} coming up, we're giving our top clients an exclusive ${offerAngle}.\n\nReply directly to this chat and our AI assistant will reserve your preferred time slot instantly! 🌟`);
 
   const emailSubject = draftResult.emailSubject || `${occasion.title}: Special Offer from ${params.businessName}`;
   const posterPrompt = draftResult.posterPrompt || occasion.defaultPrompt;

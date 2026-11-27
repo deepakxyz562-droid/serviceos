@@ -103,6 +103,43 @@ const WHATSAPP_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       { type: 'whatsapp', name: 'Booking Confirmation', subtype: 'send_message', config: { template: 'booking_confirmation', recipientRole: 'customer' } },
     ],
   },
+  {
+    id: 'lead-instant-welcome',
+    name: 'New Lead Instant Welcome',
+    description: 'Greet new enquiries immediately on WhatsApp with services & booking options',
+    category: 'customer',
+    icon: 'MessageCircle',
+    triggerEvent: 'lead_created',
+    nodes: [
+      { type: 'trigger', name: 'New Enquiry Received', subtype: 'lead_created', config: {} },
+      { type: 'whatsapp', name: 'Send Welcome & Brochure CTA', subtype: 'send_message', config: { template: 'lead_welcome', recipientRole: 'customer' } },
+    ],
+  },
+  {
+    id: 'quote-booking-reminder',
+    name: 'Quote & Booking Reminder',
+    description: 'Follow up on awaiting confirmations with customization options & slot reminders',
+    category: 'customer',
+    icon: 'CalendarCheck',
+    triggerEvent: 'appointment_reminder',
+    nodes: [
+      { type: 'trigger', name: 'Awaiting Confirmation', subtype: 'appointment_reminder', config: {} },
+      { type: 'delay', name: 'Wait 4 Hours', subtype: 'delay', config: { duration: 14400000 } },
+      { type: 'whatsapp', name: 'Booking Reminder', subtype: 'send_message', config: { template: 'booking_reminder', recipientRole: 'customer' } },
+    ],
+  },
+  {
+    id: 'customer-comeback-60d',
+    name: 'Customer Comeback (60-Day Winback)',
+    description: 'Re-engage past customers after 60 days with seasonal offers & priority slots',
+    category: 'customer',
+    icon: 'Star',
+    triggerEvent: 'customer_inactive_60d',
+    nodes: [
+      { type: 'trigger', name: '60 Days Inactive', subtype: 'customer_inactive_60d', config: {} },
+      { type: 'whatsapp', name: 'Comeback Offer', subtype: 'send_message', config: { template: 'customer_comeback', recipientRole: 'customer' } },
+    ],
+  },
 ];
 
 // ==========================================
@@ -228,8 +265,17 @@ function templateNodesToWorkflow(template: WorkflowTemplate) {
 function mapTemplateTypeToNodeType(type: string, subtype: string): string {
   switch (type) {
     case 'trigger':
-      if (subtype === 'job_status_changed') return 'webhookTrigger';
-      if (subtype === 'job_created') return 'webhookTrigger';
+      if (
+        [
+          'job_status_changed',
+          'job_created',
+          'lead_created',
+          'appointment_reminder',
+          'customer_inactive_60d',
+        ].includes(subtype)
+      ) {
+        return 'webhookTrigger';
+      }
       return 'manualTrigger';
     case 'whatsapp':
       return 'whatsappNode';
@@ -254,10 +300,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check which templates are already installed as workflows
+    // Check which templates are already installed as workflows (scoped to user's workspace when present)
     const existingWorkflows = await db.workflow.findMany({
       where: {
         name: { in: WHATSAPP_WORKFLOW_TEMPLATES.map((t) => t.name) },
+        ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
       },
       select: { name: true, id: true, active: true },
     });
@@ -303,7 +350,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { templateId, workspaceId, credentialId } = body;
+    const { templateId, workspaceId, credentialId, active } = body;
+    const resolvedWorkspaceId = workspaceId || user.workspaceId || null;
 
     if (!templateId) {
       return NextResponse.json({ error: 'templateId is required' }, { status: 400 });
@@ -314,9 +362,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    // Check if already installed
+    // Check if already installed in this workspace
     const existing = await db.workflow.findFirst({
-      where: { name: template.name },
+      where: {
+        name: template.name,
+        ...(resolvedWorkspaceId ? { workspaceId: resolvedWorkspaceId } : {}),
+      },
     });
     if (existing) {
       return NextResponse.json(
@@ -350,8 +401,8 @@ export async function POST(request: NextRequest) {
           category: template.category,
         }),
         tags: JSON.stringify(['whatsapp', 'notification', template.category]),
-        active: false,
-        workspaceId: workspaceId || null,
+        active: active === true,
+        workspaceId: resolvedWorkspaceId,
         createdById: null,
       },
     });

@@ -273,10 +273,22 @@ export default function ToolsScreen() {
           onPress={() => router.push('/automations')}
         />
         <MenuRow
+          title="WhatsApp Repeat Campaigns"
+          detail="Occasion offers, Hinglish drafts & customer comeback blasts"
+          icon="campaign"
+          onPress={() => router.push('/whatsapp-campaigns' as any)}
+        />
+        <MenuRow
           title="AI Search & SEO Audit"
           detail="Target keywords, Website audit, Maps Geo-Grid & AI visibility"
           icon="query-stats"
           onPress={() => router.push('/seo-growth')}
+        />
+        <MenuRow
+          title="Citations & Local Directories"
+          detail="NAP kit, Justdial, Sulekha, Apple Maps & Bing checklist"
+          icon="verified-user"
+          onPress={() => router.push('/citations' as any)}
         />
         <MenuRow
           title="4-Tier Growth Report"

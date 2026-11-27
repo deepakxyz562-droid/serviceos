@@ -1403,14 +1403,14 @@ export default function HomeScreen() {
             flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             gap: 10,
             backgroundColor: '#FFFFFF',
             borderWidth: 1,
             borderColor: '#BBF7D0',
             borderRadius: 14,
             paddingVertical: 12,
-            paddingHorizontal: 12,
+            paddingHorizontal: 14,
             shadowColor: '#009F50',
             shadowOffset: { width: 0, height: 1.5 },
             shadowOpacity: 0.07,
@@ -1431,11 +1431,11 @@ export default function HomeScreen() {
           >
             <MaterialIcons name="person-add" size={19} color="#009F50" />
           </View>
-          <View>
-            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
               Add Lead
             </Text>
-            <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#009F50' }}>
+            <Text numberOfLines={1} style={{ fontSize: 10.5, fontWeight: '600', color: '#009F50' }}>
               New inquiry
             </Text>
           </View>
@@ -1449,14 +1449,14 @@ export default function HomeScreen() {
             flex: 1,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
             gap: 10,
             backgroundColor: '#FFFFFF',
             borderWidth: 1,
             borderColor: '#BFDBFE',
             borderRadius: 14,
             paddingVertical: 12,
-            paddingHorizontal: 12,
+            paddingHorizontal: 14,
             shadowColor: '#2563EB',
             shadowOffset: { width: 0, height: 1.5 },
             shadowOpacity: 0.07,
@@ -1477,11 +1477,11 @@ export default function HomeScreen() {
           >
             <MaterialIcons name="event" size={19} color="#2563EB" />
           </View>
-          <View>
-            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
               Book Appt
             </Text>
-            <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#2563EB' }}>
+            <Text numberOfLines={1} style={{ fontSize: 10.5, fontWeight: '600', color: '#2563EB' }}>
               Schedule slot
             </Text>
           </View>

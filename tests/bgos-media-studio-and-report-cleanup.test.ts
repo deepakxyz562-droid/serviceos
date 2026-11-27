@@ -53,4 +53,19 @@ describe('Report Rank by Location, Media & AI Creative Studio UI Cleanups & Spee
     // Bottom center Posts icon is clean post-add rather than sparkle
     expect(tabsLayout).toContain("['marketing', 'Posts', 'post-add']");
   });
+
+  it('uses keyless Esri/OSM street tiles in GeoGridMap and left-aligns Home Add Lead & Book Appt cards', () => {
+    const geoMap = readRel('bgosmobile/src/components/gbp/geo-grid-map.tsx');
+    const homeTabs = readRel('bgosmobile/app/(tabs)/index.tsx');
+
+    expect(geoMap).not.toContain('basemaps.cartocdn.com');
+    expect(geoMap).toContain('server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map');
+    expect(geoMap).toContain('tile.openstreetmap.org');
+
+    const leadIdx = homeTabs.indexOf('accessibilityLabel="Add New Lead"');
+    expect(leadIdx).toBeGreaterThan(-1);
+    const leadSnippet = homeTabs.slice(leadIdx, leadIdx + 650);
+    expect(leadSnippet).toContain("justifyContent: 'flex-start'");
+    expect(leadSnippet).not.toContain("justifyContent: 'center'");
+  });
 });

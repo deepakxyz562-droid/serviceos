@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Share, Switch, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Action, Card, Empty, Field, colors, ui } from '../ui';
@@ -517,6 +517,112 @@ export function PerformancePanel({
           <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A' }}>GBP Performance</Text>
           <MaterialIcons name="info-outline" size={17} color="#94A3B8" />
         </View>
+
+        {/* Growth Proof Card: Earliest vs Latest Month + 3 AI Agents Coverage */}
+        {(() => {
+          const callsSeries = analytics?.sixMonthTrends?.calls || [];
+          const viewsSeries = analytics?.sixMonthTrends?.views || [];
+          const monthLabels = analytics?.sixMonthTrends?.months || [];
+          const hasCallsTrend = callsSeries.length >= 2 && (callsSeries[0] > 0 || callsSeries[callsSeries.length - 1] > 0);
+          const hasViewsTrend = viewsSeries.length >= 2 && (viewsSeries[0] > 0 || viewsSeries[viewsSeries.length - 1] > 0);
+          const startCalls = hasCallsTrend ? callsSeries[0] : null;
+          const endCalls = hasCallsTrend ? callsSeries[callsSeries.length - 1] : null;
+          const startViews = hasViewsTrend ? viewsSeries[0] : null;
+          const endViews = hasViewsTrend ? viewsSeries[viewsSeries.length - 1] : null;
+          const primaryMetricLabel = hasCallsTrend ? 'Monthly Google Calls' : hasViewsTrend ? 'Monthly Profile Views' : 'Total GBP Reach';
+          const fromVal = hasCallsTrend ? startCalls! : hasViewsTrend ? startViews! : 0;
+          const toVal = hasCallsTrend ? endCalls! : hasViewsTrend ? endViews! : (metrics?.totalViews ?? 0);
+          const liftPct = fromVal > 0 ? Math.round(((toVal - fromVal) / fromVal) * 100) : null;
+          const periodSpan =
+            monthLabels.length >= 2
+              ? `${monthLabels[0]} → ${monthLabels[monthLabels.length - 1]}`
+              : 'Latest synced period';
+
+          return (
+            <View
+              style={{
+                backgroundColor: '#0F172A',
+                borderRadius: 16,
+                padding: 15,
+                gap: 10,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ backgroundColor: '#16A34A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#FFFFFF' }}>AI GROWTH PROOF</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8' }}>{periodSpan}</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    const summaryText =
+                      hasCallsTrend || hasViewsTrend
+                        ? `${primaryMetricLabel}: ${fromVal.toLocaleString()} → ${toVal.toLocaleString()}${liftPct != null && liftPct > 0 ? ` (+${liftPct}%)` : ''} (${periodSpan}) · Powered by BGOS AI Growth Team`
+                        : `GBP Performance: ${(metrics?.totalViews ?? 0).toLocaleString()} views · ${(metrics?.callClicks ?? 0).toLocaleString()} calls · ${(metrics?.totalReviews ?? 0).toLocaleString()} reviews`;
+                    void Share.share({ message: summaryText });
+                  }}
+                  hitSlop={8}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <MaterialIcons name="share" size={14} color="#34D399" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#34D399' }}>Share</Text>
+                </Pressable>
+              </View>
+
+              {hasCallsTrend || hasViewsTrend ? (
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                  <View style={{ gap: 2 }}>
+                    <Text style={{ fontSize: 11.5, color: '#CBD5E1', fontWeight: '600' }}>{primaryMetricLabel}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#94A3B8' }}>{fromVal.toLocaleString()}</Text>
+                      <MaterialIcons name="arrow-forward" size={18} color="#34D399" />
+                      <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF' }}>{toVal.toLocaleString()}</Text>
+                    </View>
+                  </View>
+                  {liftPct != null ? (
+                    <View
+                      style={{
+                        backgroundColor: liftPct >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(248,113,113,0.2)',
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: liftPct >= 0 ? '#4ADE80' : '#FCA5A5' }}>
+                        {liftPct >= 0 ? `+${liftPct}%` : `${liftPct}%`}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={{ fontSize: 12.5, color: '#E2E8F0', fontWeight: '600' }}>
+                  {(metrics?.callClicks ?? 0).toLocaleString()} calls · {(metrics?.directionRequests ?? 0).toLocaleString()} directions · {(metrics?.totalReviews ?? 0).toLocaleString()} reviews tracked across your active GBP Agent.
+                </Text>
+              )}
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+                {['GBP Visibility Agent', 'WhatsApp Chat Agent', 'Repeat Marketing Agent'].map((tag) => (
+                  <View
+                    key={tag}
+                    style={{
+                      backgroundColor: 'rgba(255,255,255,0.08)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <MaterialIcons name="check-circle" size={12} color="#34D399" />
+                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#E2E8F0' }}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* 3 Top Stat Tiles (Views, Calls, Directions) */}
         <View style={{ flexDirection: 'row', gap: 10 }}>

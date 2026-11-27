@@ -211,6 +211,11 @@ export default function ManageGoogleProfileScreen() {
   const [savingChatToggle, setSavingChatToggle] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [hoursState, setHoursState] = useState<RegularHoursMap>(() => ({ ...DEFAULT_REGULAR_HOURS }));
+  const [areasModalOpen, setAreasModalOpen] = useState(false);
+  const [editAreasList, setEditAreasList] = useState<string[]>([]);
+  const [newAreaInput, setNewAreaInput] = useState('');
+  const [suggestingAreas, setSuggestingAreas] = useState(false);
+  const [savingAreas, setSavingAreas] = useState(false);
 
   const place = placeRes.data?.place;
   const isConnected = Boolean(placeRes.data?.isConnected);
@@ -345,6 +350,13 @@ export default function ManageGoogleProfileScreen() {
   const aiReplySalutation = place?.aiReplySalutation || placeRes.data?.tenantFallback?.aiReplySalutation || '';
   const additionalCategories = place?.additionalCategories || placeRes.data?.tenantFallback?.additionalCategories || [];
   const openingDate = place?.openingDate || placeRes.data?.tenantFallback?.openingDate || '';
+  const serviceAreas = useMemo(
+    () =>
+      (Array.isArray(place?.serviceAreas) && place.serviceAreas.length > 0
+        ? place.serviceAreas
+        : placeRes.data?.tenantFallback?.serviceAreas) || [],
+    [place?.serviceAreas, placeRes.data?.tenantFallback?.serviceAreas],
+  );
   const profilePhotos = photosRes.data?.photos || [];
   const photosCount = profilePhotos.length;
 
@@ -587,6 +599,59 @@ export default function ManageGoogleProfileScreen() {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update salutation');
     } finally {
       setSavingSalutation(false);
+    }
+  }
+
+  function openAreasEditor() {
+    setEditAreasList(serviceAreas.slice(0, 20));
+    setNewAreaInput('');
+    setAreasModalOpen(true);
+  }
+
+  function handleAddArea() {
+    const clean = newAreaInput.trim();
+    if (!clean) return;
+    if (editAreasList.length >= 20) {
+      Alert.alert('Limit Reached', 'Google Business Profile recommends up to 20 local service areas.');
+      return;
+    }
+    if (!editAreasList.some((a) => a.toLowerCase() === clean.toLowerCase())) {
+      setEditAreasList((prev) => [...prev, clean]);
+    }
+    setNewAreaInput('');
+  }
+
+  async function handleSuggest20Areas() {
+    setSuggestingAreas(true);
+    try {
+      const res = await apiRequest<{ suggestedAreas?: string[] }>('/api/gbp/service-areas/suggest', {
+        method: 'POST',
+        body: { existingAreas: editAreasList },
+      });
+      if (Array.isArray(res?.suggestedAreas) && res.suggestedAreas.length > 0) {
+        setEditAreasList(res.suggestedAreas.slice(0, 20));
+      }
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not suggest local service areas');
+    } finally {
+      setSuggestingAreas(false);
+    }
+  }
+
+  async function handleSaveServiceAreas() {
+    setSavingAreas(true);
+    try {
+      await apiRequest('/api/gbp/place', {
+        method: 'PATCH',
+        body: { serviceAreas: editAreasList.slice(0, 20) },
+      });
+      await Promise.all([placeRes.refresh(), workspaceRes.refresh()]);
+      setAreasModalOpen(false);
+      Alert.alert('Saved', `Saved ${editAreasList.slice(0, 20).length} local service area(s).`);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save service areas');
+    } finally {
+      setSavingAreas(false);
     }
   }
 
@@ -1247,12 +1312,44 @@ export default function ManageGoogleProfileScreen() {
                 ) : null}
               </View>
 
-              {/* Service Area */}
-              <View style={{ gap: 4, paddingTop: 4 }}>
-                <Text style={styles.rowLabel}>Service area</Text>
-                <Text style={{ fontSize: 13, color: '#334155' }}>
-                  {city ? `${city} and surrounding local service areas` : 'Local service area'}
-                </Text>
+              {/* Service Area (Up to 20 Local Areas) */}
+              <View style={{ gap: 8, paddingTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.rowLabel}>Service areas ({serviceAreas.length}/20)</Text>
+                  <Pressable onPress={openAreasEditor} hitSlop={8}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#2563EB' }}>Edit Areas</Text>
+                  </Pressable>
+                </View>
+                {serviceAreas.length > 0 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {serviceAreas.slice(0, 8).map((area) => (
+                      <View
+                        key={area}
+                        style={{
+                          backgroundColor: '#ECFDF5',
+                          borderWidth: 1,
+                          borderColor: '#A7F3D0',
+                          borderRadius: 8,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#065F46' }}>{area}</Text>
+                      </View>
+                    ))}
+                    {serviceAreas.length > 8 ? (
+                      <Pressable onPress={openAreasEditor}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563EB', paddingVertical: 4 }}>
+                          +{serviceAreas.length - 8} more
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={{ fontSize: 13, color: '#334155' }}>
+                    {city ? `${city} (Tap Edit Areas to add up to 20 nearby localities)` : 'Tap Edit Areas to add 20 local service areas'}
+                  </Text>
+                )}
               </View>
             </Card>
           )}
@@ -2167,6 +2264,106 @@ export default function ManageGoogleProfileScreen() {
               label={savingSalutation ? 'Saving…' : 'Save Salutation'}
               disabled={savingSalutation}
               onPress={handleSaveSalutation}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: 20 Local Service Areas Editor ─────────────── */}
+      <Modal visible={areasModalOpen} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
+                Local Service Areas ({editAreasList.length}/20)
+              </Text>
+              <Pressable onPress={() => setAreasModalOpen(false)}>
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 17 }}>
+              Add up to 20 nearby neighborhoods, sectors, or suburbs around {city || 'your location'} to strengthen local Map Pack reach.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              <TextInput
+                value={newAreaInput}
+                onChangeText={setNewAreaInput}
+                onSubmitEditing={handleAddArea}
+                style={[ui.input, { flex: 1 }]}
+                placeholder="e.g. Indiranagar, Koramangala"
+              />
+              <Pressable
+                onPress={handleAddArea}
+                style={{
+                  backgroundColor: colors.ink,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>Add</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              disabled={suggestingAreas}
+              onPress={() => void handleSuggest20Areas()}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: '#ECFDF5',
+                borderWidth: 1,
+                borderColor: '#A7F3D0',
+                borderRadius: 10,
+                paddingVertical: 9,
+                marginBottom: 10,
+                opacity: suggestingAreas ? 0.6 : 1,
+              }}
+            >
+              {suggestingAreas ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <MaterialIcons name="auto-awesome" size={16} color={colors.brand} />
+              )}
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
+                {suggestingAreas ? 'Finding Nearby Areas…' : 'AI Suggest up to 20 Nearby Areas'}
+              </Text>
+            </Pressable>
+
+            <ScrollView style={{ maxHeight: 240, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {editAreasList.map((area) => (
+                  <Pressable
+                    key={area}
+                    onPress={() => setEditAreasList((prev) => prev.filter((a) => a !== area))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      borderRadius: 10,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{area}</Text>
+                    <MaterialIcons name="close" size={14} color="#64748B" />
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+
+            <Action
+              label={savingAreas ? 'Saving Areas…' : `Save Service Areas (${editAreasList.length}/20)`}
+              disabled={savingAreas}
+              onPress={() => void handleSaveServiceAreas()}
             />
           </View>
         </View>

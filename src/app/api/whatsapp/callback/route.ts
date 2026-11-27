@@ -625,7 +625,7 @@ async function handlePlainTextInbound(
           await sendWhatsAppMessage({
             tenantId,
             to: from,
-            body: result.response,
+            message: result.response,
           }).catch((err: any) =>
             console.warn('[WhatsApp Commerce] send failed:', err.message)
           );
@@ -706,7 +706,14 @@ async function handlePlainTextInbound(
             agentConfig.systemPrompt ||
             `You are ${agentName}, an intelligent and friendly assistant for this business. Answer concisely and helpfully (1-3 sentences) in natural WhatsApp style. Assist the customer with information, bookings, and inquiries.`;
 
-          systemPrompt += `\n\nCRITICAL MULTILINGUAL INSTRUCTION: Automatically detect the customer's language (e.g. Hindi, Hinglish, Spanish, Arabic, French, English) and reply fluently in that exact same language. Keep responses natural, warm, and concise for WhatsApp.`;
+          const followUpLangMode = agentConfig?.settings?.followUp?.languageMode;
+          if (followUpLangMode === 'hinglish') {
+            systemPrompt += `\n\nCRITICAL MULTILINGUAL INSTRUCTION: Reply in warm, natural Hinglish (friendly mix of Hindi & English in Latin script, e.g. "Aapke liye Saturday 11:30 AM slot available hai") unless the customer clearly prefers pure English or a non-Latin script.`;
+          } else if (followUpLangMode === 'english') {
+            systemPrompt += `\n\nLANGUAGE INSTRUCTION: Reply concisely and warmly in clear English (unless the customer explicitly writes in another language).`;
+          } else {
+            systemPrompt += `\n\nCRITICAL MULTILINGUAL INSTRUCTION: Automatically detect the customer's language (e.g. Hindi, Hinglish, Spanish, Arabic, French, English) and reply fluently in that exact same language. Keep responses natural, warm, and concise for WhatsApp.`;
+          }
 
           // Fetch recent conversation history for multi-turn context
           const recentMsgs = await db.inboxMessage.findMany({
@@ -749,8 +756,23 @@ async function handlePlainTextInbound(
                 if (availability?.success && availability.slots.length > 0) {
                   const slotSummary = availability.slots.slice(0, 5).map((s) => s.label).join(', ');
                   systemPrompt += `\n\nLIVE AVAILABILITY ON ${checkDate}: Available slots: ${slotSummary}. Offer these exact slots to the customer and ask which time suits them best.`;
-                } else if (availability && !availability.success) {
-                  systemPrompt += `\n\nCALENDAR NOTICE: No available slots on ${checkDate} (${availability.message}). Suggest an alternate day or time.`;
+                } else {
+                  let alternateSummary = '';
+                  const baseTime = new Date(`${checkDate}T12:00:00Z`).getTime() || Date.now();
+                  for (let offset = 1; offset <= 3; offset++) {
+                    const altDate = new Date(baseTime + offset * 86400000).toISOString().split('T')[0];
+                    const altAvail = await checkAvailability({ tenantId, date: altDate }).catch(() => null);
+                    if (altAvail?.success && altAvail.slots.length > 0) {
+                      const altSlots = altAvail.slots.slice(0, 4).map((s) => s.label).join(', ');
+                      alternateSummary = `${altDate} has open slots: ${altSlots}`;
+                      break;
+                    }
+                  }
+                  if (alternateSummary) {
+                    systemPrompt += `\n\nCALENDAR NOTICE: No openings on ${checkDate} (${availability?.message || 'full'}), BUT ${alternateSummary}. Tell the customer warmly and offer those alternate slots.`;
+                  } else if (availability && !availability.success) {
+                    systemPrompt += `\n\nCALENDAR NOTICE: No available slots on ${checkDate} (${availability.message}). Suggest an alternate day or time.`;
+                  }
                 }
               }
             }
@@ -814,7 +836,7 @@ async function handlePlainTextInbound(
             await sendWhatsAppMessage({
               tenantId,
               to: from,
-              body: replyText,
+              message: replyText,
             }).catch((sendErr) => {
               console.warn('[WhatsApp Callback] FormAgent sendWhatsAppMessage failed:', sendErr);
             });

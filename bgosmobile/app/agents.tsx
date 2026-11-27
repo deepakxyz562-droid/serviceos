@@ -205,6 +205,7 @@ function AgentsScreen() {
           avatarUrl: draft.avatarUrl || null,
           welcomeGreeting: draft.welcomeGreeting?.trim() || null,
           knowledge: draft.knowledge || { faqPairs: [] },
+          settings: draft.settings,
           statusText: draft.statusText || 'Online',
         },
       });
@@ -1786,7 +1787,7 @@ function AgentsScreen() {
           <Card style={{ gap: 10 }}>
             <Text style={ui.heading}>Online Booking Integration</Text>
             <Text style={ui.caption}>
-              When customers ask to book or schedule, your assistant automatically links your booking services.
+              When customers ask to book or schedule, your assistant automatically links your booking services and checks open slots across the next 3 days.
             </Text>
             <Action
               secondary
@@ -1795,6 +1796,128 @@ function AgentsScreen() {
               onPress={() => router.push('/booking-page')}
             />
           </Card>
+
+          {/* WhatsApp Auto Follow-Up & Multilingual Controls */}
+          {(() => {
+            const fu = draft.settings?.followUp || {
+              enabled: true,
+              delayMinutes: 120,
+              languageMode: 'auto' as const,
+            };
+            const updateFollowUp = (patch: Partial<NonNullable<NonNullable<FormAgentData['settings']>['followUp']>>) => {
+              const baseSettings = (draft.settings || {}) as NonNullable<FormAgentData['settings']>;
+              edit({
+                settings: {
+                  ...baseSettings,
+                  followUp: {
+                    enabled: fu.enabled !== false,
+                    delayMinutes: fu.delayMinutes || 120,
+                    languageMode: fu.languageMode || 'auto',
+                    ...patch,
+                  },
+                },
+              });
+            };
+            return (
+              <Card style={{ gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={ui.heading}>WhatsApp Quiet-Chat Auto Follow-Up</Text>
+                    <Text style={ui.caption}>
+                      Automatically nudge leads when a WhatsApp enquiry goes quiet before booking.
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel="Enable WhatsApp Auto Follow-Up"
+                    value={fu.enabled !== false}
+                    onValueChange={(enabled) => {
+                      triggerHaptic();
+                      updateFollowUp({ enabled });
+                    }}
+                    trackColor={{ false: '#E2E8F0', true: '#BBF7D0' }}
+                    thumbColor={fu.enabled !== false ? colors.brand : '#94A3B8'}
+                  />
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.ink }}>Follow-Up Delay</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {[
+                      { label: '10 min', mins: 10 },
+                      { label: '30 min', mins: 30 },
+                      { label: '2 hrs', mins: 120 },
+                    ].map((opt) => {
+                      const active = (fu.delayMinutes || 120) === opt.mins;
+                      return (
+                        <Pressable
+                          key={opt.mins}
+                          onPress={() => {
+                            triggerHaptic();
+                            updateFollowUp({ delayMinutes: opt.mins });
+                          }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            alignItems: 'center',
+                            borderWidth: 1.5,
+                            borderColor: active ? colors.brand : '#E2E8F0',
+                            backgroundColor: active ? colors.brandSoft : '#F8FAFC',
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: active ? colors.brandDark : colors.muted }}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.ink }}>Multilingual Reply Mode</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {[
+                      { key: 'auto' as const, label: 'Auto Detect' },
+                      { key: 'hinglish' as const, label: 'Hinglish' },
+                      { key: 'english' as const, label: 'English' },
+                    ].map((opt) => {
+                      const active = (fu.languageMode || 'auto') === opt.key;
+                      return (
+                        <Pressable
+                          key={opt.key}
+                          onPress={() => {
+                            triggerHaptic();
+                            updateFollowUp({ languageMode: opt.key });
+                          }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            alignItems: 'center',
+                            borderWidth: 1.5,
+                            borderColor: active ? colors.brand : '#E2E8F0',
+                            backgroundColor: active ? colors.brandSoft : '#F8FAFC',
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: active ? colors.brandDark : colors.muted }}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <Action
+                  secondary
+                  label="Open WhatsApp Repeat Campaigns"
+                  icon="campaign"
+                  onPress={() => router.push('/whatsapp-campaigns' as any)}
+                />
+              </Card>
+            );
+          })()}
         </View>
       )}
 

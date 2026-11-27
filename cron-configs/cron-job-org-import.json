@@ -138,6 +138,17 @@
       },
       "timeout": 120,
       "_comment": "Safety net for both scheduled SocialPosts (drains status='scheduled' where scheduledAt <= now) and daily Marketing Autopilot runs. Requires Authorization: Bearer CRON_SECRET."
+    },
+    {
+      "name": "whatsapp-followup",
+      "url": "https://YOUR-DOMAIN.com/api/cron/whatsapp-followup",
+      "schedule": "*/10 * * * *",
+      "scheduleHuman": "Every 10 minutes",
+      "method": "POST",
+      "headers": {
+        "x-cron-secret": "YOUR_CRON_SECRET"
+      },
+      "_comment": "Scans quiet inbound WhatsApp chats past each tenant's configured delay (10 min / 30 min / 2 hr default) and sends context-aware AI follow-up nudges within the 24h window."
     }
   ],
   "_daily_subcrons_handled_by_master": [

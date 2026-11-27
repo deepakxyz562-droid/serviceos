@@ -165,15 +165,34 @@ function buildLeafletHtml({
           tap: true
         }).setView([${centerLat}, ${centerLng}], 13);
 
-        var primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-          maxZoom: 18,
-          subdomains: 'abcd'
+        var loadedTiles = 0;
+        var primaryTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          crossOrigin: true
         });
         var fallbackAdded = false;
+        var fallbackErrorCount = 0;
+        primaryTiles.on('tileload', function () {
+          loadedTiles += 1;
+        });
         primaryTiles.on('tileerror', function () {
           if (!fallbackAdded) {
             fallbackAdded = true;
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+            var osmFallback = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 18,
+              crossOrigin: true
+            });
+            osmFallback.on('tileload', function () {
+              loadedTiles += 1;
+            });
+            osmFallback.on('tileerror', function () {
+              fallbackErrorCount += 1;
+              if (loadedTiles === 0 && fallbackErrorCount >= 4 && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'map_error' }));
+              }
+            });
+            osmFallback.addTo(map);
           }
         });
         primaryTiles.addTo(map);

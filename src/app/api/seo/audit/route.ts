@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       tasks,
       presence,
       gbpScore: gbpAudit?.score ?? null,
+      suspensionShield: gbpAudit?.suspensionShield ?? null,
     });
   } catch (error) {
     console.error('[api/seo/audit] GET failed:', error instanceof Error ? error.message : error);

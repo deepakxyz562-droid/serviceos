@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
       occasionId?: string;
       generateImage?: boolean;
       saveCampaign?: boolean;
+      tone?: 'english' | 'hinglish';
+      customOffer?: string;
     };
 
     const tenant = await db.tenant.findUnique({
@@ -72,6 +74,8 @@ export async function POST(request: NextRequest) {
       city,
       actorId: user.id,
       generateImage: body.generateImage ?? true,
+      tone: body.tone === 'hinglish' ? 'hinglish' : 'english',
+      customOffer: body.customOffer,
     });
 
     let savedCampaignId: string | null = null;
@@ -79,14 +83,16 @@ export async function POST(request: NextRequest) {
       const campaign = await db.campaign.create({
         data: {
           tenantId: user.tenantId,
+          workspaceId: user.workspaceId || null,
           name: draft.campaignTitle,
           channel: 'whatsapp',
-          type: 'promotional',
+          type: draft.occasion.id === 'we-miss-you-re-engagement' ? 're_engagement' : 'seasonal',
           status: 'draft',
           messageContent: draft.whatsappMessage,
-          mediaUrls: draft.posterUrl ? JSON.stringify([draft.posterUrl]) : '[]',
+          mediaUrl: draft.posterUrl || null,
+          mediaType: draft.posterUrl ? 'image' : null,
           audienceType: 'segment',
-          audienceFiltersJson: JSON.stringify({ segment: draft.targetAudience }),
+          audienceFiltersJson: JSON.stringify({ segment: draft.targetAudience, tone: body.tone || 'english' }),
           createdById: user.id || 'system',
         },
       });

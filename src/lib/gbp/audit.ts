@@ -5,6 +5,10 @@ import {
   finalizeLocalizedServiceDescription,
   upsertTenantStructuredServices,
 } from '@/lib/gbp/seo-context';
+import {
+  analyzeGbpSuspensionRisks,
+  type GbpSuspensionShieldResult,
+} from '@/lib/gbp/suspension-shield';
 
 export interface AuditCheckItem {
   id: string;
@@ -28,6 +32,7 @@ export interface GbpAuditResult {
   reviewsCount: number;
   presenceMode?: BusinessPresenceMode;
   websiteSeoScore?: number | null;
+  suspensionShield?: GbpSuspensionShieldResult;
 }
 
 function safeParseArray(json: string | null | undefined): string[] {
@@ -281,11 +286,19 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       id: 'service_areas',
       category: 'Local Reach',
       label: 'Service Area Radius & Cities',
-      passed: Boolean(brand?.serviceArea || (tenant as any).city),
+      passed: Boolean(
+        safeParseArray((tenant as any).serviceAreasJson).length > 0 ||
+          brand?.serviceArea ||
+          (tenant as any).city,
+      ),
       scoreWeight: 15,
-      currentValue: brand?.serviceArea || (tenant as any).city || 'Not specified',
-      recommendation: 'Define specific cities or neighborhoods you serve to rank in the Google Maps Local 3-Pack.',
-      actionRequired: 'Add service areas to your profile.',
+      currentValue: (() => {
+        const list = safeParseArray((tenant as any).serviceAreasJson);
+        if (list.length > 0) return `${list.length} area(s): ${list.slice(0, 3).join(', ')}${list.length > 3 ? '…' : ''}`;
+        return brand?.serviceArea || (tenant as any).city || 'Not specified';
+      })(),
+      recommendation: 'Define up to 20 nearby cities or neighborhoods you serve to rank in the Google Maps Local 3-Pack.',
+      actionRequired: 'Add up to 20 local service areas in Manage Profile.',
     },
     {
       id: 'booking_link',
@@ -337,6 +350,25 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
   const score = Math.round((passedWeight / totalWeight) * 100);
   const missingChecks = checks.filter((c) => !c.passed);
 
+  const suspensionShield = analyzeGbpSuspensionRisks({
+    name:
+      (typeof settings.activeGbpTitle === 'string' && settings.activeGbpTitle.trim()) ||
+      brand?.businessName ||
+      tenant.name,
+    address:
+      (typeof settings.activeGbpAddress === 'string' && settings.activeGbpAddress.trim()) ||
+      tenant.address ||
+      brand?.location ||
+      (tenant as any).city,
+    phone: tenant.phone || settings.communicationPhone,
+    website: effectiveWebsite,
+    category:
+      (typeof settings.activeGbpCategory === 'string' && settings.activeGbpCategory.trim()) ||
+      brand?.industry ||
+      (tenant as any).industry,
+    openingDate: settings.openingDate,
+  });
+
   return {
     score,
     grade: score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D',
@@ -351,5 +383,6 @@ export async function computeGbpAudit(tenantId: string): Promise<GbpAuditResult>
       typeof settings.seoAuditSnapshot?.websiteScore === 'number'
         ? settings.seoAuditSnapshot.websiteScore
         : null,
+    suspensionShield,
   };
 }

@@ -273,6 +273,23 @@ export async function GET(request: NextRequest) {
       null;
     const fallbackPhone = tenant?.phone || '';
     const fallbackWebsite = tenant?.website || '';
+    let storedServiceAreas: string[] = [];
+    try {
+      const parsedAreas = JSON.parse((tenant as any)?.serviceAreasJson || '[]');
+      if (Array.isArray(parsedAreas)) {
+        storedServiceAreas = parsedAreas
+          .filter((a: unknown): a is string => typeof a === 'string' && a.trim().length > 0)
+          .map((a) => a.trim())
+          .slice(0, 20);
+      }
+    } catch {}
+    if (storedServiceAreas.length === 0 && tenant?.brandProfile?.serviceArea) {
+      storedServiceAreas = tenant.brandProfile.serviceArea
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+    }
     const fallbackDescription =
       [
         (tenant as any)?.description,
@@ -383,6 +400,7 @@ export async function GET(request: NextRequest) {
           phone: resolvedFallbackPhone,
           website: resolvedFallbackWebsite,
           description: fallbackDescription,
+          serviceAreas: storedServiceAreas,
           placeId: fallbackPlaceId,
           mapsUrl:
             placesBackfill?.mapsUri ||
@@ -660,7 +678,10 @@ export async function GET(request: NextRequest) {
         address: resolvedAddress,
         city: resolvedCity,
         regionCode: resolvedRegionCode,
-        serviceAreas: placeDetails.serviceAreas || [],
+        serviceAreas:
+          storedServiceAreas.length > 0
+            ? storedServiceAreas
+            : placeDetails.serviceAreas || [],
         isServiceAreaBusiness: Boolean(placeDetails.isServiceAreaBusiness),
         phone: resolvedPhone,
         website: resolvedWebsite,
@@ -786,6 +807,17 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.regularHours && typeof body.regularHours === 'object') {
       updateData.businessHoursJson = JSON.stringify(body.regularHours);
+    }
+    let cleanedServiceAreas: string[] | null = null;
+    if (Array.isArray(body.serviceAreas)) {
+      cleanedServiceAreas = Array.from(
+        new Set(
+          body.serviceAreas
+            .filter((s: unknown): s is string => typeof s === 'string' && s.trim().length > 0)
+            .map((s: string) => s.trim()),
+        ),
+      ).slice(0, 20);
+      updateData.serviceAreasJson = JSON.stringify(cleanedServiceAreas);
     }
 
     // Handle settingsJson updates (WhatsApp communication phone, secondary phone, AI salutation, branding, additional categories, opening date, services, attributes, special hours, more hours)
@@ -961,6 +993,7 @@ export async function PATCH(request: NextRequest) {
             ...(updateData.industry ? { industry: updateData.industry as string } : {}),
             ...(updateData.website !== undefined ? { website: updateData.website as string } : {}),
             ...(updateData.address ? { location: updateData.address as string } : {}),
+            ...(cleanedServiceAreas ? { serviceArea: cleanedServiceAreas.join(', ') } : {}),
             ...(updateData.description !== undefined ? { aiGeneratedSummary: updateData.description as string } : {}),
           },
         });

@@ -32,6 +32,7 @@ import {
 } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
+import { WEB_URL } from '../src/lib/constants';
 import { leadLabels, leadStage, leadStages } from '../src/lib/leads';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
 import {
@@ -360,13 +361,42 @@ export function LeadsView({ embedded = false }: { embedded?: boolean }) {
     });
   }
 
-  function whatsAppLead(phoneNum: string, leadName: string) {
+  function whatsAppLead(phoneNum: string, leadName: string, customBody?: string) {
     const digits = phoneNum.replace(/\D/g, '');
+    const msg = customBody || `Hi ${leadName}, thank you for contacting us!`;
     Linking.openURL(
-      `https://wa.me/${digits}?text=${encodeURIComponent(`Hi ${leadName}, thank you for contacting us!`)}`
+      `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
     ).catch(() => {
       setError('Could not open WhatsApp.');
     });
+  }
+
+  function resolveShareLink(raw?: string | null): string | null {
+    if (!raw || !raw.trim()) return null;
+    const trimmed = raw.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `${WEB_URL.replace(/\/$/, '')}${trimmed.startsWith('/') ? trimmed : `/${trimmed}`}`;
+  }
+
+  function sendBrochureOnWhatsApp(lead: Lead, linkType: 'brochure' | 'booking') {
+    const links = workspaceRes.data?.links;
+    const url =
+      linkType === 'booking'
+        ? resolveShareLink(links?.booking) || resolveShareLink(links?.profile)
+        : resolveShareLink(links?.profile) || resolveShareLink(links?.booking);
+    if (!url) {
+      Alert.alert(
+        linkType === 'booking' ? 'Booking Link Not Set' : 'Brochure Page Not Published',
+        'Enable your Digital Business Page or Booking Page in Tools first.',
+      );
+      return;
+    }
+    const biz = workspaceRes.data?.name || 'our team';
+    const text =
+      linkType === 'booking'
+        ? `Hi ${lead.name}! You can check available slots with ${biz} and book online here: ${url}`
+        : `Hi ${lead.name}! Here is ${biz}'s service brochure, pricing & details: ${url}`;
+    whatsAppLead(lead.phone, lead.name, text);
   }
 
   const leadRows = resource.data?.leads || [];
@@ -892,6 +922,29 @@ export function LeadsView({ embedded = false }: { embedded?: boolean }) {
                     secondary
                     disabled={!selected.phone}
                     onPress={() => whatsAppLead(selected.phone, selected.name)}
+                  />
+                </View>
+              </View>
+
+              <View style={[ui.row, { gap: 10 }]}>
+                <View style={{ flex: 1 }}>
+                  <Action
+                    compact
+                    secondary
+                    label="Send Brochure"
+                    icon="menu-book"
+                    disabled={!selected.phone}
+                    onPress={() => sendBrochureOnWhatsApp(selected, 'brochure')}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Action
+                    compact
+                    secondary
+                    label="Booking Link"
+                    icon="event"
+                    disabled={!selected.phone}
+                    onPress={() => sendBrochureOnWhatsApp(selected, 'booking')}
                   />
                 </View>
               </View>

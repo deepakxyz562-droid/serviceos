@@ -167,6 +167,7 @@ export type GbpPlaceResult = {
     category: string;
     address: string;
     city?: string | null;
+    serviceAreas?: string[];
     phone?: string;
     website?: string;
     description?: string;
@@ -204,6 +205,7 @@ export type GbpPlaceResult = {
     category?: string;
     address?: string;
     city?: string | null;
+    serviceAreas?: string[];
     phone?: string;
     website?: string;
     description?: string;

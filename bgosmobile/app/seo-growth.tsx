@@ -3,7 +3,12 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ErrorNotice, Loading, Screen, colors, ui } from '../src/components/ui';
-import { SeoAuditTab, type AutoOptimizePlan, type PresenceSummary } from '../src/components/gbp/seo-audit-tab';
+import {
+  SeoAuditTab,
+  type AutoOptimizePlan,
+  type PresenceSummary,
+  type SuspensionShieldSummary,
+} from '../src/components/gbp/seo-audit-tab';
 import { SeoGridTab, type RankingsResponse } from '../src/components/gbp/seo-grid-tab';
 import { SeoAiVisibilityTab, type AiGapReport } from '../src/components/gbp/seo-ai-visibility-tab';
 import { SeoKeywordsTab, type KeywordPlanResponse } from '../src/components/gbp/seo-keywords-tab';
@@ -15,6 +20,7 @@ type SeoAuditResponse = {
   tasks?: any[];
   presence?: PresenceSummary;
   gbpScore?: number | null;
+  suspensionShield?: SuspensionShieldSummary | null;
 };
 
 type AiGapResponse = {
@@ -508,6 +514,7 @@ export default function SeoGrowthScreen() {
               tasks={tasks}
               gbpScoreFallback={auditRes.data?.gbpScore}
               autoOptPlan={autoOptRes.data || null}
+              suspensionShield={auditRes.data?.suspensionShield || null}
               auditing={auditing}
               fixingKey={fixingKey}
               optimizingAll={optimizingAll}

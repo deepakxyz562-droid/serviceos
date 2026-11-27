@@ -1,7 +1,24 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, Share, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Card, colors, ui } from '../ui';
+import { apiRequest } from '../../lib/api';
+
+export interface SuspensionShieldSummary {
+  riskLevel: 'low' | 'medium' | 'high';
+  safetyScore: number;
+  criticalCount: number;
+  warningCount: number;
+  checks: Array<{
+    id: string;
+    label: string;
+    severity: 'safe' | 'warning' | 'critical';
+    detail: string;
+    fixHint: string;
+  }>;
+  evidenceChecklist: Array<{ id: string; label: string; required: boolean }>;
+}
 
 export interface PresenceSummary {
   mode: 'no_website' | 'bgos_hosted' | 'custom_domain';
@@ -49,6 +66,7 @@ export function SeoAuditTab({
   tasks,
   gbpScoreFallback,
   autoOptPlan,
+  suspensionShield,
   auditing,
   fixingKey,
   optimizingAll,
@@ -63,6 +81,7 @@ export function SeoAuditTab({
   tasks: any[];
   gbpScoreFallback?: number | null;
   autoOptPlan?: AutoOptimizePlan | null;
+  suspensionShield?: SuspensionShieldSummary | null;
   auditing: boolean;
   fixingKey: string | null;
   optimizingAll: boolean;
@@ -72,9 +91,31 @@ export function SeoAuditTab({
   onDismissTask: (taskId: string) => void;
   onRunAutoOptimize: (mode: 'apply' | 'rollback') => void;
 }) {
+  const router = useRouter();
   const [checklistExpanded, setChecklistExpanded] = useState(false);
+  const [shieldExpanded, setShieldExpanded] = useState(false);
+  const [appealReason, setAppealReason] = useState('Quality guidelines / Profile suspension review');
+  const [generatingAppeal, setGeneratingAppeal] = useState(false);
+  const [appealLetter, setAppealLetter] = useState('');
   const [taskFilter, setTaskFilter] = useState<'open' | 'done'>('open');
   const [snippetTab, setSnippetTab] = useState<'robots' | 'meta' | 'schema'>('robots');
+
+  async function handleGenerateAppeal() {
+    setGeneratingAppeal(true);
+    try {
+      const res = await apiRequest<{ appealLetter?: string }>('/api/gbp/suspension-appeal', {
+        method: 'POST',
+        body: { suspensionReason: appealReason.trim() || undefined },
+      });
+      if (res?.appealLetter) {
+        setAppealLetter(res.appealLetter);
+      }
+    } catch (e) {
+      Alert.alert('Appeal Draft Error', (e as Error).message || 'Could not generate appeal letter');
+    } finally {
+      setGeneratingAppeal(false);
+    }
+  }
 
   const mode = presence?.mode || 'no_website';
   const auditedUrl = presence?.canonicalUrl || presence?.websiteUrl || null;
@@ -760,6 +801,176 @@ export function SeoAuditTab({
           </Pressable>
         </Card>
       ) : null}
+
+      {/* GBP Suspension Shield & Appeal Kit */}
+      {suspensionShield ? (
+        <Card style={{ gap: 10 }}>
+          <Pressable
+            onPress={() => setShieldExpanded((p) => !p)}
+            style={[ui.row, { justifyContent: 'space-between', alignItems: 'flex-start' }]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={ui.heading}>GBP Suspension Shield &amp; Recovery</Text>
+              <Text style={ui.caption}>
+                Safety Score {suspensionShield.safetyScore}/100 · {suspensionShield.riskLevel.toUpperCase()} Risk
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor:
+                  suspensionShield.riskLevel === 'low'
+                    ? '#DCFCE7'
+                    : suspensionShield.riskLevel === 'medium'
+                      ? '#FEF3C7'
+                      : '#FEE2E2',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: '800',
+                  color:
+                    suspensionShield.riskLevel === 'low'
+                      ? '#15803D'
+                      : suspensionShield.riskLevel === 'medium'
+                        ? '#B45309'
+                        : '#B91C1C',
+                }}
+              >
+                {suspensionShield.riskLevel === 'low'
+                  ? 'Policy Safe'
+                  : suspensionShield.riskLevel === 'medium'
+                    ? 'Review Warnings'
+                    : 'High Risk'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {(suspensionShield.checks || []).map((chk) => (
+            <View
+              key={chk.id}
+              style={{
+                flexDirection: 'row',
+                gap: 8,
+                padding: 9,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: chk.severity === 'safe' ? colors.line : chk.severity === 'critical' ? '#FECACA' : '#FDE68A',
+                backgroundColor: chk.severity === 'safe' ? colors.background : chk.severity === 'critical' ? '#FEF2F2' : '#FFFBEB',
+              }}
+            >
+              <MaterialIcons
+                name={chk.severity === 'safe' ? 'verified-user' : 'warning'}
+                size={16}
+                color={chk.severity === 'safe' ? '#16A34A' : chk.severity === 'critical' ? '#DC2626' : '#D97706'}
+                style={{ marginTop: 1 }}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink }}>{chk.label}</Text>
+                <Text style={{ fontSize: 11, color: colors.muted }}>{chk.detail}</Text>
+              </View>
+            </View>
+          ))}
+
+          {shieldExpanded ? (
+            <View style={{ gap: 8, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.line }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.ink }}>
+                Suspended Profile Appeal Kit
+              </Text>
+              {(suspensionShield.evidenceChecklist || []).map((ev) => (
+                <Text key={ev.id} style={{ fontSize: 11, color: colors.muted }}>
+                  • {ev.label}
+                </Text>
+              ))}
+              <TextInput
+                value={appealReason}
+                onChangeText={setAppealReason}
+                placeholder="Reason for Google reinstatement appeal"
+                placeholderTextColor={colors.muted}
+                style={ui.input}
+              />
+              <Pressable
+                disabled={generatingAppeal}
+                onPress={() => void handleGenerateAppeal()}
+                style={{
+                  backgroundColor: colors.ink,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  opacity: generatingAppeal ? 0.6 : 1,
+                }}
+              >
+                {generatingAppeal ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="gavel" size={16} color="#FFFFFF" />
+                )}
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                  {generatingAppeal ? 'Drafting Appeal Letter…' : 'Generate Google Appeal Letter'}
+                </Text>
+              </Pressable>
+
+              {appealLetter ? (
+                <View style={{ gap: 8 }}>
+                  <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }}>
+                    <Text style={{ fontSize: 11.5, color: colors.ink, lineHeight: 17 }}>{appealLetter}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => void Share.share({ title: 'Google Appeal Letter', message: appealLetter })}
+                    style={{
+                      backgroundColor: colors.brandSoft,
+                      borderWidth: 1,
+                      borderColor: colors.brand,
+                      paddingVertical: 9,
+                      borderRadius: 9,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandDark }}>
+                      Copy / Share Appeal Letter
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <Pressable onPress={() => setShieldExpanded(true)}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brand }}>
+                Open Suspension Appeal &amp; Evidence Kit →
+              </Text>
+            </Pressable>
+          )}
+        </Card>
+      ) : null}
+
+      {/* Citations & Local Directories Shortcut */}
+      <Card style={{ gap: 8, backgroundColor: '#F8FAFC' }}>
+        <View style={[ui.row, { justifyContent: 'space-between' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={ui.heading}>Local Citations &amp; NAP Hub</Text>
+            <Text style={ui.caption}>
+              Check Justdial, Sulekha, IndiaMART, Apple Maps &amp; Bing listings with your exact NAP details.
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push('/citations' as any)}
+            style={{
+              backgroundColor: colors.brand,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 10,
+            }}
+          >
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#FFFFFF' }}>Open Hub</Text>
+          </Pressable>
+        </View>
+      </Card>
     </View>
   );
 }

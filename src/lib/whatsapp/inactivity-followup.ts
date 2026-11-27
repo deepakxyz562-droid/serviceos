@@ -8,8 +8,73 @@ export interface InactivityResult {
   conversations: Array<{ id: string; phone: string; followUpText: string }>;
 }
 
+interface AgentFollowUpPrefs {
+  enabled: boolean;
+  delayMinutes: number;
+  languageMode: 'auto' | 'english' | 'hinglish';
+}
+
+async function resolveTenantFollowUpPrefs(
+  tenantId: string,
+  defaultDelayMinutes: number,
+  cache: Map<string, AgentFollowUpPrefs>,
+): Promise<AgentFollowUpPrefs> {
+  const cached = cache.get(tenantId);
+  if (cached) return cached;
+
+  const fallback: AgentFollowUpPrefs = {
+    enabled: true,
+    delayMinutes: defaultDelayMinutes,
+    languageMode: 'auto',
+  };
+
+  try {
+    const findAgent = (db as any)?.formAgent?.findFirst;
+    if (typeof findAgent !== 'function') {
+      cache.set(tenantId, fallback);
+      return fallback;
+    }
+
+    const agent = await findAgent({
+      where: { tenantId, status: 'active' },
+      orderBy: { updatedAt: 'desc' },
+      select: { configJson: true },
+    });
+
+    if (agent?.configJson) {
+      const cfg =
+        typeof agent.configJson === 'string'
+          ? JSON.parse(agent.configJson || '{}')
+          : agent.configJson;
+      const followUp = cfg?.settings?.followUp;
+      if (followUp && typeof followUp === 'object') {
+        const delayMinutes =
+          typeof followUp.delayMinutes === 'number' && followUp.delayMinutes >= 5
+            ? Math.min(1440, Math.round(followUp.delayMinutes))
+            : defaultDelayMinutes;
+        const languageMode: AgentFollowUpPrefs['languageMode'] =
+          followUp.languageMode === 'hinglish' || followUp.languageMode === 'english'
+            ? followUp.languageMode
+            : 'auto';
+        const resolved: AgentFollowUpPrefs = {
+          enabled: followUp.enabled !== false,
+          delayMinutes,
+          languageMode,
+        };
+        cache.set(tenantId, resolved);
+        return resolved;
+      }
+    }
+  } catch {
+    // Non-fatal: fall back to defaults
+  }
+
+  cache.set(tenantId, fallback);
+  return fallback;
+}
+
 /**
- * Scans open WhatsApp conversations that have gone quiet (>2h without customer response)
+ * Scans open WhatsApp conversations that have gone quiet without customer response
  * and dispatches an automated, context-aware nudge to bring them back.
  */
 export async function processWhatsAppInactivityFollowups(params?: {
@@ -17,15 +82,18 @@ export async function processWhatsAppInactivityFollowups(params?: {
   maxAgeHours?: number;
   limit?: number;
 }): Promise<InactivityResult> {
-  const minHours = params?.inactivityHours ?? 2;
+  const explicitHours = typeof params?.inactivityHours === 'number' ? params.inactivityHours : null;
+  const defaultDelayMinutes = explicitHours !== null ? Math.round(explicitHours * 60) : 120;
+  // Query floor allows tenants configured for 10-min fast follow-up while respecting explicit overrides
+  const queryFloorHours = explicitHours !== null ? explicitHours : 10 / 60;
   const maxHours = params?.maxAgeHours ?? 48;
   const limit = params?.limit ?? 20;
 
   const now = Date.now();
-  const minThreshold = new Date(now - minHours * 60 * 60 * 1000);
+  const minThreshold = new Date(now - queryFloorHours * 60 * 60 * 1000);
   const maxThreshold = new Date(now - maxHours * 60 * 60 * 1000);
 
-  // 1. Find conversations where the last customer interaction is between 2h and 48h ago
+  // 1. Find conversations where the last customer interaction is within the quiet window
   const quietConversations = await db.conversation.findMany({
     where: {
       channel: 'whatsapp',
@@ -53,6 +121,7 @@ export async function processWhatsAppInactivityFollowups(params?: {
 
   let nudgedCount = 0;
   const dispatched: Array<{ id: string; phone: string; followUpText: string }> = [];
+  const prefsCache = new Map<string, AgentFollowUpPrefs>();
 
   for (const conv of quietConversations) {
     if (!conv.customerPhone || !conv.tenantId) continue;
@@ -67,6 +136,18 @@ export async function processWhatsAppInactivityFollowups(params?: {
       continue;
     }
 
+    const prefs = await resolveTenantFollowUpPrefs(conv.tenantId, defaultDelayMinutes, prefsCache);
+    if (!prefs.enabled) {
+      continue;
+    }
+
+    // Enforce per-tenant quiet delay (unless overridden explicitly in params)
+    const effectiveDelayMs = (explicitHours !== null ? explicitHours * 60 : prefs.delayMinutes) * 60 * 1000;
+    const lastMsgMs = conv.lastMessageAt ? new Date(conv.lastMessageAt).getTime() : 0;
+    if (lastMsgMs > 0 && now - lastMsgMs < effectiveDelayMs) {
+      continue;
+    }
+
     const tenant = await db.tenant.findUnique({
       where: { id: conv.tenantId },
       include: { brandProfile: true },
@@ -76,17 +157,27 @@ export async function processWhatsAppInactivityFollowups(params?: {
     const customerName = conv.customerName || 'there';
     const lastTopic = (conv.lastMessageBody || '').slice(0, 120);
 
+    const languageRule =
+      prefs.languageMode === 'hinglish'
+        ? '3. Write in warm, natural Hinglish (friendly conversational mix of English and Hindi in Latin script), unless the customer used a strictly non-Latin script.'
+        : prefs.languageMode === 'english'
+          ? '3. Write in clear, friendly English.'
+          : '3. Automatically match the language and script of their prior inquiry (including Hinglish or Hindi if they used it).';
+
     const prompt = `You are a friendly, helpful assistant for "${businessName}".
 A customer named ${customerName} inquired on WhatsApp earlier: "${lastTopic}".
-The chat has gone quiet for a few hours.
+The chat has gone quiet.
 
 Write a warm, polite 1-2 sentence WhatsApp message checking in to see if they still need help or would like to reserve a time slot.
 Requirements:
 1. Short and natural for WhatsApp (under 40 words).
 2. Never pushy or aggressive.
-3. Automatically match the language of their prior inquiry.`;
+${languageRule}`;
 
-    let followUpText = `Hi ${customerName}! Still planning your visit with ${businessName}? Let us know if you would like help picking a convenient time slot! 😊`;
+    let followUpText =
+      prefs.languageMode === 'hinglish'
+        ? `Hi ${customerName}! Still planning your visit with ${businessName}? Batayein agar main aapke liye koi convenient time slot book karne mein help kar sakoon! 😊`
+        : `Hi ${customerName}! Still planning your visit with ${businessName}? Let us know if you would like help picking a convenient time slot! 😊`;
     try {
       const aiRes = await callAI({
         messages: [{ role: 'user', content: prompt }],
@@ -106,11 +197,16 @@ Requirements:
 
     // Send the WhatsApp follow-up message
     try {
-      await sendWhatsAppMessage({
+      const sendRes = await sendWhatsAppMessage({
         tenantId: conv.tenantId,
         to: conv.customerPhone,
-        body: followUpText,
+        message: followUpText,
       });
+
+      if (sendRes && sendRes.success === false) {
+        console.warn(`[inactivity-followup] Send blocked/failed for ${conv.customerPhone}:`, sendRes.error);
+        continue;
+      }
 
       // Save the message in InboxMessage
       await db.inboxMessage.create({

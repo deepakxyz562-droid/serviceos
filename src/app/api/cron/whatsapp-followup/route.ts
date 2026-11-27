@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron-auth';
 import { processWhatsAppInactivityFollowups } from '@/lib/whatsapp/inactivity-followup';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/cron/whatsapp-followup
- * Scans quiet WhatsApp customer chats (>2 hours without activity) and sends context-aware follow-up nudges.
+ * Scans quiet WhatsApp customer chats (based on tenant delay, default 2h) and sends context-aware follow-up nudges.
  */
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = verifyCronAuth(request);
+    if (!auth.ok) return auth.response;
 
     const result = await processWhatsAppInactivityFollowups();
 
