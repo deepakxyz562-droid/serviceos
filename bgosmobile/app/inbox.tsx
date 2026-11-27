@@ -35,7 +35,7 @@ import { getBgosWebUrl } from '../src/lib/bgos-urls';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
 import type { BgosConversation, BgosMessage, BgosWorkspace } from '../src/types/bgos-contracts';
 
-function InboxScreen() {
+export function InboxView({ embedded = false }: { embedded?: boolean }) {
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 25000);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
@@ -117,7 +117,8 @@ function InboxScreen() {
       subtitle="Omnichannel conversations, visitor radar & support tickets."
       onRefresh={activeTab !== 'inbox' ? inbox.refresh : undefined}
       scrollable={activeTab !== 'inbox'}
-      showBack={true}
+      showBack={!embedded}
+      hideNavBar={embedded}
       rightAction={
         <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
           <MaterialIcons name="share" size={18} color={colors.brand} />
@@ -129,7 +130,7 @@ function InboxScreen() {
       <View
         style={[
           ui.row,
-          { justifyContent: 'space-between' },
+          { justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
           activeTab === 'inbox' ? { paddingHorizontal: 16, paddingTop: 12 } : undefined,
         ]}
       >
@@ -149,6 +150,12 @@ function InboxScreen() {
           selected={activeTab === 'tickets'}
           onPress={() => setActiveTab('tickets')}
         />
+        {embedded ? (
+          <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
+            <MaterialIcons name="share" size={15} color={colors.brand} />
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.brand }}>Chat Link</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {activeTab !== 'inbox' ? <ErrorNotice message={inbox.error} retry={inbox.refresh} /> : null}
@@ -669,4 +676,8 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withProtectedRoute(InboxScreen);
+function InboxScreenRoute() {
+  return <InboxView />;
+}
+
+export default withProtectedRoute(InboxScreenRoute);

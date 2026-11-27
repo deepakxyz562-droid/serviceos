@@ -32,7 +32,7 @@ type Booking = {
   status: string;
 };
 
-function AppointmentsScreen() {
+export function AppointmentsView({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -148,7 +148,8 @@ function AppointmentsScreen() {
     <Screen
       title="Appointments"
       subtitle="Calendar schedule, customer bookings & rescheduling."
-      showBack={true}
+      showBack={!embedded}
+      hideNavBar={embedded}
       scrollable={false}
       rightAction={
         <Action
@@ -169,7 +170,7 @@ function AppointmentsScreen() {
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 96 }}
         refreshControl={
           <RefreshControl
             refreshing={resource.loading}
@@ -179,6 +180,22 @@ function AppointmentsScreen() {
         }
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
+            {embedded ? (
+              <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                  Appointments &amp; Bookings
+                </Text>
+                <Action
+                  compact
+                  label="＋ Book"
+                  icon="add"
+                  onPress={() => {
+                    setError(null);
+                    setBookModal(true);
+                  }}
+                />
+              </View>
+            ) : null}
             <ErrorNotice message={error || resource.error} retry={resource.refresh} />
 
             {/* Quick Share Online Booking Link Banner */}
@@ -586,4 +603,8 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withProtectedRoute(AppointmentsScreen);
+function AppointmentsScreenRoute() {
+  return <AppointmentsView />;
+}
+
+export default withProtectedRoute(AppointmentsScreenRoute);

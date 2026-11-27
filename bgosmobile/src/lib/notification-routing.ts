@@ -9,7 +9,8 @@ const destinations = {
   bookings: '/appointments',
   reviews: '/(tabs)/reviews',
   marketing: '/(tabs)/marketing',
-  photos: '/(tabs)/photos',
+  photos: '/(tabs)/marketing?mode=media',
+  customers: '/(tabs)/customers',
   tools: '/(tabs)/tools',
   forms: '/submissions',
   growth: '/growth-report',
@@ -21,6 +22,7 @@ const ALLOWED_DIRECT_ROUTES = [
   '/(tabs)/index',
   '/(tabs)/reviews',
   '/(tabs)/marketing',
+  '/(tabs)/customers',
   '/(tabs)/photos',
   '/(tabs)/tools',
   '/inbox',
@@ -97,7 +99,11 @@ export function notificationDestination(data: Record<string, unknown>): string |
   if (data.conversationId || data.sessionId || data.source === 'live_chat_escalation') {
     return `/inbox${buildDestinationQuery(data)}`;
   }
-  if (data.mediaId || data.photoId) return `/(tabs)/photos${buildDestinationQuery(data)}`;
+  if (data.mediaId || data.photoId) {
+    const extra = new URLSearchParams();
+    if (!data.mode) extra.set('mode', 'media');
+    return `/(tabs)/marketing${buildDestinationQuery(data, extra)}`;
+  }
   if (data.postId) {
     const extra = new URLSearchParams();
     if (!data.mode) extra.set('mode', 'posts');
@@ -115,9 +121,10 @@ const DEEP_LINK_VIEW_ROUTES: Record<string, string> = {
   dashboard: '/(tabs)',
   home: '/(tabs)',
   reviews: '/(tabs)/reviews',
-  photos: '/(tabs)/photos',
-  studio: '/(tabs)/photos?mode=studio',
+  photos: '/(tabs)/marketing?mode=media',
+  studio: '/(tabs)/marketing?mode=media_studio',
   marketing: '/(tabs)/marketing',
+  customers: '/(tabs)/customers',
   tools: '/(tabs)/tools',
   helpcenter: '/help',
   help: '/help',
@@ -178,7 +185,7 @@ export function resolveBgosDeepLink(rawUrl?: string | null): string | null {
 
     if (viewRaw === 'socialmedia') {
       if (socialTab === 'ai-content' || mode === 'studio') {
-        return '/(tabs)/photos?mode=studio';
+        return '/(tabs)/marketing?mode=media_studio';
       }
       return '/(tabs)/marketing';
     }

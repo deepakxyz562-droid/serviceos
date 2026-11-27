@@ -147,9 +147,11 @@ describe('BGOS Email Deliverability & Performance Guardrails', () => {
   });
 
   it('resolves incoming mailer app/universal links to mobile screens while ignoring OAuth callbacks', () => {
-    expect(resolveBgosDeepLink('bgos://open?view=socialMedia&socialTab=ai-content')).toBe('/(tabs)/photos?mode=studio');
+    expect(resolveBgosDeepLink('bgos://open?view=socialMedia&socialTab=ai-content')).toBe('/(tabs)/marketing?mode=media_studio');
     expect(resolveBgosDeepLink('https://bgos.site/open?view=reviews')).toBe('/(tabs)/reviews');
-    expect(resolveBgosDeepLink('https://bgos.site/open?view=photos')).toBe('/(tabs)/photos');
+    expect(resolveBgosDeepLink('https://bgos.site/open?view=photos')).toBe('/(tabs)/marketing?mode=media');
+    expect(resolveBgosDeepLink('bgos://open?view=inbox')).toBe('/inbox');
+    expect(resolveBgosDeepLink('bgos://open?view=customers')).toBe('/(tabs)/customers');
     expect(resolveBgosDeepLink('bgos://open?view=dashboard')).toBe('/(tabs)');
     expect(resolveBgosDeepLink('https://bgos.site/open?view=helpCenter')).toBe('/help');
     expect(resolveBgosDeepLink('https://bgos.site/open?view=settings')).toBe('/settings');

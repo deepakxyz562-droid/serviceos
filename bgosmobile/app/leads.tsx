@@ -75,7 +75,7 @@ type ServiceOption = {
   basePrice?: number | null;
 };
 
-function LeadsScreen() {
+export function LeadsView({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const handledCreateParamRef = useRef(false);
   const params = useLocalSearchParams<{ create?: string; phone?: string; name?: string; notes?: string; source?: string }>();
@@ -375,7 +375,8 @@ function LeadsScreen() {
     <Screen
       title="Leads & CRM"
       subtitle="Pipeline stages, quick follow-up & customer history."
-      showBack={true}
+      showBack={!embedded}
+      hideNavBar={embedded}
       scrollable={false}
       rightAction={
         <Action
@@ -397,7 +398,7 @@ function LeadsScreen() {
         windowSize={5}
         removeClippedSubviews
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 96 }}
         refreshControl={
           <RefreshControl
             refreshing={resource.loading}
@@ -407,6 +408,22 @@ function LeadsScreen() {
         }
         ListHeaderComponent={
           <View style={{ gap: 10, marginBottom: 4 }}>
+            {embedded ? (
+              <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.ink }}>
+                  Customer Pipeline ({leadRows.length})
+                </Text>
+                <Action
+                  compact
+                  label="＋ Add Lead"
+                  icon="add"
+                  onPress={() => {
+                    setError(null);
+                    setOpen(true);
+                  }}
+                />
+              </View>
+            ) : null}
             <Field
               label="Search leads"
               value={search}
@@ -1116,4 +1133,8 @@ const styles = StyleSheet.create({
   },
 });
 
-export default withProtectedRoute(LeadsScreen);
+function LeadsScreenRoute() {
+  return <LeadsView />;
+}
+
+export default withProtectedRoute(LeadsScreenRoute);

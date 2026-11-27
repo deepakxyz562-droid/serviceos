@@ -346,7 +346,7 @@ export default function SettingsScreen() {
           <MenuRowItem
             icon="tune"
             title="GBP Management"
-            onPress={() => router.push('/growth')}
+            onPress={() => router.push('/manage-profile')}
           />
           <MenuRowItem
             icon="assignment"

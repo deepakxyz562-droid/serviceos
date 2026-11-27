@@ -201,42 +201,76 @@ export default function ToolsScreen() {
       </Pressable>
 
       {/* ─────────────────────────────────────────────────────────────
-          3. TOOLS & OPERATIONS
+          1. CUSTOMERS & SALES
           ───────────────────────────────────────────────────────────── */}
       <Card>
         <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
-          <MaterialIcons name="build" size={20} color={colors.brand} />
-          <Text style={ui.heading}>Tools</Text>
+          <MaterialIcons name="people" size={20} color={colors.brand} />
+          <Text style={ui.heading}>Customers &amp; Sales</Text>
         </View>
         <MenuRow
-          title="Brand Brain (AI Preferences)"
-          detail="Products, branding, founder bio & AI guardrails"
-          icon="psychology"
-          onPress={() => router.push('/preferences')}
+          title="Customers Hub (Inbox, Leads & Bookings)"
+          detail="Live WhatsApp/Instagram chats, CRM pipeline & appointments"
+          icon="forum"
+          onPress={() => router.push('/(tabs)/customers')}
         />
         <MenuRow
           title="1-Tap WhatsApp Reviews"
           detail="Send personalized 5★ Google review invites to customer chats"
-          icon="chat"
+          icon="reviews"
           onPress={() => router.push('/(tabs)/reviews')}
-        />
-        <MenuRow
-          title="Manage Google Profile"
-          detail="Contact & Address, Services, AI & Automation, Post on Google"
-          icon="storefront"
-          onPress={() => router.push('/manage-profile')}
-        />
-        <MenuRow
-          title="Products, Pickup & Ordering"
-          detail="Catalog, Delivery / Food Ordering, Social links & Google Ads"
-          icon="shopping-bag"
-          onPress={() => router.push('/products-management')}
         />
         <MenuRow
           title="QR Standee Studio"
           detail="Printable countertop review cards with verified Google rating"
           icon="qr-code-2"
           onPress={() => router.push('/qr-standee')}
+        />
+        <MenuRow
+          title="Booking & Business Web Page"
+          detail="Public scheduling page, digital card & WhatsApp chat link"
+          icon="language"
+          onPress={() => router.push('/booking-page')}
+        />
+        <MenuRow
+          title="Form Responses & Surveys"
+          detail="Customer inquiries, quote requests & feedback"
+          icon="assignment"
+          onPress={() => router.push('/submissions')}
+        />
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────
+          2. ONLINE PRESENCE & AI
+          ───────────────────────────────────────────────────────────── */}
+      <Card>
+        <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
+          <MaterialIcons name="auto-awesome" size={20} color="#7C3AED" />
+          <Text style={ui.heading}>Online Presence &amp; AI</Text>
+        </View>
+        <MenuRow
+          title="Manage Google Profile"
+          detail="Contact & Address, Services, Opening Hours & Verification"
+          icon="storefront"
+          onPress={() => router.push('/manage-profile')}
+        />
+        <MenuRow
+          title="Services, Products & Ordering"
+          detail="Catalog, Pricing, Delivery / Food Ordering & Social Links"
+          icon="shopping-bag"
+          onPress={() => router.push('/products-management')}
+        />
+        <MenuRow
+          title="AI Chatbot & Agents"
+          detail="Train website & WhatsApp assistants from your docs/URLs"
+          icon="smart-toy"
+          onPress={() => router.push('/agents')}
+        />
+        <MenuRow
+          title="AI Automations & Triggers"
+          detail="Instant lead follow-ups, booking reminders & workflows"
+          icon="bolt"
+          onPress={() => router.push('/automations')}
         />
         <MenuRow
           title="AI Search & SEO Audit"
@@ -251,34 +285,44 @@ export default function ToolsScreen() {
           onPress={() => router.push('/growth-report')}
         />
         <MenuRow
+          title="Brand Brain & Reply Rules"
+          detail="Brand voice, salutations, response length & auto-replies"
+          icon="psychology"
+          onPress={() => router.push('/preferences')}
+        />
+      </Card>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. ACCOUNT, CHANNELS & BILLING
+          ───────────────────────────────────────────────────────────── */}
+      <Card>
+        <View style={[ui.row, { gap: 6, alignItems: 'center', marginBottom: 6 }]}>
+          <MaterialIcons name="admin-panel-settings" size={20} color="#0284C7" />
+          <Text style={ui.heading}>Account &amp; Workspace</Text>
+        </View>
+        <MenuRow
+          title="Connected Channels"
+          detail="Google Business, WhatsApp, Instagram, Facebook & Websites"
+          icon="extension"
+          onPress={() => router.push('/integrations')}
+        />
+        <MenuRow
+          title="Team & Staff Permissions"
+          detail="Invite team members and manage access roles"
+          icon="groups"
+          onPress={() => router.push('/team-management')}
+        />
+        <MenuRow
+          title="Subscription & Plan"
+          detail="Upgrade plan, billing history & payment methods"
+          icon="credit-card"
+          onPress={() => router.push('/my-plan')}
+        />
+        <MenuRow
           title="Review Reply Settings"
-          detail="Salutations, response length & auto-replies"
-          icon="reviews"
+          detail="Auto-reply rules & notification templates"
+          icon="tune"
           onPress={() => router.push('/reply-settings')}
-        />
-        <MenuRow
-          title="Unified Inbox & Chat"
-          detail="WhatsApp, Instagram & visitor radar"
-          icon="chat"
-          onPress={() => router.push('/inbox')}
-        />
-        <MenuRow
-          title="Leads & CRM Pipeline"
-          detail="Manage leads, statuses & follow-ups"
-          icon="people-outline"
-          onPress={() => router.push('/leads')}
-        />
-        <MenuRow
-          title="Appointments Calendar"
-          detail="Schedule, booking slots & customer appointments"
-          icon="event"
-          onPress={() => router.push('/appointments')}
-        />
-        <MenuRow
-          title="Form Responses & Surveys"
-          detail="Customer inquiries, quote requests & feedback"
-          icon="assignment"
-          onPress={() => router.push('/submissions')}
         />
       </Card>
 

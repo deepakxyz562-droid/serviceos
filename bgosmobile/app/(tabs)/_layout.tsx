@@ -9,18 +9,18 @@ import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banne
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar (strictly 5 visible tabs;
- * all secondary operational modules live on the Root Stack in app/).
- *  - Home: Business overview, growth radar & actions
- *  - Reviews: Google reviews stream with pending badge
- *  - Marketing: 1-Tap AI Post creation, calendar & marketing studio
- *  - Media: Photos & store asset manager
- *  - Tools: Operations hub, settings & account tools
+ * secondary operational modules live on the Root Stack in app/).
+ *  - Home: Daily 3-minute priorities, real KPIs & growth radar
+ *  - Reviews: Google reviews stream & WhatsApp review invites
+ *  - Marketing: Unified Posts, Media Library, AI Studio & Autopilot
+ *  - Customers: Omnichannel Inbox, CRM Leads Pipeline & Appointments
+ *  - Tools: Business profile, SEO & Growth Reports, Channels & Settings
  */
 const visible = [
   ['index', 'Home', 'home'],
   ['reviews', 'Reviews', 'rate-review'],
-  ['marketing', 'Posts', 'post-add'],
-  ['photos', 'Media', 'photo-library'],
+  ['marketing', 'Marketing', 'post-add'],
+  ['customers', 'Customers', 'people'],
   ['tools', 'Tools', 'grid-view'],
 ] as const;
 
@@ -91,6 +91,8 @@ export default function TabLayout() {
           />
         );
       })}
+      {/* Compatibility deep-link route hidden from the tab bar */}
+      <Tabs.Screen name="photos" options={{ href: null }} />
       </Tabs>
       <GlobalUploadBanner bottomOffset={(tabHeight ?? 66) + 10} />
       </View>

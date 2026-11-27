@@ -106,6 +106,7 @@ export function Screen({
   floatingAction,
   scrollable = true,
   scrollViewRef,
+  hideNavBar = false,
 }: {
   title?: string;
   subtitle?: string;
@@ -125,6 +126,7 @@ export function Screen({
   floatingAction?: React.ReactNode;
   scrollable?: boolean;
   scrollViewRef?: React.RefObject<ScrollView | null>;
+  hideNavBar?: boolean;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -151,15 +153,15 @@ export function Screen({
 
   // Ensure top clearance fits naturally without artificial excessive top gaps
   const androidStatus = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
-  const effectiveTopPadding = Math.max(insets.top, androidStatus) + extraTopPadding;
+  const effectiveTopPadding = hideNavBar ? 0 : Math.max(insets.top, androidStatus) + extraTopPadding;
 
   // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
   const floatingClearance = floatingAction ? 60 : 0;
   const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
 
-  const hasPinnedNav = Boolean(stickyHeader || !customHeader);
+  const hasPinnedNav = hideNavBar ? false : Boolean(stickyHeader || !customHeader);
 
-  const pinnedNavBar = stickyHeader ? (
+  const pinnedNavBar = hideNavBar ? null : stickyHeader ? (
     stickyHeader
   ) : !customHeader ? (
     <View style={ui.navBar}>

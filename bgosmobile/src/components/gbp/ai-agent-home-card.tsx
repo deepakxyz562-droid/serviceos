@@ -49,7 +49,7 @@ export function HomeStoryBubblesStrip({
       color: '#4F46E5',
       ringColor: '#C7D2FE',
       shadowColor: '#4F46E5',
-      onPress: onOpenPosters || (() => router.push('/photos?mode=studio')),
+      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=studio')),
     },
     {
       id: 's_ranking',
@@ -58,7 +58,7 @@ export function HomeStoryBubblesStrip({
       color: '#0284C7',
       ringColor: '#BAE6FD',
       shadowColor: '#0284C7',
-      onPress: onOpenSeo || (() => router.push('/growth')),
+      onPress: onOpenSeo || (() => router.push('/seo-growth')),
     },
     {
       id: 's_reviews',
@@ -76,7 +76,7 @@ export function HomeStoryBubblesStrip({
       color: '#059669',
       ringColor: '#A7F3D0',
       shadowColor: '#059669',
-      onPress: onAddPhotos || (() => router.push('/(tabs)/photos')),
+      onPress: onAddPhotos || (() => router.push('/(tabs)/marketing?mode=media')),
     },
   ];
 
@@ -168,7 +168,7 @@ export function GbpAiAgentHomeCard({
       icon: 'auto-awesome' as const,
       iconColor: '#7C3AED',
       iconBg: '#F3E8FF',
-      onPress: onOpenPosters || (() => router.push('/photos?mode=studio')),
+      onPress: onOpenPosters || (() => router.push('/(tabs)/marketing?mode=studio')),
     },
     {
       id: 'agent_review',
@@ -195,7 +195,7 @@ export function GbpAiAgentHomeCard({
       icon: 'photo-library' as const,
       iconColor: '#059669',
       iconBg: '#DCFCE7',
-      onPress: onAddPhotos || (() => router.push('/(tabs)/photos')),
+      onPress: onAddPhotos || (() => router.push('/(tabs)/marketing?mode=media')),
     },
   ];
 

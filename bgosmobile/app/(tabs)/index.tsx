@@ -168,10 +168,10 @@ const MORE_TOOLS: {
   route: string;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
-  { label: 'Inbox', route: '/inbox', icon: 'chat-bubble-outline' },
-  { label: 'Leads Pipeline', route: '/leads', icon: 'people-outline' },
+  { label: 'Inbox', route: '/(tabs)/customers?tab=inbox', icon: 'chat-bubble-outline' },
+  { label: 'Leads Pipeline', route: '/(tabs)/customers?tab=leads', icon: 'people-outline' },
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
-  { label: 'GBP Hub', route: '/growth', icon: 'hub' },
+  { label: 'Growth Reports', route: '/growth-report', icon: 'insights' },
   { label: 'Page Settings', route: '/booking-page', icon: 'tune' },
   { label: 'Train AI Chatbot', route: '/agents', icon: 'smart-toy' },
   { label: 'Integrations', route: '/integrations', icon: 'extension' },
@@ -287,7 +287,7 @@ function MarketingScoreCard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Improve Marketing Score with Growth Actions"
-              onPress={() => (onImproveScore ? onImproveScore() : router.push('/growth'))}
+              onPress={() => (onImproveScore ? onImproveScore() : router.push('/seo-growth'))}
             >
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>Improve Score →</Text>
             </Pressable>
@@ -327,7 +327,7 @@ function MarketingScoreCard({
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/growth')}
+            onPress={() => router.push('/select-profile')}
             style={[ui.row, { gap: 4, marginTop: 2 }]}
           >
             <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted }}>NOT_CONNECTED</Text>
@@ -434,7 +434,7 @@ function MarketingScoreCard({
           <Action
             label={slide === 2 ? 'View All Growth Tasks →' : 'Improve Marketing Score →'}
             icon="trending-up"
-            onPress={() => router.push('/growth')}
+            onPress={() => router.push('/seo-growth')}
           />
         </>
       )}
@@ -729,10 +729,10 @@ export default function HomeScreen() {
       { id: 'edit_services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
       { id: 'products', label: 'Products', icon: 'shopping-bag' as const, onPress: () => router.push('/products-management') },
       { id: 'reviews', label: 'Reviews', icon: 'star-outline' as const, onPress: () => router.push('/(tabs)/reviews') },
-      { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo' as const, onPress: () => router.push('/(tabs)/photos') },
+      { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo' as const, onPress: () => router.push('/(tabs)/marketing?mode=media') },
       { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2' as const, onPress: () => router.push('/qr-standee') },
       { id: 'page_settings', label: 'Page Setup', icon: 'tune' as const, onPress: () => router.push('/booking-page') },
-      { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/appointments') },
+      { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/(tabs)/customers?tab=appointments') },
       { id: 'pickup_delivery', label: 'Ordering', icon: 'local-shipping' as const, onPress: () => router.push('/products-management?tab=fulfillment') },
       { id: 'advertise', label: 'Advertise', icon: 'campaign' as const, onPress: () => router.push('/products-management?tab=social') },
       { id: 'ai_chatbot', label: 'AI Chatbot', icon: 'smart-toy' as const, onPress: () => router.push('/agents') },
@@ -1522,7 +1522,7 @@ export default function HomeScreen() {
             name: 'Media Uploaded',
             target: 5,
             achieved: growthActions.data?.actions?.find((a) => a.id === 'upload_media')?.doneCount || 0,
-            route: '/(tabs)/photos',
+            route: '/(tabs)/marketing?mode=media',
           },
         ]}
       />
@@ -1551,11 +1551,11 @@ export default function HomeScreen() {
 
       {/* The 5 Autonomous AI Marketing Agents Story Bubbles */}
       <HomeStoryBubblesStrip
-        onAddPhotos={() => router.push('/(tabs)/photos')}
-        onOpenPosts={() => router.push('/(tabs)/marketing')}
+        onAddPhotos={() => router.push('/(tabs)/marketing?mode=media')}
+        onOpenPosts={() => router.push('/(tabs)/marketing?mode=posts')}
         onOpenReviews={() => router.push('/(tabs)/reviews')}
         onOpenSeo={() => setSeoUpdatesSheetOpen(true)}
-        onOpenPosters={() => router.push('/photos?mode=studio')}
+        onOpenPosters={() => router.push('/(tabs)/marketing?mode=studio')}
       />
 
       {/* Four Autonomous AI Marketing Agents Hub */}
@@ -1572,10 +1572,10 @@ export default function HomeScreen() {
         sentInvitesCount={reviewQueue.data?.queue?.sent || 0}
         scheduledPostsCount={(socialPosts.data?.data || []).filter((p) => p.status === 'scheduled').length}
         onOpenSeoUpdates={() => setSeoUpdatesSheetOpen(true)}
-        onAddPhotos={() => router.push('/(tabs)/photos')}
+        onAddPhotos={() => router.push('/(tabs)/marketing?mode=media')}
         onOpenReviews={() => router.push('/(tabs)/reviews')}
-        onOpenPosts={() => router.push('/(tabs)/marketing')}
-        onOpenPosters={() => router.push('/photos?mode=studio')}
+        onOpenPosts={() => router.push('/(tabs)/marketing?mode=posts')}
+        onOpenPosters={() => router.push('/(tabs)/marketing?mode=studio')}
       />
 
       {/* Google's Performance & Search Preview (100% Real GBP & Analytics Data) */}
@@ -2058,15 +2058,15 @@ export default function HomeScreen() {
           } else if (activeTutorialVideoId === 'reviews_trust' || activeTutorialVideoId === 'how_to_get_reviews') {
             setQuickAddCustomerOpen(true);
           } else {
-            router.push('/(tabs)/photos');
+            router.push('/(tabs)/marketing?mode=media');
           }
         }}
       />
 
       </Screen>
 
-      {/* Half-Screen Slide-Over Sidebar Drawer (Screenshot 08.55 benchmark, no Growth & Marketing) */}
-      <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {/* Lazy-Mounted Half-Screen Slide-Over Sidebar Drawer */}
+      {drawerOpen ? <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} /> : null}
 
       {/* Push Notification First-Launch Prompt */}
       <PushPromptModal />
