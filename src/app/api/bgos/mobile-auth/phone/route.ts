@@ -7,6 +7,7 @@ import { ensureBgosTenantAndWorkspace, resolveBgosMobileAccount } from '@/lib/bg
 import { buildPhoneVariants, resolveBestPhoneUser } from '@/lib/phone-account-lookup';
 import { ProductAccessError } from '@/lib/product-access';
 import { invalidateAuthCache } from '@/lib/auth-me-cache';
+import { verifyFirebasePhoneIdToken } from '@/lib/bgos-firebase-auth';
 
 const phoneInputSchema = z.object({
   idToken: z.string().min(10),
@@ -14,123 +15,6 @@ const phoneInputSchema = z.object({
   fullName: z.string().optional(),
   product: z.string().optional().default('bgos'),
 });
-
-function resolveFirebaseConfig() {
-  const apiKey =
-    process.env.BGOS_FIREBASE_WEB_API_KEY ||
-    process.env.NEXT_PUBLIC_BGOS_FIREBASE_API_KEY ||
-    process.env.FIREBASE_WEB_API_KEY ||
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  const projectId =
-    process.env.BGOS_FIREBASE_PROJECT_ID ||
-    process.env.NEXT_PUBLIC_BGOS_FIREBASE_PROJECT_ID ||
-    process.env.FIREBASE_PROJECT_ID ||
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-
-  if ((!apiKey || !projectId) && process.env.NODE_ENV === 'production' && !process.env.VITEST) {
-    throw new Error('[mobile-auth/phone] Firebase API key and project ID env vars must be configured in production.');
-  }
-
-  return {
-    apiKey: apiKey || 'AIzaSyDLMfL0psz7RPx_V9BC0q9nLSV5bj5V930',
-    projectId: projectId || 'fir-rn-49534',
-  };
-}
-
-interface FirebaseLookupUser {
-  localId: string;
-  phoneNumber?: string;
-  email?: string;
-  displayName?: string;
-}
-
-interface FirebaseLookupResponse {
-  users?: FirebaseLookupUser[];
-  error?: { message: string; code: number };
-}
-
-/**
- * Verify Firebase ID Token via JWT claim validation + Google Identity Toolkit
- */
-async function verifyFirebaseIdToken(idToken: string): Promise<{
-  uid: string;
-  phoneNumber: string;
-  email?: string;
-} | null> {
-  try {
-    // 1. Strict JWT structure + project claim verification (fail-closed)
-    const parts = idToken.split('.');
-    if (parts.length !== 3 || !parts[1]) return null;
-
-    let payload: Record<string, unknown>;
-    try {
-      payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-    if (!payload || typeof payload !== 'object') return null;
-
-    const { apiKey: firebaseApiKey, projectId: firebaseProjectId } = resolveFirebaseConfig();
-    const expectedIssuer = `https://securetoken.google.com/${firebaseProjectId}`;
-    if (payload.iss !== expectedIssuer || payload.aud !== firebaseProjectId) {
-      console.warn('[Firebase Auth] Issuer/Aud mismatch:', {
-        iss: payload.iss,
-        aud: payload.aud,
-        expectedProjectId: firebaseProjectId,
-      });
-      return null;
-    }
-
-    // 2. Cryptographic verification via Google Identity Toolkit
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${firebaseApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-        signal: AbortSignal.timeout(10000),
-      }
-    );
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.warn('[Firebase Auth] accounts:lookup error:', err);
-      return null;
-    }
-
-    const data: FirebaseLookupResponse = await response.json();
-    const user = data.users?.[0];
-    if (!user || !user.localId) {
-      console.warn('[Firebase Auth] No user returned in lookup');
-      return null;
-    }
-
-    if (
-      (typeof payload.sub === 'string' && payload.sub !== user.localId) ||
-      (typeof payload.user_id === 'string' && payload.user_id !== user.localId)
-    ) {
-      console.warn('[Firebase Auth] UID mismatch between token claims and lookup');
-      return null;
-    }
-
-    const verifiedPhone =
-      user.phoneNumber ||
-      (typeof payload.phone_number === 'string' ? payload.phone_number : '');
-    if (!verifiedPhone) {
-      console.warn('[Firebase Auth] No phone number present in token');
-      return null;
-    }
-
-    return {
-      uid: user.localId,
-      phoneNumber: verifiedPhone,
-      email: user.email || (typeof payload.email === 'string' ? payload.email : undefined),
-    };
-  } catch (error) {
-    console.error('[Firebase Auth] ID Token verification failed:', error);
-    return null;
-  }
-}
 
 export async function POST(request: NextRequest) {
   const limited = applyRateLimit(oauthLimiter, request);
@@ -144,7 +28,7 @@ export async function POST(request: NextRequest) {
   const { idToken, fullName } = parsed.data;
 
   // Verify Firebase Token
-  const verified = await verifyFirebaseIdToken(idToken);
+  const verified = await verifyFirebasePhoneIdToken(idToken);
   if (!verified) {
     return NextResponse.json(
       { error: 'Could not verify Firebase identity token or session has expired.' },
