@@ -90,13 +90,36 @@ export async function GET(request: NextRequest) {
       googleEmail = user.email || '';
     }
 
-    // Honest handling: if no genuine Google Business account is connected, return empty
-    if (profiles.length === 0) {
+    const userWorkspaces = await listUserBgosWorkspaces(
+      user.id,
+      user.workspaceId,
+      user.tenantId,
+    ).catch(() => []);
+    const currentWorkspaceActivity = await hasWorkspaceLiveActivity(user.tenantId).catch(() => ({
+      hasActivity: false,
+      reason: null,
+      counts: { leads: 0, customers: 0, bookings: 0, conversations: 0, publicChats: 0, reviews: 0, posts: 0 },
+    }));
+
+    const boundProfileId =
+      typeof tenantSettings.boundGbpLocationId === 'string' && tenantSettings.boundGbpLocationId
+        ? tenantSettings.boundGbpLocationId
+        : typeof tenantSettings.activeGbpLocationId === 'string' && tenantSettings.activeGbpLocationId
+          ? tenantSettings.activeGbpLocationId
+          : null;
+
+    // Honest handling: if no genuine Google Business account is connected, still return user workspaces
+    if (profiles.length === 0 && userWorkspaces.length <= 1) {
       return NextResponse.json({
         email: googleEmail,
         count: 0,
         hasConnectedGbp: false,
         activeProfileId: null,
+        boundProfileId,
+        hasWorkspaceActivity: currentWorkspaceActivity.hasActivity,
+        workspaceActivityReason: currentWorkspaceActivity.reason,
+        currentWorkspaceId: user.workspaceId || userWorkspaces.find((w) => w.isCurrent)?.workspaceId || null,
+        workspaces: userWorkspaces,
         savedPublishingAccountId: null,
         activeProfile: null,
         profiles: [],
@@ -111,17 +134,6 @@ export async function GET(request: NextRequest) {
       if (!a.isPrimary && b.isPrimary) return 1;
       return a.name.localeCompare(b.name);
     });
-
-    const userWorkspaces = await listUserBgosWorkspaces(
-      user.id,
-      user.workspaceId,
-      user.tenantId,
-    ).catch(() => []);
-    const currentWorkspaceActivity = await hasWorkspaceLiveActivity(user.tenantId).catch(() => ({
-      hasActivity: false,
-      reason: null,
-      counts: { leads: 0, customers: 0, bookings: 0, conversations: 0, publicChats: 0, reviews: 0, posts: 0 },
-    }));
 
     // Include any Google Business profiles already connected under other workspaces owned by this user
     const knownIds = new Set(profiles.map((p) => p.id));
@@ -181,12 +193,7 @@ export async function GET(request: NextRequest) {
     const currentWs = userWorkspaces.find((w) => w.tenantId === user.tenantId || w.workspaceId === user.workspaceId);
     const tenantName = (tenant?.name || currentWs?.name || '').trim().toLowerCase();
 
-    const boundProfileId =
-      typeof tenantSettings.boundGbpLocationId === 'string' && tenantSettings.boundGbpLocationId
-        ? tenantSettings.boundGbpLocationId
-        : null;
-
-    // 1. Explicitly bound to this tenant
+    // 1. Explicitly bound to this tenant (via boundGbpLocationId or legacy activeGbpLocationId)
     const boundToCurrent = enrichedProfiles.find(
       (p) => p.isBoundToCurrentWorkspace || (boundProfileId && p.id === boundProfileId),
     );
@@ -537,7 +544,7 @@ export async function POST(request: NextRequest) {
       triggerSource: 'gbp_profile_bound',
     }).catch(() => {});
     import('@/lib/designs/business-image-suggestions')
-      .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(user.tenantId))
+      .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(tenantId))
       .catch(() => {});
 
     const targetShortId = `#${profileId.slice(-4)}`;

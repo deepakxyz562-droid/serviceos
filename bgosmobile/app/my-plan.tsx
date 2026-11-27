@@ -16,6 +16,7 @@ import { getToken } from '../src/lib/auth';
 import { useAuthStore } from '../src/stores/auth-store';
 import { PAYMENT_WEB_URL, WEB_URL } from '../src/lib/constants';
 import { detectDeviceCountryAndTimezone } from '../src/lib/country-codes';
+import { WorkspaceSwitcherSection } from '../src/components/navigation/workspace-switcher-section';
 import * as WebBrowser from 'expo-web-browser';
 
 interface BgosEntitlement {
@@ -473,6 +474,16 @@ export default function MyPlanScreen() {
           );
         })}
       </View>
+
+      <Card style={{ padding: 16, marginTop: 4 }}>
+        <WorkspaceSwitcherSection
+          title="MANAGE OTHER BUSINESS WORKSPACES"
+          navigateHomeOnSwitch={false}
+          onSwitched={() => {
+            void billingRes.refresh();
+          }}
+        />
+      </Card>
     </Screen>
   );
 }

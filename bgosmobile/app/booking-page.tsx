@@ -129,7 +129,7 @@ export default function BusinessPageSettingsScreen() {
   dirtyRef.current = dirty;
 
   const [busy, setBusy] = useState(false);
-  const [aiIdentityField, setAiIdentityField] = useState<'tagline' | 'headline' | null>(null);
+  const [aiIdentityField, setAiIdentityField] = useState<'tagline' | 'headline' | 'description' | null>(null);
   const [savingAutoConfirm, setSavingAutoConfirm] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState<'cover' | 'logo' | null>(null);
   const [coverLoadError, setCoverLoadError] = useState(false);
@@ -534,25 +534,40 @@ export default function BusinessPageSettingsScreen() {
     void Linking.openURL(fullPublicUrl);
   };
 
-  const generateIdentityField = async (field: 'tagline' | 'headline') => {
+  const generateIdentityField = async (field: 'tagline' | 'headline' | 'description') => {
     if (aiIdentityField) return;
     setAiIdentityField(field);
     setError(null);
     try {
-      const res = await apiRequest<{ tagline?: string; headline?: string }>('/api/bgos/business-identity/ai', {
-        method: 'POST',
-        body: {
-          field,
-          businessName: config.businessName || workspace.data?.name || '',
-          description: config.seoDescription || '',
-          currentTagline: config.tagline || '',
-          currentHeadline: config.headline || '',
+      const res = await apiRequest<{ tagline?: string; headline?: string; description?: string }>(
+        '/api/bgos/business-identity/ai',
+        {
+          method: 'POST',
+          body: {
+            field,
+            businessName: config.businessName || workspace.data?.name || '',
+            description: config.seoDescription || '',
+            currentTagline: config.tagline || '',
+            currentHeadline: config.headline || '',
+            currentDescription: config.seoDescription || '',
+          },
         },
-      });
-      const generated = field === 'tagline' ? res?.tagline : res?.headline;
+      );
+      const generated =
+        field === 'tagline'
+          ? res?.tagline
+          : field === 'headline'
+            ? res?.headline
+            : res?.description;
       if (generated && generated.trim()) {
-        setField(field, generated.trim());
-        showToast(field === 'tagline' ? 'AI generated a fresh tagline' : 'AI generated a fresh headline');
+        setField(field === 'description' ? 'seoDescription' : field, generated.trim());
+        showToast(
+          field === 'tagline'
+            ? 'AI generated a fresh tagline'
+            : field === 'headline'
+              ? 'AI generated a fresh headline'
+              : 'AI wrote your About description',
+        );
       }
     } catch (e) {
       setError((e as Error).message || 'Could not auto-fill with AI');
@@ -1053,13 +1068,45 @@ export default function BusinessPageSettingsScreen() {
                     </Pressable>
                   </View>
                 </View>
-                <Field
-                  label="About / Description"
-                  value={config.seoDescription || ''}
-                  onChangeText={(v) => setField('seoDescription', v)}
-                  placeholder="Describe what your business specializes in..."
-                  multiline
-                />
+                <View style={{ gap: 6, marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={ui.label}>About / Description</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Auto-fill About description with AI"
+                      onPress={() => void generateIdentityField('description')}
+                      disabled={aiIdentityField !== null}
+                      hitSlop={8}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 8,
+                        backgroundColor: '#ECFDF5',
+                        opacity: aiIdentityField === 'description' ? 0.6 : pressed ? 0.75 : 1,
+                      })}
+                    >
+                      {aiIdentityField === 'description' ? (
+                        <ActivityIndicator size="small" color="#059669" />
+                      ) : (
+                        <MaterialIcons name="auto-awesome" size={14} color="#059669" />
+                      )}
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#047857' }}>
+                        {aiIdentityField === 'description' ? 'Writing…' : 'AI Write'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    style={[ui.input, { minHeight: 96, textAlignVertical: 'top', fontSize: 15, color: colors.ink }]}
+                    value={config.seoDescription || ''}
+                    onChangeText={(v) => setField('seoDescription', v)}
+                    placeholder="Describe what your business specializes in..."
+                    placeholderTextColor={colors.muted}
+                    multiline
+                  />
+                </View>
                 <Field
                   label="Phone Number"
                   value={config.phone || ''}

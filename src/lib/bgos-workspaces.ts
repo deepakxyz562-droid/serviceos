@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { generateToken, type AuthUser } from '@/lib/auth';
 import { issueRefreshSession, type RefreshSessionMetadata } from '@/lib/auth-refresh-session';
 import { ensureAndSyncBusinessChatbot } from '@/lib/bgos-business-chatbot';
+import { evaluateBgosEntitlement } from '@/lib/bgos-entitlement';
 
 export interface BgosWorkspaceSummary {
   workspaceId: string;
@@ -16,6 +17,9 @@ export interface BgosWorkspaceSummary {
   planTier: string;
   subscriptionStatus: string;
   trialEndsAt: string | null;
+  entitled: boolean;
+  trialExpired: boolean;
+  trialDaysLeft: number;
   isCurrent: boolean;
   hasLiveActivity: boolean;
   publicBusinessUrl: string;
@@ -355,6 +359,10 @@ export async function listUserBgosWorkspaces(
 
         const isCurrent =
           effectiveCurrentWsId ? w.id === effectiveCurrentWsId : tenant.id === effectiveCurrentTenantId;
+        const entitlement = evaluateBgosEntitlement({
+          tenant,
+          productSubscription: sub,
+        });
 
         return {
           workspaceId: w.id,
@@ -365,9 +373,12 @@ export async function listUserBgosWorkspaces(
           logo: tenant.logo || w.logo || null,
           boundGbpLocationId,
           boundBusinessName: boundGbpLocationId ? tenant.name || w.name : null,
-          planTier: sub?.plan || tenant.plan || 'free',
-          subscriptionStatus: sub?.status || tenant.planStatus || 'active',
-          trialEndsAt: (sub?.trialEndsAt || tenant.trialEndsAt)?.toISOString?.() ?? null,
+          planTier: entitlement.plan || sub?.plan || tenant.plan || 'starter',
+          subscriptionStatus: entitlement.status || sub?.status || tenant.planStatus || 'trial',
+          trialEndsAt: entitlement.trialEndsAt ?? (sub?.trialEndsAt || tenant.trialEndsAt)?.toISOString?.() ?? null,
+          entitled: entitlement.entitled,
+          trialExpired: entitlement.trialExpired,
+          trialDaysLeft: entitlement.trialDaysLeft,
           isCurrent,
           hasLiveActivity: activity.hasActivity,
           publicBusinessUrl: buildPublicBusinessPath(tenant.slug || w.slug),
@@ -475,23 +486,88 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
     }
   }
 
+  // Auto-hydrate GBP location metadata from the connected SocialAccount when creating from a GBP listing
+  let gbpMeta: Record<string, any> = {};
+  if (input.profileId) {
+    const sourceAccount = await db.socialAccount
+      .findFirst({
+        where: {
+          platform: 'googlebusiness',
+          isActive: true,
+          accountId: input.profileId,
+          OR: [
+            { connectedById: input.userId },
+            ...(userWorkspaces.length > 0
+              ? [{ tenantId: { in: userWorkspaces.map((w) => w.tenantId) } }]
+              : []),
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { metadata: true },
+      })
+      .catch(() => null);
+    if (sourceAccount?.metadata) {
+      gbpMeta =
+        typeof sourceAccount.metadata === 'string'
+          ? parseWorkspaceJson(sourceAccount.metadata)
+          : (sourceAccount.metadata as Record<string, any>);
+    }
+  }
+
+  const resolvedAddress = (input.address || (typeof gbpMeta.address === 'string' ? gbpMeta.address : '') || '').trim() || null;
+  const resolvedPhone = (input.phone || (typeof gbpMeta.phone === 'string' ? gbpMeta.phone : '') || '').trim() || null;
+  const resolvedWebsite = (input.website || (typeof gbpMeta.website === 'string' ? gbpMeta.website : '') || '').trim() || null;
+  const resolvedPlaceId = (typeof gbpMeta.placeId === 'string' ? gbpMeta.placeId.trim() : '') || null;
+
+  let resolvedCity = (input.city || '').trim() || null;
+  if (!resolvedCity && resolvedAddress) {
+    const parts = resolvedAddress.split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      resolvedCity = parts.find((p) => p.length > 2 && !/^\d{5,6}$/.test(p) && !/road|rd|street|st|lane|floor|suite|near|opp/i.test(p)) || parts[parts.length - 2] || null;
+    }
+  }
+
   const uniqueSlug = await ensureUniqueBgosWorkspaceSlug(cleanName);
   const country = (input.country || 'IN').trim().toUpperCase();
   const currency = (input.currency || (country === 'IN' ? 'INR' : 'USD')).trim().toUpperCase();
-  const category = (input.category || 'Local Business').trim();
+  const category = (input.category || (typeof gbpMeta.category === 'string' ? gbpMeta.category : '') || 'Local Business').trim();
+  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const defaultTagline = resolvedCity ? `Trusted ${category} in ${resolvedCity}` : `Trusted ${category}`;
+  const defaultHeadline = `Book ${category} Services With ${cleanName}`;
+  const defaultDescription = resolvedCity
+    ? `${cleanName} offers reliable ${category.toLowerCase()} services in ${resolvedCity}. Explore offerings, verified Google reviews, and book or message our team directly online.`
+    : `${cleanName} offers reliable ${category.toLowerCase()} services. Explore offerings, verified Google reviews, and book or message our team directly online.`;
 
   const initialSettings = {
     source: 'bgos',
     isBgosStandalone: true,
     boundGbpLocationId: input.profileId || null,
     activeGbpLocationId: input.profileId || null,
+    activeGbpTitle: cleanName,
+    activeGbpCategory: category,
+    ...(resolvedAddress ? { activeGbpAddress: resolvedAddress } : {}),
+    ...(resolvedCity ? { activeGbpCity: resolvedCity } : {}),
+    ...(resolvedPlaceId ? { activeGbpPlaceId: resolvedPlaceId } : {}),
+    ...(input.services?.length ? { activeGbpServices: input.services.slice(0, 12) } : {}),
     boundAt: input.profileId ? new Date().toISOString() : null,
-    city: input.city || null,
+    city: resolvedCity,
     state: input.state || null,
-    website: input.website || null,
+    website: resolvedWebsite,
+    bookingPageConfig: {
+      businessName: cleanName,
+      phone: resolvedPhone || undefined,
+      email: undefined,
+      website: resolvedWebsite || undefined,
+      address: resolvedAddress || undefined,
+      tagline: defaultTagline,
+      headline: defaultHeadline,
+      seoDescription: defaultDescription,
+      publicSlug: uniqueSlug,
+      onlineBookingEnabled: true,
+    },
     publicCard: {
       accentColor: '#1E3A5F',
-      tagline: category,
+      tagline: defaultTagline,
       showReviews: true,
       showGallery: true,
       bookingEnabled: true,
@@ -503,15 +579,22 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
       data: {
         name: cleanName,
         slug: uniqueSlug,
+        publicSlug: uniqueSlug,
+        publicProfileEnabled: true,
         industry: category,
-        phone: input.phone || null,
-        address: input.address || null,
-        city: input.city || null,
+        tagline: defaultTagline,
+        description: defaultDescription,
+        googlePlaceId: resolvedPlaceId,
+        phone: resolvedPhone,
+        address: resolvedAddress,
+        city: resolvedCity,
         state: input.state || null,
         country,
         currency,
-        plan: 'free',
-        planStatus: 'active',
+        website: resolvedWebsite,
+        plan: 'starter',
+        planStatus: 'trial',
+        trialEndsAt,
         onboardingCompleted: Boolean(input.profileId),
         onboardingStep: input.profileId ? 3 : 0,
         settingsJson: JSON.stringify(initialSettings),
@@ -526,7 +609,7 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
         industry: category,
         ownerId: input.userId,
         productType: 'bgos',
-        plan: 'free',
+        plan: 'starter',
       },
     });
 
@@ -554,8 +637,9 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
     await tx.productSubscription.create({
       data: {
         workspaceId: workspace.id,
-        plan: 'free',
-        status: 'active',
+        plan: 'starter',
+        status: 'trial',
+        trialEndsAt,
         billingSource: 'none',
       },
     });
@@ -590,16 +674,16 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
       update: {
         businessName: cleanName,
         industry: category,
-        location: [input.city, input.state].filter(Boolean).join(', ') || input.address || null,
-        website: input.website || null,
+        location: [resolvedCity, input.state].filter(Boolean).join(', ') || resolvedAddress || null,
+        website: resolvedWebsite,
         services: input.services?.length ? JSON.stringify(input.services) : undefined,
       },
       create: {
         tenantId: created.tenant.id,
         businessName: cleanName,
         industry: category,
-        location: [input.city, input.state].filter(Boolean).join(', ') || input.address || null,
-        website: input.website || null,
+        location: [resolvedCity, input.state].filter(Boolean).join(', ') || resolvedAddress || null,
+        website: resolvedWebsite,
         tone: 'friendly',
         services: input.services?.length ? JSON.stringify(input.services) : undefined,
       },
@@ -629,6 +713,10 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
     triggerSource: 'workspace_created',
   }).catch(() => null);
 
+  import('@/lib/designs/business-image-suggestions')
+    .then(({ prewarmTenantSceneSuggestions }) => prewarmTenantSceneSuggestions(created.tenant.id))
+    .catch(() => {});
+
   const summary: BgosWorkspaceSummary = {
     workspaceId: created.workspace.id,
     tenantId: created.tenant.id,
@@ -638,9 +726,12 @@ export async function createBgosBusinessWorkspace(input: CreateBgosWorkspaceInpu
     logo: null,
     boundGbpLocationId: input.profileId || null,
     boundBusinessName: input.profileId ? cleanName : null,
-    planTier: 'free',
-    subscriptionStatus: 'active',
-    trialEndsAt: null,
+    planTier: 'starter',
+    subscriptionStatus: 'trial',
+    trialEndsAt: trialEndsAt.toISOString(),
+    entitled: true,
+    trialExpired: false,
+    trialDaysLeft: 7,
     isCurrent: input.activateForUser !== false,
     hasLiveActivity: false,
     publicBusinessUrl: buildPublicBusinessPath(uniqueSlug),

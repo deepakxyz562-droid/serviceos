@@ -20,6 +20,7 @@ import { getToken } from '../../lib/auth';
 import { useAuthStore } from '../../stores/auth-store';
 import { PAYMENT_WEB_URL, WEB_URL } from '../../lib/constants';
 import { detectDeviceCountryAndTimezone } from '../../lib/country-codes';
+import { WorkspaceSwitcherSection } from '../navigation/workspace-switcher-section';
 
 interface BillingResponse {
   subscription?: {
@@ -98,6 +99,7 @@ interface PaywallGateProps {
 
 export function PaywallGate({ children }: PaywallGateProps) {
   const billingRes = useResource<BillingResponse>('/api/bgos/billing', 0, true, 15000);
+  const workspaceRes = useResource<{ name?: string }>('/api/bgos/workspace', 0, true, 15000);
   const [activatingPlan, setActivatingPlan] = useState<string | null>(null);
   const [region, setRegion] = useState<'india' | 'international'>(() => {
     try {
@@ -164,6 +166,18 @@ export function PaywallGate({ children }: PaywallGateProps) {
                 <Text style={styles.payButtonText}>Retry Verification</Text>
               </View>
             </Pressable>
+
+            <View style={styles.switcherCard}>
+              <WorkspaceSwitcherSection
+                title="SWITCH BUSINESS WORKSPACE"
+                showAddBusiness={false}
+                navigateHomeOnSwitch={false}
+                onSwitched={() => {
+                  void billingRes.refresh();
+                  void workspaceRes.refresh();
+                }}
+              />
+            </View>
 
             <Pressable
               style={styles.signOutButton}
@@ -259,12 +273,16 @@ export function PaywallGate({ children }: PaywallGateProps) {
           <View style={styles.badgeRow}>
             <View style={styles.expiredBadge}>
               <MaterialIcons name="lock" size={14} color="#BA3547" />
-              <Text style={styles.expiredBadgeText}>7-Day Free Trial Ended</Text>
+              <Text style={styles.expiredBadgeText}>
+                {workspaceRes.data?.name
+                  ? `7-Day Free Trial Ended · ${workspaceRes.data.name}`
+                  : '7-Day Free Trial Ended'}
+              </Text>
             </View>
           </View>
           <Text style={styles.title}>Complete Payment to Continue</Text>
           <Text style={styles.subtitle}>
-            Your 7-day full-access trial has ended. Choose a plan below to unlock all BGOS features.
+            This business workspace requires an active plan. Subscribe below or switch to another active business workspace.
           </Text>
           {user?.email ? (
             <Text style={styles.accountBadge}>Signed in as: {user.email}</Text>
@@ -346,6 +364,19 @@ export function PaywallGate({ children }: PaywallGateProps) {
           })}
         </View>
 
+        {/* Switch to another Business Workspace without signing out */}
+        <View style={styles.switcherCard}>
+          <WorkspaceSwitcherSection
+            title="SWITCH TO ANOTHER BUSINESS WORKSPACE"
+            showAddBusiness={false}
+            navigateHomeOnSwitch={false}
+            onSwitched={() => {
+              void billingRes.refresh();
+              void workspaceRes.refresh();
+            }}
+          />
+        </View>
+
         {/* Security & Actions Footer */}
         <View style={styles.footer}>
           <Pressable
@@ -388,6 +419,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 18,
+  },
+  switcherCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginTop: 18,
+    width: '100%',
   },
   refreshButton: {
     paddingVertical: 8,

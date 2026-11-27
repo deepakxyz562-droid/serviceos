@@ -20,7 +20,7 @@ import { Screen, colors } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { applyWorkspaceSession, type SessionResponse } from '../src/stores/auth-store';
 import type { WorkspaceListItem } from '../src/components/navigation/workspace-switcher-section';
-import { apiRequest } from '../src/lib/api';
+import { apiRequest, ApiError } from '../src/lib/api';
 import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
 
@@ -222,20 +222,25 @@ export default function SelectProfileScreen() {
       });
       invalidateResourceScope();
       setVerifyModalProfile(null);
-      Alert.alert(
-        'Profile & Services Verified',
-        `Active profile is now ${name.trim() || p.name} (${category || 'Local Business'}).\n\nAI posts, designs, and captions are now calibrated to this business.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (router.canGoBack?.()) router.back();
-              else router.replace('/(tabs)');
-            },
-          },
-        ]
-      );
+      setStatusNotice(`✓ Active profile set to ${name.trim() || p.name}`);
+      if (router.canGoBack?.()) router.back();
+      else router.replace('/(tabs)');
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.statusCode === 409 && err.data?.code === 'WORKSPACE_BOUND_TO_OTHER_BUSINESS') {
+        setVerifyModalProfile(null);
+        setSwitchingId(null);
+        if (err.data.existingTargetWorkspaceId) {
+          await handleSwitchExistingWorkspace(err.data.existingTargetWorkspaceId, name.trim() || p.name);
+        } else {
+          await handleCreateSeparateWorkspace({
+            businessName: name.trim() || p.name,
+            profileId: p.id,
+            category: category.trim() || p.category || null,
+            services: prods,
+          });
+        }
+        return;
+      }
       Alert.alert('Update Failed', (err as Error).message || 'Could not verify profile.');
     } finally {
       setSwitchingId(null);
@@ -424,39 +429,7 @@ export default function SelectProfileScreen() {
 
   function handleSelectProfileRow(p: any) {
     if (p.isBoundToOtherWorkspace && p.boundWorkspaceId) {
-      Alert.alert(
-        `Switch to ${p.boundBusinessName || p.name}?`,
-        `This Google Business already has its own dedicated workspace (${String(p.boundPlanTier || 'free').toUpperCase()} plan). Switch to manage it without mixing data.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Switch Workspace',
-            onPress: () => void handleSwitchExistingWorkspace(p.boundWorkspaceId, p.boundBusinessName || p.name),
-          },
-        ],
-      );
-      return;
-    }
-
-    if (boundProfileId && boundProfileId !== p.id) {
-      Alert.alert(
-        'Separate Workspace Required',
-        hasWorkspaceActivity
-          ? `Your current workspace already has live data (${discoverExtra.workspaceActivityReason || 'activity'}). Each business gets its own isolated CRM, page URL, AI chatbot & subscription.\n\nCreate a dedicated workspace for "${p.name}"?`
-          : `Your current workspace is already linked to another Google Business. Create a separate workspace for "${p.name}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Create Business Workspace',
-            onPress: () =>
-              void handleCreateSeparateWorkspace({
-                businessName: p.name,
-                profileId: p.id,
-                category: p.category || null,
-              }),
-          },
-        ],
-      );
+      void handleSwitchExistingWorkspace(p.boundWorkspaceId, p.boundBusinessName || p.name);
       return;
     }
 
@@ -1031,10 +1004,14 @@ export default function SelectProfileScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>
-                  Verify Business Profile
+                  {verifyModalProfile && boundProfileId && boundProfileId !== verifyModalProfile.id
+                    ? 'Create Business Workspace'
+                    : 'Verify Business Profile'}
                 </Text>
                 <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 2 }}>
-                  Confirm category &amp; offerings for dynamic AI marketing
+                  {verifyModalProfile && boundProfileId && boundProfileId !== verifyModalProfile.id
+                    ? 'Starts with a 7-day trial · separate AI agent, images & website'
+                    : 'Confirm category & offerings for dynamic AI marketing'}
                 </Text>
               </View>
               <Pressable

@@ -9,6 +9,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiRequest } from '../../lib/api';
+import { invalidateResourceScope } from '../../lib/resource-cache';
 import { applyWorkspaceSession, type SessionResponse, useAuthStore } from '../../stores/auth-store';
 import { colors } from '../ui';
 
@@ -20,17 +21,46 @@ export interface WorkspaceListItem {
   industry: string | null;
   boundGbpLocationId: string | null;
   planTier: string;
+  subscriptionStatus?: string;
+  trialEndsAt?: string | null;
+  entitled?: boolean;
+  trialExpired?: boolean;
+  trialDaysLeft?: number;
   isCurrent: boolean;
   publicBusinessUrl: string;
 }
 
 interface WorkspaceSwitcherSectionProps {
-  onClose: () => void;
+  onClose?: () => void;
+  onSwitched?: (ws: WorkspaceListItem) => void;
+  title?: string;
+  showAddBusiness?: boolean;
+  navigateHomeOnSwitch?: boolean;
 }
 
-export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionProps) {
+function getWorkspacePlanLabel(ws: WorkspaceListItem): { text: string; color: string; bg: string } {
+  const status = String(ws.subscriptionStatus || '').toLowerCase();
+  const plan = String(ws.planTier || 'starter').toUpperCase();
+  if (ws.trialExpired || ws.entitled === false) {
+    return { text: `${plan} · PAYMENT NEEDED`, color: '#B91C1C', bg: '#FEE2E2' };
+  }
+  if (status === 'trial') {
+    const days = typeof ws.trialDaysLeft === 'number' && ws.trialDaysLeft > 0 ? `${ws.trialDaysLeft}d` : '7d';
+    return { text: `TRIAL · ${days} left`, color: '#B45309', bg: '#FEF3C7' };
+  }
+  return { text: `${plan} · ACTIVE`, color: '#15803D', bg: '#DCFCE7' };
+}
+
+export function WorkspaceSwitcherSection({
+  onClose,
+  onSwitched,
+  title,
+  showAddBusiness = true,
+  navigateHomeOnSwitch = true,
+}: WorkspaceSwitcherSectionProps) {
   const router = useRouter();
   const currentWorkspaceId = useAuthStore((s) => s.user?.workspaceId || null);
+  const currentTenantId = useAuthStore((s) => s.user?.tenantId || null);
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -43,7 +73,7 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
         setWorkspaces(res.workspaces);
       }
     } catch {
-      // Non-fatal in drawer
+      // Non-fatal in drawer / paywall
     } finally {
       setLoading(false);
     }
@@ -51,11 +81,11 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
 
   useEffect(() => {
     void loadWorkspaces();
-  }, [loadWorkspaces, currentWorkspaceId]);
+  }, [loadWorkspaces, currentWorkspaceId, currentTenantId]);
 
   async function handleSwitch(ws: WorkspaceListItem) {
     if (ws.isCurrent || switchingId) {
-      if (ws.isCurrent) onClose();
+      if (ws.isCurrent) onClose?.();
       return;
     }
     setSwitchingId(ws.workspaceId);
@@ -69,9 +99,14 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
       );
       if (session?.user && session?.token) {
         await applyWorkspaceSession(session);
+        invalidateResourceScope();
       }
-      onClose();
-      router.replace('/(tabs)');
+      await loadWorkspaces();
+      onSwitched?.(ws);
+      onClose?.();
+      if (navigateHomeOnSwitch) {
+        router.replace('/(tabs)');
+      }
     } catch (e) {
       Alert.alert(
         'Switch Failed',
@@ -86,27 +121,29 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6 }}>
-          BUSINESS WORKSPACES ({workspaces.length || 1})
+          {title || `BUSINESS WORKSPACES (${workspaces.length || 1})`}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            onClose();
-            router.push('/select-profile');
-          }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 3,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            borderRadius: 8,
-            backgroundColor: '#EFF6FF',
-          }}
-        >
-          <MaterialIcons name="add" size={14} color="#2563EB" />
-          <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Add Business</Text>
-        </Pressable>
+        {showAddBusiness ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              onClose?.();
+              router.push('/select-profile');
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 3,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 8,
+              backgroundColor: '#EFF6FF',
+            }}
+          >
+            <MaterialIcons name="add" size={14} color="#2563EB" />
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Add Business</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {loading && workspaces.length === 0 ? (
@@ -117,6 +154,7 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
         <View style={{ gap: 6 }}>
           {workspaces.map((ws) => {
             const isBusy = switchingId === ws.workspaceId;
+            const planBadge = getWorkspacePlanLabel(ws);
             return (
               <Pressable
                 key={ws.workspaceId}
@@ -156,16 +194,30 @@ export function WorkspaceSwitcherSection({ onClose }: WorkspaceSwitcherSectionPr
                   </Text>
                 </View>
 
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, gap: 2 }}>
                   <Text
                     style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}
                     numberOfLines={1}
                   >
                     {ws.name}
                   </Text>
-                  <Text style={{ fontSize: 10.5, color: '#64748B' }} numberOfLines={1}>
-                    {ws.planTier.toUpperCase()} · /{ws.slug}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <View
+                      style={{
+                        backgroundColor: planBadge.bg,
+                        paddingHorizontal: 6,
+                        paddingVertical: 1.5,
+                        borderRadius: 5,
+                      }}
+                    >
+                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: planBadge.color }}>
+                        {planBadge.text}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 10.5, color: '#64748B' }} numberOfLines={1}>
+                      /{ws.slug}
+                    </Text>
+                  </View>
                 </View>
 
                 {isBusy ? (

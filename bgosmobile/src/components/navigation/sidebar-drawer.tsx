@@ -20,6 +20,7 @@ import { enablePush, isPushPermissionGranted, unregisterPush } from '../../lib/p
 import { getBgosWebUrl } from '../../lib/bgos-urls';
 import { WEB_URL } from '../../lib/constants';
 import type { BgosWorkspace } from '../../types/bgos-contracts';
+import { WorkspaceSwitcherSection } from './workspace-switcher-section';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.75, 320);
@@ -197,6 +198,9 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 18 }}
           >
+            {/* BUSINESS WORKSPACES SWITCHER */}
+            <WorkspaceSwitcherSection onClose={onClose} />
+
             {/* GOOGLE GROWTH & BRAND BRAIN */}
             <View style={{ gap: 6 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6 }}>
