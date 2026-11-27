@@ -37,7 +37,7 @@ const colors = {
 };
 
 const FIREBASE_JS_VERSION = '10.14.1';
-const INVISIBLE_MANUAL_HINT_MS = 7000;
+const INVISIBLE_MANUAL_HINT_MS = 4500;
 
 export interface FirebaseRecaptchaModalHandle {
   verify: (phoneLabel?: string) => Promise<string>;
@@ -619,14 +619,14 @@ export const FirebaseRecaptchaModal = forwardRef<FirebaseRecaptchaModalHandle>(
                   pointerEvents={showInteractiveArea && !webError ? 'auto' : 'none'}
                   style={
                     showInteractiveArea && !webError
-                      ? { flex: 1 }
+                      ? { flex: 1, zIndex: 3 }
                       : {
                           position: 'absolute',
                           top: 0,
                           left: 0,
                           right: 0,
                           height: interactiveHeight,
-                          opacity: 0.01,
+                          zIndex: 1,
                         }
                   }
                 >
@@ -675,7 +675,14 @@ export const FirebaseRecaptchaModal = forwardRef<FirebaseRecaptchaModalHandle>(
               {webError ? (
                 <View
                   style={{
-                    flex: 1,
+                    ...({
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 2,
+                    } as const),
                     backgroundColor: '#FFFFFF',
                     paddingHorizontal: 22,
                     paddingVertical: 20,
@@ -729,7 +736,14 @@ export const FirebaseRecaptchaModal = forwardRef<FirebaseRecaptchaModalHandle>(
                 /* Compact Silent Check Overlay */
                 <View
                   style={{
-                    flex: 1,
+                    ...({
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 2,
+                    } as const),
                     backgroundColor: '#FFFFFF',
                     paddingHorizontal: 22,
                     paddingVertical: 20,

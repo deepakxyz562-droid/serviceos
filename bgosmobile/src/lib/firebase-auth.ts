@@ -56,6 +56,7 @@ export interface SendOtpResult {
   sessionInfo?: string;
   formattedPhone?: string;
   channel?: 'native' | 'recaptcha_in_app';
+  autoVerifiedIdToken?: string;
   error?: string;
 }
 
@@ -129,9 +130,19 @@ export function isExpoGoRuntime(): boolean {
   return execEnv === 'storeClient' || ownership === 'expo';
 }
 
+type NativeAuthUser = {
+  phoneNumber?: string | null;
+  getIdToken?: (forceRefresh?: boolean) => Promise<string>;
+};
+
+type NativeAuthLike = {
+  currentUser?: NativeAuthUser | null;
+};
+
 type NativeFirebasePhoneBridge = {
   getAuth: () => unknown;
   signInWithPhoneNumber: (auth: unknown, phoneNumber: string) => Promise<NativeConfirmationResult>;
+  signOut?: (auth: unknown) => Promise<void>;
 };
 
 let nativeFirebaseBridgeOverride: NativeFirebasePhoneBridge | null | undefined;
@@ -170,6 +181,7 @@ function getNativeFirebasePhoneBridge(): NativeFirebasePhoneBridge | null {
     const authModule = require('@react-native-firebase/auth') as {
       getAuth?: () => unknown;
       signInWithPhoneNumber?: (auth: unknown, phoneNumber: string) => Promise<NativeConfirmationResult>;
+      signOut?: (auth: unknown) => Promise<void>;
     };
     if (
       !authModule ||
@@ -182,6 +194,7 @@ function getNativeFirebasePhoneBridge(): NativeFirebasePhoneBridge | null {
     return {
       getAuth: authModule.getAuth,
       signInWithPhoneNumber: authModule.signInWithPhoneNumber,
+      signOut: typeof authModule.signOut === 'function' ? authModule.signOut : undefined,
     };
   } catch (err) {
     console.warn('[Firebase Auth] Native module unavailable, will use in-app reCAPTCHA:', err);
@@ -213,10 +226,13 @@ function mapTerminalNativeSendError(code: string, message: string): string | nul
     combined.includes('TOO_MANY_ATTEMPTS') ||
     combined.includes('QUOTA_EXCEEDED')
   ) {
-    return 'Too many OTP requests from this number. Please wait a few minutes before trying again.';
+    return 'Too many OTP requests from this number. Firebase has temporarily paused SMS for this number — please wait a bit or sign in with Google / Email.';
   }
   if (combined.includes('operation-not-allowed') || combined.includes('OPERATION_NOT_ALLOWED')) {
-    return 'Phone sign-in is not enabled right now. Please sign in with Email or Google.';
+    return 'Phone sign-in is not enabled on Firebase right now. Please sign in with Email or Google.';
+  }
+  if (combined.includes('billing-not-enabled') || combined.includes('BILLING_NOT_ENABLED')) {
+    return 'Firebase Phone SMS billing/region quota is unavailable for this country right now. Please try again later or sign in with Google / Email.';
   }
   if (combined.includes('network-request-failed')) {
     return 'Network error while contacting Firebase. Please check your internet connection and retry.';
@@ -226,7 +242,7 @@ function mapTerminalNativeSendError(code: string, message: string): string | nul
 
 function mapRestSendError(rawMessage: string): string {
   if (rawMessage.includes('TOO_MANY_ATTEMPTS') || rawMessage.includes('QUOTA_EXCEEDED')) {
-    return 'Too many OTP requests from this number. Please wait a few minutes before trying again.';
+    return 'Too many OTP requests from this number. Firebase has temporarily paused SMS for this number — please wait a bit or sign in with Google / Email.';
   }
   if (rawMessage.includes('INVALID_PHONE_NUMBER')) {
     return 'Invalid phone number format. Please check the digits and try again.';
@@ -243,7 +259,7 @@ function mapRestSendError(rawMessage: string): string {
     return 'Security verification check could not be completed. Please tap Send OTP and try again.';
   }
   if (rawMessage.includes('BILLING_NOT_ENABLED')) {
-    return 'Unable to send verification SMS right now. Please verify your mobile number or try again in a few moments.';
+    return 'Firebase Phone SMS billing/region quota is unavailable for this country right now. Please try again later or sign in with Google / Email.';
   }
   return 'Unable to send verification code right now. Please check your number or sign in with Email / Google.';
 }
@@ -341,7 +357,34 @@ export async function sendFirebaseOtp(
     if (nativeBridge) {
       try {
         const auth = nativeBridge.getAuth();
+        if (nativeBridge.signOut && (auth as NativeAuthLike)?.currentUser) {
+          await nativeBridge.signOut(auth).catch(() => {});
+        }
         const confirmation = await nativeBridge.signInWithPhoneNumber(auth, formatted);
+
+        // If Android Play Integrity silently auto-verified this device/number,
+        // Firebase signs in `auth.currentUser` directly without sending a 6-digit SMS.
+        const autoUser = (auth as NativeAuthLike)?.currentUser;
+        if (
+          autoUser &&
+          formatPhoneNumber(autoUser.phoneNumber || '') === formatted &&
+          typeof autoUser.getIdToken === 'function'
+        ) {
+          try {
+            const autoToken = await autoUser.getIdToken(true);
+            if (autoToken) {
+              return {
+                success: true,
+                formattedPhone: formatted,
+                channel: 'native',
+                autoVerifiedIdToken: autoToken,
+              };
+            }
+          } catch {
+            // Fall through to OTP code entry if token extraction fails
+          }
+        }
+
         pruneStaleNativeSessions();
         sessionCounter += 1;
         const sessionId = `${NATIVE_SESSION_PREFIX}${Date.now()}_${sessionCounter}`;

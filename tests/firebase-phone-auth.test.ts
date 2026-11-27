@@ -379,4 +379,78 @@ describe('BGOS In-App FirebaseRecaptchaModal', () => {
     await expect(tokenPromise).rejects.toBeInstanceOf(FirebaseRecaptchaCancelledError);
     expect(screen.queryByTestId('mock-modal')).toBeNull();
   });
+
+  it('signs out stale user, detects Android Play Integrity auto-verification, and returns autoVerifiedIdToken', async () => {
+    const authObj: {
+      currentUser: { phoneNumber: string | null; getIdToken: (force?: boolean) => Promise<string> } | null;
+    } = {
+      currentUser: {
+        phoneNumber: '+919999999999',
+        getIdToken: vi.fn().mockResolvedValue('stale_token'),
+      },
+    };
+    const signOutMock = vi.fn().mockImplementation(async () => {
+      authObj.currentUser = null;
+    });
+    const signInMock = vi.fn().mockImplementation(async () => {
+      authObj.currentUser = {
+        phoneNumber: '+919876543210',
+        getIdToken: vi.fn().mockResolvedValue('auto_fb_id_tok'),
+      };
+      return { verificationId: 'auto_ver_id', confirm: vi.fn() };
+    });
+
+    setNativeFirebaseBridgeForTesting({
+      getAuth: () => authObj,
+      signOut: signOutMock,
+      signInWithPhoneNumber: signInMock,
+    });
+    const requestRecaptchaToken = vi.fn();
+
+    try {
+      const res = await sendFirebaseOtp('+919876543210', { requestRecaptchaToken });
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+      expect(res).toEqual({
+        success: true,
+        formattedPhone: '+919876543210',
+        channel: 'native',
+        autoVerifiedIdToken: 'auto_fb_id_tok',
+      });
+      expect(requestRecaptchaToken).not.toHaveBeenCalled();
+    } finally {
+      setNativeFirebaseBridgeForTesting(undefined);
+    }
+  });
+
+  it('maps terminal auth/too-many-requests and auth/billing-not-enabled without opening reCAPTCHA modal', async () => {
+    const requestRecaptchaToken = vi.fn();
+
+    try {
+      setNativeFirebaseBridgeForTesting({
+        getAuth: () => ({}),
+        signInWithPhoneNumber: vi.fn().mockRejectedValue({
+          code: 'auth/too-many-requests',
+          message: 'TOO_MANY_ATTEMPTS_TRY_LATER',
+        }),
+      });
+      const rateLimitRes = await sendFirebaseOtp('+919876543210', { requestRecaptchaToken });
+      expect(rateLimitRes.success).toBe(false);
+      expect(rateLimitRes.error).toMatch(/too many|wait|limit|blocked|later/i);
+      expect(requestRecaptchaToken).not.toHaveBeenCalled();
+
+      setNativeFirebaseBridgeForTesting({
+        getAuth: () => ({}),
+        signInWithPhoneNumber: vi.fn().mockRejectedValue({
+          code: 'auth/billing-not-enabled',
+          message: 'BILLING_NOT_ENABLED',
+        }),
+      });
+      const billingRes = await sendFirebaseOtp('+919876543210', { requestRecaptchaToken });
+      expect(billingRes.success).toBe(false);
+      expect(billingRes.error).toMatch(/billing|blaze|sms|plan|firebase/i);
+      expect(requestRecaptchaToken).not.toHaveBeenCalled();
+    } finally {
+      setNativeFirebaseBridgeForTesting(undefined);
+    }
+  });
 });

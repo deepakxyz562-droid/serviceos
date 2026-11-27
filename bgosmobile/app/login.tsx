@@ -103,6 +103,10 @@ export default function LoginScreen() {
           return recaptchaModalRef.current.verify(formatted);
         },
       });
+      if (res.success && res.autoVerifiedIdToken) {
+        await loginPhone(res.autoVerifiedIdToken, res.formattedPhone || fullE164);
+        return;
+      }
       if (!res.success || !res.sessionInfo) {
         setLocalError(res.error || 'Failed to send verification code.');
         return;
