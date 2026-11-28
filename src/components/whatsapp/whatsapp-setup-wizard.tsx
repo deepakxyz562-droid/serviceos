@@ -533,11 +533,11 @@ export function WhatsAppSetupWizard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="p-3 rounded-lg bg-sky-500/5 border border-sky-500/20 text-xs text-sky-300">
-              <strong>Don&apos;t have a Meta Business account?</strong> Create one at{' '}
+              <strong>Using 1-Click Meta Login?</strong> Skip the steps below — it connects automatically without needing Meta&apos;s 8-task &quot;Get Started&quot; checklist. Only open{' '}
               <a href="https://business.facebook.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-sky-200">
                 business.facebook.com <ExternalLink className="size-3 inline" />
-              </a>
-              . Then go to WhatsApp → Get Started to create your WhatsApp Business API account.
+              </a>{' '}
+              if you want to paste manual API credentials or add billing for paid outbound broadcasts.
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

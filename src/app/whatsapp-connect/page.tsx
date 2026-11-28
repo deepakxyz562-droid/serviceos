@@ -1,25 +1,55 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Loader2,
+  Lock,
   MessageCircle,
   ShieldCheck,
   Smartphone,
   ArrowLeft,
 } from 'lucide-react';
 import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
+import { authHeaders } from '@/lib/client-auth';
+
+// Deduplicate ticket-to-cookie exchange across React StrictMode remounts
+const handoffExchangePromises = new Map<string, Promise<boolean>>();
+
+function exchangeMobileHandoffTicket(ticket: string): Promise<boolean> {
+  const existing = handoffExchangePromises.get(ticket);
+  if (existing) return existing;
+
+  const promise = fetch('/api/bgos/mobile-auth/handoff', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ ticket }),
+  })
+    .then((res) => res.ok)
+    .catch(() => false);
+
+  handoffExchangePromises.set(ticket, promise);
+  return promise;
+}
+
+type AuthGateState = 'checking' | 'authenticated' | 'unauthenticated' | 'customer_forbidden';
 
 function WhatsAppConnectContent() {
   const searchParams = useSearchParams();
   const ticket = searchParams.get('ticket') || '';
-  const returnUrl = searchParams.get('returnUrl') || 'bgos://gbp-callback';
+  const clientParam = searchParams.get('client') || '';
+  const rawReturnUrl = searchParams.get('returnUrl') || '';
+  const isMobileClient = clientParam === 'mobile' || rawReturnUrl.startsWith('bgos://');
+  const returnUrl = rawReturnUrl || (isMobileClient ? 'bgos://gbp-callback' : '');
   const nextPath = searchParams.get('next') || '/integrations';
 
+  const [authState, setAuthState] = useState<AuthGateState>('checking');
+  const [ticketExpired, setTicketExpired] = useState(false);
   const [mode, setMode] = useState<'coexistence' | 'cloud_api'>('coexistence');
   const [showPersonalGuide, setShowPersonalGuide] = useState(false);
   const [configMeta, setConfigMeta] = useState<{
@@ -37,20 +67,79 @@ function WhatsAppConnectContent() {
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const loginHref = useMemo(() => {
+    const cleanParams = new URLSearchParams(searchParams.toString());
+    cleanParams.delete('ticket');
+    const query = cleanParams.toString();
+    const target = query ? `/whatsapp-connect?${query}` : '/whatsapp-connect';
+    return `/?auth=login&returnUrl=${encodeURIComponent(target)}`;
+  }, [searchParams]);
+
   useEffect(() => {
-    const q = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
-    fetch(`/api/whatsapp/config${q}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json) setConfigMeta(json);
-      })
-      .catch(() => {});
+    let cancelled = false;
+
+    async function verifySessionAndLoadConfig() {
+      setAuthState((prev) => (prev === 'authenticated' ? prev : 'checking'));
+      setTicketExpired(false);
+
+      if (ticket) {
+        const exchanged = await exchangeMobileHandoffTicket(ticket);
+        if (!exchanged && !cancelled) {
+          setTicketExpired(true);
+        } else if (exchanged && typeof window !== 'undefined') {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('ticket');
+          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+        }
+      }
+
+      try {
+        const meRes = await fetch('/api/auth/me', {
+          headers: authHeaders(),
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const meJson = meRes.ok ? await meRes.json().catch(() => null) : null;
+        if (cancelled) return;
+
+        if (!meJson?.user?.id || !meJson?.user?.tenantId) {
+          setAuthState('unauthenticated');
+          return;
+        }
+        if (meJson.user.role === 'customer') {
+          setAuthState('customer_forbidden');
+          return;
+        }
+
+        setAuthState('authenticated');
+
+        const cfgRes = await fetch('/api/whatsapp/config', {
+          headers: authHeaders(),
+          credentials: 'include',
+          cache: 'no-store',
+        }).catch(() => null);
+        if (!cancelled && cfgRes?.ok) {
+          const json = await cfgRes.json().catch(() => null);
+          if (json) setConfigMeta(json);
+        }
+      } catch {
+        if (!cancelled) setAuthState('unauthenticated');
+      }
+    }
+
+    void verifySessionAndLoadConfig();
+    return () => {
+      cancelled = true;
+    };
   }, [ticket]);
 
   const buildDeepLink = (statusParam: string) => {
-    const sep = returnUrl.includes('?') ? '&' : '?';
-    return `${returnUrl}${sep}${statusParam}&next=${encodeURIComponent(nextPath)}`;
+    const target = returnUrl || 'bgos://gbp-callback';
+    const sep = target.includes('?') ? '&' : '?';
+    return `${target}${sep}${statusParam}&next=${encodeURIComponent(nextPath)}`;
   };
+
+  const safeWebNextPath = nextPath.startsWith('/') ? nextPath : '/integrations';
 
   const handleSuccess = (
     phoneNumberId: string,
@@ -86,27 +175,80 @@ function WhatsAppConnectContent() {
           </div>
         </div>
 
-        {connectedResult ? (
-          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
-              <CheckCircle2 className="w-5 h-5" />
-              WhatsApp Connected!
+        {authState === 'checking' ? (
+          <div className="py-10 flex flex-col items-center justify-center gap-3 text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+            <p className="text-sm font-medium text-slate-600">Verifying your BGOS session…</p>
+          </div>
+        ) : authState !== 'authenticated' ? (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
+              <Lock className="w-4 h-4 shrink-0" />
+              {authState === 'customer_forbidden'
+                ? 'Business Account Required'
+                : 'Sign In Required to Connect WhatsApp'}
             </div>
-            <p className="text-xs text-emerald-700 leading-relaxed">
-              {connectedResult.displayPhoneNumber
-                ? `Connected number ${connectedResult.displayPhoneNumber}. `
-                : ''}
-              {connectedResult.coexistenceMode
-                ? 'Coexistence mode active — your phone WhatsApp Business app keeps working alongside BGOS AI Chat.'
-                : 'Cloud API active — 24/7 AI booking, reminders, and campaigns are ready.'}
+            <p className="text-xs text-amber-800 leading-relaxed">
+              {authState === 'customer_forbidden'
+                ? 'You are currently signed in to a customer portal session. Please sign in with your BGOS business owner or admin account to connect WhatsApp.'
+                : ticketExpired
+                  ? 'Your mobile connection link expired (valid for 60 seconds). Sign in below or return to the BGOS app and tap Connect WhatsApp again.'
+                  : 'Please sign in to your BGOS / FieserOS business account before linking your WhatsApp number with Meta.'}
             </p>
-            <a
-              href={buildDeepLink('whatsapp=connected')}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white font-semibold text-sm py-2.5 px-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Return to BGOS App
-            </a>
+            <div className="space-y-2 pt-1">
+              <a
+                href={loginHref}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 px-4 transition"
+              >
+                Sign In to BGOS &amp; Continue
+              </a>
+              {isMobileClient ? (
+                <a
+                  href={buildDeepLink('whatsapp=auth_required')}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold text-sm py-2 px-4 hover:bg-slate-50 transition"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Return to BGOS App
+                </a>
+              ) : null}
+            </div>
+          </div>
+        ) : connectedResult ? (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
+                <CheckCircle2 className="w-5 h-5" />
+                WhatsApp Connected!
+              </div>
+              <p className="text-xs text-emerald-700 leading-relaxed">
+                {connectedResult.displayPhoneNumber
+                  ? `Connected number ${connectedResult.displayPhoneNumber}. `
+                  : ''}
+                {connectedResult.coexistenceMode
+                  ? 'Coexistence mode active — your phone WhatsApp Business app keeps working alongside BGOS AI Chat.'
+                  : 'Cloud API active — 24/7 AI booking, reminders, and campaigns are ready.'}
+              </p>
+              <a
+                href={isMobileClient ? buildDeepLink('whatsapp=connected') : safeWebNextPath}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white font-semibold text-sm py-2.5 px-4"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {isMobileClient ? 'Return to BGOS App' : 'Continue to BGOS'}
+              </a>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-xs text-slate-700 space-y-1.5">
+              <p className="font-semibold text-slate-900">You&apos;re Done — No Extra Meta Portal Setup Needed</p>
+              <p>
+                <strong>1. Inbound AI Chat is live:</strong> Customers messaging you get instant replies inside BGOS immediately.
+              </p>
+              <p>
+                <strong>2. Test from BGOS:</strong> Send a test WhatsApp message using your QR / Chat Link inside BGOS — no need to use Meta&apos;s onboarding checklist.
+              </p>
+              <p className="text-slate-500">
+                Optional later: If Meta shows a &quot;3 of 8 tasks&quot; checklist or asks for a payment method, you can ignore it unless you send paid outbound marketing broadcasts.
+              </p>
+            </div>
           </div>
         ) : (
           <>
@@ -217,7 +359,7 @@ function WhatsAppConnectContent() {
                 {/(personal|messenger|ineligible|coexist|register|linked|app|3441107|cancelled)/i.test(errorMsg) ? (
                   <div className="text-[11px] text-red-800 space-y-1">
                     <p>
-                      Tip: Ensure your phone is on the latest <strong>WhatsApp Business app</strong> (v2.24.17+) and check <em>Settings → Account → Business Platform</em> to disconnect any previous partner link before retrying.
+                      Tip: Ensure your phone is on the latest <strong>WhatsApp Business app</strong> (v2.24.17+) and check <em>Settings → Account → Business Platform</em> to disconnect any unrelated previous provider before retrying.
                     </p>
                     <p>
                       If Meta shows error <strong>#3441107</strong> (&quot;partner&apos;s app isn&apos;t set up yet&quot;), Coexistence setup for WhatsApp Business app numbers is still awaiting Meta partner/app verification — or choose <strong>Connect Dedicated API Number</strong> if setting up a dedicated or spare number.
@@ -226,6 +368,10 @@ function WhatsAppConnectContent() {
                 ) : null}
               </div>
             ) : null}
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[11.5px] text-slate-600 leading-relaxed">
+              <strong className="text-slate-800">Just 1 popup step:</strong> After approving below, you&apos;re ready immediately inside BGOS. If Meta later displays a <em>&quot;Get started (8 tasks)&quot;</em> page on <code className="text-[11px]">business.facebook.com</code>, you can ignore it — only add a payment card later if you send paid promotional broadcasts.
+            </div>
 
             <WhatsAppEmbeddedSignupButton
               label="Continue with Facebook & WhatsApp"
@@ -239,7 +385,7 @@ function WhatsAppConnectContent() {
             />
 
             <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-              No Developer tokens required. Start immediately with unlimited inbound AI chat replies & 250 template messages/day; verify your Meta Business Portfolio later for 1,000+ daily volume.
+              No Developer tokens required. Start immediately with unlimited inbound AI chat replies &amp; 250 free-tier conversations; business verification in Meta is only needed later for 1,000+ daily broadcasts.
             </p>
           </>
         )}

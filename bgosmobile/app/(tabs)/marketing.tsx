@@ -42,6 +42,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { resolveSafeBottomInset, resolveSafeTopInset } from '../../src/lib/safe-area';
 import {
   Screen,
   Card,
@@ -2181,7 +2182,7 @@ export default function MarketingScreen() {
   </>);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 12) }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: resolveSafeTopInset(insets.top) }}>
       {/* ── Single-Row Top Header Bar matching Benchmark Screenshot 1 ─────────────────── */}
       <View
         style={{
@@ -2918,7 +2919,7 @@ export default function MarketingScreen() {
         </View>
       </Modal>
       <Modal visible={templatePickerOpen} animationType="slide" onRequestClose={() => setTemplatePickerOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: insets.top }}>
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: resolveSafeTopInset(insets.top) }}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle}>Choose a Poster Template</Text>
             <Pressable
@@ -5981,7 +5982,7 @@ export default function MarketingScreen() {
           animationType="fade"
           onRequestClose={() => setFullscreenPhotoUrl(null)}
         >
-          <View style={{ flex: 1, backgroundColor: '#090D16', paddingTop: insets.top, paddingBottom: insets.bottom }}>
+          <View style={{ flex: 1, backgroundColor: '#090D16', paddingTop: resolveSafeTopInset(insets.top), paddingBottom: resolveSafeBottomInset(insets.bottom, 12) }}>
             {/* Top Bar */}
             <View
               style={{

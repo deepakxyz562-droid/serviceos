@@ -91,6 +91,9 @@ export async function POST(request: NextRequest) {
     if (!authUser || !authUser.tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (authUser.role === 'customer') {
+      return NextResponse.json({ error: 'Business account required' }, { status: 403 });
+    }
 
     if (!code) {
       return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });

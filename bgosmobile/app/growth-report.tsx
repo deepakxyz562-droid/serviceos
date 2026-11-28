@@ -23,6 +23,7 @@ import { getToken } from '../src/lib/auth';
 import { WEB_URL } from '../src/lib/constants';
 import { PerformancePanel } from '../src/components/gbp/performance-panel';
 import { TutorialVideoModal } from '../src/components/gbp/tutorial-video-modal';
+import { resolveSafeBottomInset, resolveSafeTopInset } from '../src/lib/safe-area';
 
 interface MetricDelta {
   value: number;
@@ -458,7 +459,7 @@ export default function GrowthReportScreen() {
       <StatusBar style="dark" />
 
       {/* ── Light Header Matching BGOS Design System ── */}
-      <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={[styles.headerContainer, { paddingTop: resolveSafeTopInset(insets.top, 8) }]}>
         <View style={styles.headerLeft}>
           <Pressable
             accessibilityRole="button"
@@ -520,7 +521,7 @@ export default function GrowthReportScreen() {
       ) : (
         <ScrollView
           style={styles.scrollBody}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 20 }}
+          contentContainerStyle={{ paddingBottom: resolveSafeBottomInset(insets.bottom, 24) + 20 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

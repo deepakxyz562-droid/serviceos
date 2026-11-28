@@ -20,6 +20,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../ui';
+import { resolveSafeBottomInset, resolveSafeTopInset } from '../../lib/safe-area';
 import { apiRequest } from '../../lib/api';
 import { resolvePhotoUrl } from '../../lib/constants';
 import { resolveTemplateSource } from '../design/professional-assets';
@@ -673,7 +674,10 @@ export function MediaMetadataSheet({
         ) : (
           <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             {/* ── TOP NAV BAR (WITH SAFE AREA INSETS) ── */}
-            <View style={[styles.navBar, { paddingTop: insets.top, height: 56 + insets.top }]}>
+            {(() => {
+              const safeTop = resolveSafeTopInset(insets.top);
+              return (
+                <View style={[styles.navBar, { paddingTop: safeTop, height: 56 + safeTop }]}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -699,11 +703,13 @@ export function MediaMetadataSheet({
               >
                 <MaterialIcons name="close" size={22} color="#64748B" />
               </Pressable>
-            </View>
+                </View>
+              );
+            })()}
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + insets.bottom }]}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + resolveSafeBottomInset(insets.bottom, 12) }]}
             >
               {errorMsg ? (
                 <View style={styles.errorBanner}>

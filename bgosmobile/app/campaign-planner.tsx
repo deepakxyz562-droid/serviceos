@@ -20,6 +20,7 @@ import { apiRequest } from '../src/lib/api';
 import { uploadFileToStorage, normalizePendingUpload } from '../src/lib/upload';
 import { useResource } from '../src/hooks/use-resource';
 import { parsePostStructure } from '../src/components/gbp/posts-list';
+import { resolveSafeTopInset } from '../src/lib/safe-area';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -369,7 +370,7 @@ export default function CampaignPlannerScreen() {
   const pendingCount = posts.filter((p) => p.approvalStatus === 'pending').length;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={[styles.screen, { paddingTop: resolveSafeTopInset(insets.top) }]}>
       {/* ── Top Header with Back Button ──────────────────────────────────── */}
       <View style={styles.topHeader}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>

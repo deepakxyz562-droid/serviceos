@@ -13,11 +13,11 @@ import {
   Text,
   TextInput,
   View,
-  StatusBar as RNStatusBar,
   type TextInputProps,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { resolveSafeBottomInset, resolveSafeTopInset } from '../lib/safe-area';
 
 export const colors = {
   background: '#F7FAF9',
@@ -87,7 +87,7 @@ export function Brand({ large = false, light = false }: { large?: boolean; light
   );
 }
 
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 
 export function Screen({
   title = '',
@@ -131,9 +131,11 @@ export function Screen({
   hideNavBar?: boolean;
 }) {
   const router = useRouter();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const [pulling, setPulling] = useState(false);
   const canBack = showBack !== undefined ? showBack : (onBack !== undefined || (router.canGoBack?.() ?? false));
+  const isInsideTabs = segments[0] === '(tabs)';
 
   function handleBack() {
     if (onBack) {
@@ -153,13 +155,16 @@ export function Screen({
     }
   }
 
-  // Ensure top clearance fits naturally without artificial excessive top gaps
-  const androidStatus = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
-  const effectiveTopPadding = hideNavBar ? 0 : Math.max(insets.top, androidStatus) + extraTopPadding;
+  // Reliable top inset across iOS notch, Android display cutouts, and Modals
+  const effectiveTopPadding = hideNavBar ? 0 : resolveSafeTopInset(insets.top, extraTopPadding);
 
-  // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
-  const floatingClearance = floatingAction ? 60 : 0;
-  const bottomInset = Math.max(insets.bottom, 16) + 76 + extraBottomPadding + floatingClearance;
+  // Inside (tabs), TabLayout reserves system bottom inset; non-tab Stack screens must clear insets.bottom
+  const floatingBottomOffset = isInsideTabs ? 12 : resolveSafeBottomInset(insets.bottom, 12) + 8;
+  const floatingClearance = floatingAction ? 68 + (isInsideTabs ? 0 : floatingBottomOffset - 12) : 0;
+  const bottomInset =
+    (isInsideTabs ? 24 : resolveSafeBottomInset(insets.bottom, 16) + 24) +
+    extraBottomPadding +
+    floatingClearance;
 
   const hasPinnedNav = hideNavBar ? false : Boolean(stickyHeader || !customHeader);
 
@@ -276,7 +281,7 @@ export function Screen({
                 position: 'absolute',
                 left: 16,
                 right: 16,
-                bottom: 12,
+                bottom: floatingBottomOffset,
                 zIndex: 40,
               }}
             >

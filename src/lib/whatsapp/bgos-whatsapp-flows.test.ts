@@ -655,4 +655,81 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
       process.env = prevEnv;
     }
   });
+
+  it('locks down /api/whatsapp/config and /api/whatsapp/embedded-signup against unauthenticated ?tenantId= probes and customer roles, while accepting valid mobile handoff tickets', async () => {
+    const prevKey = process.env.SOCIAL_CRYPTO_KEY;
+    process.env.SOCIAL_CRYPTO_KEY = 'test-wa-connect-crypto-key';
+    try {
+      const {
+        GET: configGet,
+        PUT: configPut,
+        DELETE: configDelete,
+      } = await import('@/app/api/whatsapp/config/route');
+      const { POST: embeddedPost } = await import('@/app/api/whatsapp/embedded-signup/route');
+      const { sealHandoffTicket } = await import('@/lib/bgos-mobile-auth');
+
+      // 1. Unauthenticated caller cannot bypass auth using ?tenantId=
+      mockGetAuthUser.mockResolvedValue(null);
+      const unauthGet = await configGet(
+        new Request('http://localhost/api/whatsapp/config?tenantId=victim_tenant_1') as any,
+      );
+      expect(unauthGet.status).toBe(401);
+      expect(mockDb.tenant.findUnique).not.toHaveBeenCalled();
+
+      const unauthPut = await configPut(
+        new Request('http://localhost/api/whatsapp/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: 'EAA_X', phoneNumberId: '123' }),
+        }) as any,
+      );
+      expect(unauthPut.status).toBe(401);
+
+      const unauthDelete = await configDelete(
+        new Request('http://localhost/api/whatsapp/config', { method: 'DELETE' }) as any,
+      );
+      expect(unauthDelete.status).toBe(401);
+
+      // 2. Customer portal session is rejected with 403
+      mockGetAuthUser.mockResolvedValue({ id: 'cust_1', tenantId: 'ten_1', role: 'customer' });
+      const customerGet = await configGet(
+        new Request('http://localhost/api/whatsapp/config') as any,
+      );
+      expect(customerGet.status).toBe(403);
+
+      const customerSignup = await embeddedPost(
+        new Request('http://localhost/api/whatsapp/embedded-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'abc123' }),
+        }) as any,
+      );
+      expect(customerSignup.status).toBe(403);
+
+      // 3. Valid mobile handoff ticket authenticates GET /api/whatsapp/config without exposing other tenants
+      mockGetAuthUser.mockResolvedValue(null);
+      mockDb.communicationProvider.findFirst.mockResolvedValue(null);
+      mockDb.tenant.findUnique.mockResolvedValue({ settingsJson: '{}', country: 'IN' });
+      const ticket = sealHandoffTicket({
+        userId: 'owner_mobile_1',
+        tenantId: 'ten_mobile_1',
+        role: 'owner',
+        email: 'owner@example.com',
+      });
+      const ticketGet = await configGet(
+        new Request(
+          `http://localhost/api/whatsapp/config?tenantId=other_tenant&ticket=${encodeURIComponent(ticket)}`,
+        ) as any,
+      );
+      expect(ticketGet.status).toBe(200);
+      expect(mockDb.tenant.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ten_mobile_1' },
+        }),
+      );
+    } finally {
+      if (prevKey === undefined) delete process.env.SOCIAL_CRYPTO_KEY;
+      else process.env.SOCIAL_CRYPTO_KEY = prevKey;
+    }
+  });
 });

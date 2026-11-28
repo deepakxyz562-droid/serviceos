@@ -11,31 +11,51 @@ function maskString(value: string): string {
   return '****' + value.slice(-4);
 }
 
+type CallerAuth =
+  | { ok: true; userId: string; tenantId: string }
+  | { ok: false; status: 401 | 403; error: string };
+
+async function resolveWhatsAppConfigCaller(request: NextRequest): Promise<CallerAuth> {
+  const authUser = await getAuthUser(request).catch(() => null);
+  if (authUser?.id) {
+    if (authUser.role === 'customer') {
+      return { ok: false, status: 403, error: 'Business account required' };
+    }
+    if (!authUser.tenantId) {
+      return { ok: false, status: 401, error: 'Unauthorized' };
+    }
+    return { ok: true, userId: authUser.id, tenantId: authUser.tenantId };
+  }
+
+  try {
+    const ticket = new URL(request.url).searchParams.get('ticket');
+    if (ticket) {
+      const verified = verifyHandoffTicket(ticket);
+      if (verified?.userId && verified?.tenantId) {
+        if (verified.role === 'customer') {
+          return { ok: false, status: 403, error: 'Business account required' };
+        }
+        return { ok: true, userId: verified.userId, tenantId: verified.tenantId };
+      }
+    }
+  } catch {
+    // Ignore malformed request URL
+  }
+
+  return { ok: false, status: 401, error: 'Unauthorized' };
+}
+
 /**
  * GET - Return current WhatsApp configuration status, live metadata & QR standee URL
  * Resolves from DB: tenant's own → platform (SuperAdmin) → .env fallback
  */
 export async function GET(request: NextRequest) {
   try {
-    let tenantId: string | undefined;
-    try {
-      const { searchParams } = new URL(request.url);
-      tenantId = searchParams.get('tenantId') || undefined;
-      if (!tenantId) {
-        const ticket = searchParams.get('ticket');
-        if (ticket) {
-          const verified = verifyHandoffTicket(ticket);
-          if (verified?.tenantId) tenantId = verified.tenantId;
-        }
-      }
-    } catch { /* no query context */ }
-
-    if (!tenantId) {
-      const authUser = await getAuthUser(request).catch(() => null);
-      if (authUser?.tenantId) {
-        tenantId = authUser.tenantId;
-      }
+    const caller = await resolveWhatsAppConfigCaller(request);
+    if (!caller.ok) {
+      return NextResponse.json({ error: caller.error }, { status: caller.status });
     }
+    const tenantId = caller.tenantId;
 
     const config = await resolveWhatsAppConfig(tenantId);
     const configured = Boolean(
@@ -132,6 +152,11 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    const caller = await resolveWhatsAppConfigCaller(request);
+    if (!caller.ok) {
+      return NextResponse.json({ error: caller.error }, { status: caller.status });
+    }
+
     const body = await request.json();
     const { accessToken, phoneNumberId } = body;
 
@@ -183,7 +208,11 @@ export async function PUT(request: NextRequest) {
 /**
  * DELETE - Clear WhatsApp configuration (reset to demo mode)
  */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  const caller = await resolveWhatsAppConfigCaller(request);
+  if (!caller.ok) {
+    return NextResponse.json({ error: caller.error }, { status: caller.status });
+  }
   return NextResponse.json({
     success: true,
     mode: 'demo',

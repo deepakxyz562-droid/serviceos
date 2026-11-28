@@ -577,14 +577,34 @@ function IntegrationsScreen() {
               </Text>
             </Pressable>
 
-            <Pressable
-              onPress={() => Linking.openURL('https://business.facebook.com/settings/security').catch(() => {})}
-              style={{ paddingVertical: 4 }}
+            <View
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                padding: 10,
+                gap: 4,
+              }}
             >
-              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#047857', textAlign: 'center' }}>
-                Verify Business in Meta Portfolio to unlock 1,000+ daily broadcasts →
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                Just 1 step — no Meta portal tasks needed
               </Text>
-            </Pressable>
+              <Text style={{ fontSize: 11.5, color: '#475569', lineHeight: 16 }}>
+                Once you finish the 2-minute Facebook popup, WhatsApp AI replies and customer bookings start working inside BGOS right away. If Meta shows a &quot;3 of 8 tasks&quot; page on business.facebook.com, you can ignore it — billing in Meta is only needed later if you run paid outbound broadcasts.
+              </Text>
+            </View>
+
+            {waActive ? (
+              <Pressable
+                onPress={() => Linking.openURL('https://business.facebook.com/settings/security').catch(() => {})}
+                style={{ paddingVertical: 2 }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textAlign: 'center' }}>
+                  Optional: Open Meta Portfolio Billing &amp; Verification (for 1,000+/day broadcasts) →
+                </Text>
+              </Pressable>
+            ) : null}
 
             <Pressable
               onPress={() => setShowManualWaFields((prev) => !prev)}
@@ -694,7 +714,7 @@ function IntegrationsScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalHeading}>WhatsApp AI Chat QR</Text>
             <Text style={styles.modalSubheading}>
-              Print or share this QR code at your reception counter. Customers scan to chat with your AI booking assistant on {waConfig.data?.displayPhoneNumber || 'WhatsApp'}.
+              Scan with your phone to send a test message right inside BGOS, or print this QR for your counter. Customers scan to chat with your AI booking assistant on {waConfig.data?.displayPhoneNumber || 'WhatsApp'}.
             </Text>
             {waConfig.data?.qrCodeDataUrl ? (
               <Image

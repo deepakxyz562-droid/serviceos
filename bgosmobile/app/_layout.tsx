@@ -4,6 +4,7 @@ import { Alert, AppState, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { NotificationResponse } from 'expo-notifications';
@@ -315,51 +316,53 @@ export default function RootLayout() {
   }, [isLoading, isAuthenticated, onboardingRequired, router]);
 
   return (
-    <RootErrorBoundary>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#F7FAF9' },
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="recover" />
-        <Stack.Screen name="auth-callback" />
-        <Stack.Screen name="setup" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="open" />
-        <Stack.Screen name="gbp-callback" />
-        <Stack.Screen name="inbox" />
-        <Stack.Screen name="leads" />
-        <Stack.Screen name="appointments" />
-        <Stack.Screen name="submissions" />
-        <Stack.Screen name="automations" />
-        <Stack.Screen name="agents" />
-        <Stack.Screen name="integrations" />
-        <Stack.Screen name="growth" />
-        <Stack.Screen name="qr-standee" />
-        <Stack.Screen name="booking-page" />
-        <Stack.Screen name="services-management" />
-        <Stack.Screen name="products-management" />
-        <Stack.Screen name="manage-profile" />
-        <Stack.Screen name="my-plan" />
-        <Stack.Screen name="keyword-planner" />
-        <Stack.Screen name="seo-growth" />
-        <Stack.Screen name="reply-settings" />
-        <Stack.Screen name="growth-report" />
-        <Stack.Screen name="campaign-planner" />
-        <Stack.Screen name="whatsapp-campaigns" />
-        <Stack.Screen name="citations" />
-        <Stack.Screen name="select-profile" />
-        <Stack.Screen name="team-management" />
-        <Stack.Screen name="logo-management" />
-        <Stack.Screen name="preferences" />
-        <Stack.Screen name="help" />
-        <Stack.Screen name="settings" />
-      </Stack>
-      <AnimatedSplash ready={(fontsLoaded || !!fontError) && !isLoading} />
-    </RootErrorBoundary>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <RootErrorBoundary>
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: '#F7FAF9' },
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="recover" />
+          <Stack.Screen name="auth-callback" />
+          <Stack.Screen name="setup" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="open" />
+          <Stack.Screen name="gbp-callback" />
+          <Stack.Screen name="inbox" />
+          <Stack.Screen name="leads" />
+          <Stack.Screen name="appointments" />
+          <Stack.Screen name="submissions" />
+          <Stack.Screen name="automations" />
+          <Stack.Screen name="agents" />
+          <Stack.Screen name="integrations" />
+          <Stack.Screen name="growth" />
+          <Stack.Screen name="qr-standee" />
+          <Stack.Screen name="booking-page" />
+          <Stack.Screen name="services-management" />
+          <Stack.Screen name="products-management" />
+          <Stack.Screen name="manage-profile" />
+          <Stack.Screen name="my-plan" />
+          <Stack.Screen name="keyword-planner" />
+          <Stack.Screen name="seo-growth" />
+          <Stack.Screen name="reply-settings" />
+          <Stack.Screen name="growth-report" />
+          <Stack.Screen name="campaign-planner" />
+          <Stack.Screen name="whatsapp-campaigns" />
+          <Stack.Screen name="citations" />
+          <Stack.Screen name="select-profile" />
+          <Stack.Screen name="team-management" />
+          <Stack.Screen name="logo-management" />
+          <Stack.Screen name="preferences" />
+          <Stack.Screen name="help" />
+          <Stack.Screen name="settings" />
+        </Stack>
+        <AnimatedSplash ready={(fontsLoaded || !!fontError) && !isLoading} />
+      </RootErrorBoundary>
+    </SafeAreaProvider>
   );
 }

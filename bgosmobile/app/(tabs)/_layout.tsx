@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
 import { ProtectedRoute } from '../../src/components/navigation/protected-route';
 import { GlobalUploadBanner } from '../../src/components/gbp/global-upload-banner';
+import { resolveTabBarLayout } from '../../src/lib/safe-area';
 
 /**
  * Bottom Navigation — BGOS Growth Employee bar (strictly 5 visible tabs;
@@ -26,12 +27,7 @@ const visible = [
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-
-  const tabHeight = Platform.select({
-    ios: insets.bottom > 0 ? 60 + insets.bottom : 64,
-    default: 66,
-  });
-  const tabPaddingBottom = insets.bottom > 0 ? insets.bottom : 8;
+  const tabLayout = resolveTabBarLayout(insets.bottom);
 
   return (
     <ProtectedRoute>
@@ -43,9 +39,9 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E2E8F0',
           borderTopWidth: 1,
-          height: tabHeight,
-          paddingBottom: tabPaddingBottom,
-          paddingTop: 6,
+          height: tabLayout.height,
+          paddingBottom: tabLayout.paddingBottom,
+          paddingTop: tabLayout.paddingTop,
           elevation: 8,
           shadowColor: '#070B2D',
           shadowOffset: { width: 0, height: -2 },
@@ -94,7 +90,7 @@ export default function TabLayout() {
       {/* Compatibility deep-link route hidden from the tab bar */}
       <Tabs.Screen name="photos" options={{ href: null }} />
       </Tabs>
-      <GlobalUploadBanner bottomOffset={(tabHeight ?? 66) + 10} />
+      <GlobalUploadBanner bottomOffset={tabLayout.height + 10} />
       </View>
     </ProtectedRoute>
   );

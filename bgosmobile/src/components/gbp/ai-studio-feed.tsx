@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
+import { resolveSafeTopInset } from '../../lib/safe-area';
 import { BGOS_SUPPORT_EMAIL } from '../../lib/constants';
 import { resolveTemplateSource } from '../design/professional-assets';
 import {
@@ -618,15 +619,18 @@ export function AiStudioFeed({
   return (
     <View style={styles.container}>
       {/* ── TOP NAV BAR (SAFE AREA COMPLIANT) ── */}
-      <View
-        style={[
-          styles.navBar,
-          {
-            paddingTop: embedded ? 0 : insets.top,
-            height: 52 + (embedded ? 0 : insets.top),
-          },
-        ]}
-      >
+      {(() => {
+        const safeTop = embedded ? 0 : resolveSafeTopInset(insets.top);
+        return (
+          <View
+            style={[
+              styles.navBar,
+              {
+                paddingTop: safeTop,
+                height: 52 + safeTop,
+              },
+            ]}
+          >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to Media"
@@ -640,7 +644,9 @@ export function AiStudioFeed({
         <View style={styles.navTitleWrap}>
           <Text style={styles.navTitleText}>AI Creative Studio</Text>
         </View>
-      </View>
+          </View>
+        );
+      })()}
 
       {/* ── SINGLE ACTION CTA: CREATE IMAGE WITH AI ── */}
       <View style={styles.createAiBannerWrap}>

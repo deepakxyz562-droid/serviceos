@@ -15,7 +15,9 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../lib/api';
+import { resolveSafeBottomInset, resolveSafeTopInset } from '../../lib/safe-area';
 import { normalizePendingUpload, uploadFileToStorage } from '../../lib/upload';
 import { GbpMediaPickerModal, type SelectedMediaItem } from './gbp-media-picker-modal';
 
@@ -46,6 +48,7 @@ export function CreateGbpPostModal({
   businessName = 'My Business',
   businessCategory = '',
 }: CreateGbpPostModalProps) {
+  const insets = useSafeAreaInsets();
   const [prompt, setPrompt] = useState('');
   const [attachedImageUri, setAttachedImageUri] = useState<string | null>(null);
   const [attachedImageUrl, setAttachedImageUrl] = useState<string | null>(null);
@@ -316,7 +319,7 @@ export function CreateGbpPostModal({
         style={styles.modalRoot}
       >
         {/* ── Top Header matching Screenshot 2 ── */}
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, Platform.OS === 'android' ? { paddingTop: resolveSafeTopInset(insets.top, 4) } : null]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -337,7 +340,7 @@ export function CreateGbpPostModal({
 
         <ScrollView
           style={styles.body}
-          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: resolveSafeBottomInset(insets.bottom, 24) + 16 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { authHeaders } from '@/lib/client-auth';
 import {
   getLoadedFbSdk,
   invokeFbLogin,
@@ -76,7 +77,10 @@ export function WhatsAppEmbeddedSignupButton({
         resolvedIdsRef.current.configId;
 
       if (!appId || !cfgId) {
-        const cfgRes = await fetch('/api/whatsapp/config').catch(() => null);
+        const cfgRes = await fetch('/api/whatsapp/config', {
+          headers: authHeaders(),
+          credentials: 'include',
+        }).catch(() => null);
         if (cfgRes?.ok) {
           const cfgJson = await cfgRes.json().catch(() => ({}));
           if (!appId && cfgJson.metaAppId) appId = cfgJson.metaAppId;
@@ -127,7 +131,8 @@ export function WhatsAppEmbeddedSignupButton({
         if (response.authResponse?.code) {
           const res = await fetch('/api/whatsapp/embedded-signup', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            credentials: 'include',
             body: JSON.stringify({
               code: response.authResponse.code,
               state: response.authResponse.state,
@@ -236,7 +241,10 @@ export function WhatsAppEmbeddedSignupButton({
         let resolvedConfigId = currentConfigId;
 
         if (!resolvedAppId || !resolvedConfigId) {
-          const cfgRes = await fetch('/api/whatsapp/config').catch(() => null);
+          const cfgRes = await fetch('/api/whatsapp/config', {
+            headers: authHeaders(),
+            credentials: 'include',
+          }).catch(() => null);
           if (cfgRes?.ok) {
             const cfgJson = await cfgRes.json().catch(() => ({}));
             if (!resolvedAppId && cfgJson.metaAppId) resolvedAppId = cfgJson.metaAppId;
