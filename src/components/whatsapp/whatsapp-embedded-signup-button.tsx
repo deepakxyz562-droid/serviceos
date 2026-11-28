@@ -28,7 +28,7 @@ interface WhatsAppEmbeddedSignupButtonProps {
   mode?: 'coexistence' | 'cloud_api';
 }
 
-const DEFAULT_TECH_PROVIDER_CONFIG_ID = '1822859788621036';
+const DEFAULT_TECH_PROVIDER_CONFIG_ID = '1726144922272991';
 
 /**
  * WhatsApp Embedded Signup Button (Supports Cloud API & WA Business App Coexistence)
