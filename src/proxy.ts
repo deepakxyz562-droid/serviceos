@@ -293,7 +293,7 @@ export async function proxy(request: NextRequest) {
     if (match) {
       const slugCandidate = match[1].toLowerCase();
       const BGOS_RESERVED = new Set([
-        'api', '_next', 'b', 'app', 'login', 'recover', 'setup', 'terms', 'privacy',
+        'api', '_next', 'b', 'app', 'open', 'login', 'recover', 'setup', 'terms', 'privacy',
         'terms-of-service', 'privacy-policy', 'data-deletion', 'auth', 'auth-callback',
         'gbp-callback', 'whatsapp-connect', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
         'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',

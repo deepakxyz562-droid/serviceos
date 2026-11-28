@@ -2,7 +2,13 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { MobileAppHandoff } from '@/components/bgos/mobile-app-handoff';
-import { buildBgosOpenHandoffConfig } from '@/lib/bgos/open-handoff';
+import {
+  buildBgosOpenHandoffConfig,
+  buildCleanBgosOpenDestination,
+} from '@/lib/bgos/open-handoff';
+import { recordTokenClickEvent } from '@/lib/email-consent';
+
+export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -26,12 +32,31 @@ export default async function OpenBgosAppPage({
     headers(),
   ]);
 
+  const view = firstParam(params.view);
+  const socialTab = firstParam(params.socialTab);
+  const tab = firstParam(params.tab);
+  const mode = firstParam(params.mode);
+  const clickToken = firstParam(params.ct);
+  const userAgent = hdrs.get('user-agent') || '';
+
+  if (clickToken) {
+    const rawHost = (hdrs.get('x-forwarded-host') || hdrs.get('host') || 'bgos.site').trim();
+    const proto = (hdrs.get('x-forwarded-proto') || 'https').trim();
+    const baseUrl = rawHost.includes('://') ? rawHost : `${proto}://${rawHost}`;
+    await recordTokenClickEvent({
+      token: clickToken,
+      destination: buildCleanBgosOpenDestination({ baseUrl, view, socialTab, tab, mode }),
+      userAgent,
+      ipAddress: hdrs.get('x-forwarded-for') || hdrs.get('x-real-ip'),
+    });
+  }
+
   const handoff = buildBgosOpenHandoffConfig({
-    view: firstParam(params.view),
-    socialTab: firstParam(params.socialTab),
-    tab: firstParam(params.tab),
-    mode: firstParam(params.mode),
-    userAgent: hdrs.get('user-agent') || '',
+    view,
+    socialTab,
+    tab,
+    mode,
+    userAgent,
   });
 
   if (!handoff.isMobile) {

@@ -125,9 +125,30 @@ export function clickRedirectUrl(token: string, destination: string, baseUrl?: s
 }
 
 /**
+ * Append `ct=<token>` to `/open` mobile app handoff URLs so Android App Links
+ * and iOS Universal Links match `/open` directly without a browser tracking hop,
+ * while `/open` (or the app) still records the click against the token.
+ */
+function appendOpenClickToken(cleanUrl: string, token: string): string | null {
+  try {
+    const parsed = new URL(cleanUrl)
+    if (parsed.pathname.replace(/\/+$/, '') !== '/open') {
+      return null
+    }
+    if (!parsed.searchParams.has('ct')) {
+      parsed.searchParams.set('ct', token)
+    }
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+/**
  * Rewrite every <a href="http(s)://..."> in the HTML to route through the
- * click-redirect endpoint, and append a hidden open-pixel <img> before
- * </body> (or at the end of the document). Only call for marketing emails.
+ * click-redirect endpoint (or embed `ct=<token>` on `/open` deep-link URLs
+ * so OS App Links / Universal Links can still trigger directly), and append
+ * a hidden open-pixel <img> before </body>. Only call for marketing emails.
  */
 export function injectTracking(html: string, token: string, baseUrl?: string | null): string {
   if (!html) return html
@@ -141,6 +162,10 @@ export function injectTracking(html: string, token: string, baseUrl?: string | n
       const cleanUrl = decodeHtmlUrlEntities(url)
       if (cleanUrl.includes('/api/public/unsubscribe') || cleanUrl.includes('/api/public/preferences')) {
         return match
+      }
+      const directOpenUrl = appendOpenClickToken(cleanUrl, token)
+      if (directOpenUrl) {
+        return `${prefix}${directOpenUrl}`
       }
       return `${prefix}${clickRedirectUrl(token, cleanUrl, baseUrl)}`
     },
@@ -338,6 +363,59 @@ export async function recordEmailEvent(opts: {
     })
   } catch {
     /* non-fatal */
+  }
+}
+
+/**
+ * Resolve an unsubscribe/tracking token and record a click event plus campaign
+ * `clickedCount` bump (best-effort, never throws). Shared by `/api/email/click/[token]`
+ * and direct `/open?ct=<token>` app handoff requests.
+ */
+export async function recordTokenClickEvent(opts: {
+  token: string
+  destination: string
+  userAgent?: string | null
+  ipAddress?: string | null
+}): Promise<void> {
+  const cleanToken = (opts.token || '').trim()
+  if (!cleanToken) return
+  try {
+    const row = await db.emailUnsubscribeToken.findUnique({ where: { token: cleanToken } })
+    if (!row) return
+
+    await recordEmailEvent({
+      type: 'click',
+      campaignId: row.campaignId,
+      recipientEmail: row.recipientEmail,
+      token: cleanToken,
+      url: opts.destination,
+      tenantId: row.tenantId,
+      userAgent: opts.userAgent,
+      ipAddress: opts.ipAddress,
+    })
+
+    if (row.campaignId) {
+      try {
+        const updated = await db.campaignMessage.updateMany({
+          where: {
+            campaignId: row.campaignId,
+            recipientEmail: row.recipientEmail,
+            clickedAt: null,
+          },
+          data: { clickedAt: new Date() },
+        })
+        if (updated.count > 0) {
+          await db.campaign.update({
+            where: { id: row.campaignId },
+            data: { clickedCount: { increment: 1 } },
+          })
+        }
+      } catch {
+        /* non-fatal */
+      }
+    }
+  } catch (err) {
+    console.error('[email/click] failed:', err)
   }
 }
 

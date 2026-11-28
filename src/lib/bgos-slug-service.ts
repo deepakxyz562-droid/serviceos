@@ -8,6 +8,7 @@ export const BGOS_RESERVED_SLUGS = new Set([
   '_next',
   'b',
   'app',
+  'open',
   'login',
   'recover',
   'setup',

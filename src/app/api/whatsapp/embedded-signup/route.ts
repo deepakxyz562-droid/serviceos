@@ -3,6 +3,10 @@ import { getAuthUser } from '@/lib/auth';
 import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { db } from '@/lib/db';
 import { syncTenantWhatsAppIdentity } from '@/lib/whatsapp/identity-sync';
+import {
+  fetchMetaAccountActivationSnapshot,
+  validateWhatsappRedirectUri,
+} from '@/lib/whatsapp/activation';
 
 /**
  * WhatsApp Embedded Signup — Code Exchange + WABA Registration + Coexistence
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
     const {
       code,
       state,
+      redirectUri: rawRedirectUri,
       wabaId: sessionWabaId,
       phoneNumberId: sessionPhoneNumberId,
       isCoexistence: rawIsCoexistence,
@@ -68,12 +73,20 @@ export async function POST(request: NextRequest) {
     } = body as {
       code?: string;
       state?: string;
+      redirectUri?: string;
       wabaId?: string;
       phoneNumberId?: string;
       isCoexistence?: boolean;
       featureType?: string;
       ticket?: string;
     };
+
+    const validatedRedirectUri = rawRedirectUri
+      ? validateWhatsappRedirectUri(rawRedirectUri)
+      : '';
+    if (rawRedirectUri && !validatedRedirectUri) {
+      return NextResponse.json({ error: 'Invalid redirectUri' }, { status: 400 });
+    }
 
     let authUser = await getAuthUser(request);
     if (!authUser?.tenantId && ticket) {
@@ -117,13 +130,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Exchange code for short-lived access token
+    // Meta JS SDK popup flows require redirect_uri=''; mobile dialog/oauth redirects require exact matching redirect_uri.
     const tokenRes = await fetch(`${META_GRAPH_API}/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: appId,
         client_secret: appSecret,
-        redirect_uri: '',
+        redirect_uri: validatedRedirectUri || '',
         code,
       }),
     });
@@ -163,11 +177,6 @@ export async function POST(request: NextRequest) {
     // 3. Resolve WABA ID & Phone Number ID (prefer exact session info from WA_EMBEDDED_SIGNUP)
     let wabaId: string | null = sessionWabaId?.trim() || null;
     let phoneNumberId: string | null = sessionPhoneNumberId?.trim() || null;
-    let displayPhoneNumber: string | null = null;
-    let verifiedName: string | null = null;
-    let nameStatus: string | null = null;
-    let messagingLimitTier: string | null = null;
-    let qualityRating: string | null = null;
 
     if (!wabaId) {
       const wabaRes = await fetch(`${META_GRAPH_API}/debug_token?input_token=${longLivedToken}`, {
@@ -176,7 +185,10 @@ export async function POST(request: NextRequest) {
       if (wabaRes.ok) {
         const debugData = await wabaRes.json();
         const wabaScope = debugData.data?.granular_scopes?.find(
-          (s: any) => s.scope === 'whatsapp_business_management',
+          (s: any) =>
+            (s.scope === 'whatsapp_business_management' || s.scope === 'whatsapp_business_messaging') &&
+            Array.isArray(s.target_ids) &&
+            s.target_ids.length > 0,
         );
         if (wabaScope?.target_ids?.length > 0) {
           wabaId = wabaScope.target_ids[0];
@@ -188,25 +200,16 @@ export async function POST(request: NextRequest) {
       Boolean(rawIsCoexistence) ||
       featureType === 'whatsapp_business_app_onboarding';
 
-    if (wabaId) {
-      const phoneRes = await fetch(
-        `${META_GRAPH_API}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating,messaging_limit_tier&access_token=${longLivedToken}`,
-      );
-      if (phoneRes.ok) {
-        const phoneData = await phoneRes.json();
-        const numbers: any[] = Array.isArray(phoneData.data) ? phoneData.data : [];
-        const matched =
-          (phoneNumberId && numbers.find((n) => n.id === phoneNumberId)) || numbers[0];
-        if (matched) {
-          phoneNumberId = matched.id || phoneNumberId;
-          displayPhoneNumber = matched.display_phone_number || null;
-          verifiedName = matched.verified_name || null;
-          nameStatus = matched.name_status || null;
-          messagingLimitTier = matched.messaging_limit_tier || null;
-          qualityRating = matched.quality_rating || null;
-        }
-      }
+    let snapshot = await fetchMetaAccountActivationSnapshot({
+      wabaId,
+      phoneNumberId,
+      accessToken: longLivedToken,
+      apiBase: META_GRAPH_API,
+    });
+    wabaId = snapshot.wabaId || wabaId;
+    phoneNumberId = snapshot.phoneNumberId || phoneNumberId;
 
+    if (wabaId) {
       // 4. Subscribe the WABA to app webhooks (messages + Coexistence smb_message_echoes)
       try {
         await fetch(`${META_GRAPH_API}/${wabaId}/subscribed_apps`, {
@@ -223,7 +226,7 @@ export async function POST(request: NextRequest) {
     let coexistenceSyncRequested = false;
     if (phoneNumberId && !isCoexistence) {
       try {
-        await fetch(`${META_GRAPH_API}/${phoneNumberId}/register`, {
+        const regRes = await fetch(`${META_GRAPH_API}/${phoneNumberId}/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -234,6 +237,14 @@ export async function POST(request: NextRequest) {
             pin: '000000',
           }),
         });
+        if (regRes.ok && snapshot.activationStatus !== 'active') {
+          snapshot = await fetchMetaAccountActivationSnapshot({
+            wabaId,
+            phoneNumberId,
+            accessToken: longLivedToken,
+            apiBase: META_GRAPH_API,
+          });
+        }
       } catch (err) {
         console.warn('[whatsapp/embedded-signup] Phone registration notice:', err);
       }
@@ -243,6 +254,14 @@ export async function POST(request: NextRequest) {
         longLivedToken,
       );
     }
+
+    const displayPhoneNumber = snapshot.displayPhoneNumber;
+    const verifiedName = snapshot.verifiedName;
+    const nameStatus = snapshot.nameStatus;
+    const messagingLimitTier = snapshot.messagingLimitTier;
+    const qualityRating = snapshot.qualityRating;
+    const activationStatus = snapshot.activationStatus;
+    const pendingActivation = activationStatus === 'pending';
 
     // 6. Store credentials & rich Meta status in tenant-owned CommunicationProvider
     const configJson = JSON.stringify({
@@ -254,6 +273,10 @@ export async function POST(request: NextRequest) {
       nameStatus: nameStatus || '',
       messagingLimitTier: messagingLimitTier || '',
       qualityRating: qualityRating || '',
+      phoneStatus: snapshot.phoneStatus || '',
+      codeVerificationStatus: snapshot.codeVerificationStatus || '',
+      accountReviewStatus: snapshot.accountReviewStatus || '',
+      activationStatus,
       coexistenceMode: isCoexistence,
       apiVersion: 'v21.0',
       source: isCoexistence ? 'embedded_signup_coexistence' : 'embedded_signup',
@@ -271,8 +294,8 @@ export async function POST(request: NextRequest) {
         where: { id: existing.id },
         data: {
           configJson,
-          status: 'active',
-          sendingEnabled: true,
+          status: activationStatus === 'active' ? 'active' : 'pending',
+          sendingEnabled: activationStatus === 'active',
           isPlatform: false,
         },
       });
@@ -286,8 +309,8 @@ export async function POST(request: NextRequest) {
             ? 'WhatsApp Business App (Coexistence)'
             : 'WhatsApp Business (Embedded Signup)',
           configJson,
-          status: 'active',
-          sendingEnabled: true,
+          status: activationStatus === 'active' ? 'active' : 'pending',
+          sendingEnabled: activationStatus === 'active',
           isPlatform: false,
         },
       });
@@ -307,7 +330,7 @@ export async function POST(request: NextRequest) {
       tenantId: authUser.tenantId,
       phone: displayPhoneNumber,
       syncChatbot: true,
-      syncGoogleBusiness: Boolean(displayPhoneNumber),
+      syncGoogleBusiness: Boolean(displayPhoneNumber && activationStatus === 'active'),
     }).catch(() => null);
 
     return NextResponse.json({
@@ -317,6 +340,11 @@ export async function POST(request: NextRequest) {
       displayPhoneNumber: displayPhoneNumber || identitySync?.phone || '',
       verifiedName: verifiedName || '',
       messagingLimitTier: messagingLimitTier || '',
+      activationStatus,
+      pendingActivation,
+      phoneStatus: snapshot.phoneStatus || '',
+      codeVerificationStatus: snapshot.codeVerificationStatus || '',
+      accountReviewStatus: snapshot.accountReviewStatus || '',
       coexistenceMode: isCoexistence,
       coexistenceSyncRequested,
       chatbotEnsured: Boolean(identitySync?.chatbotEnsured),

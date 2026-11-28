@@ -155,8 +155,14 @@ export async function POST(request: NextRequest) {
           console.log('[WhatsApp Callback] smb_app_state_sync received');
         }
 
-        if (change.field === 'account_update' && value) {
-          console.log('[WhatsApp Callback] account_update event received:', JSON.stringify(value));
+        if (
+          (change.field === 'account_update' ||
+            change.field === 'account_review_update' ||
+            change.field === 'phone_number_name_update') &&
+          value
+        ) {
+          console.log(`[WhatsApp Callback] ${change.field} event received:`, JSON.stringify(value));
+          await handleAccountLifecycleUpdate(entry.id, change.field, value);
         }
 
         // Handle incoming messages (interactive responses + plain-text inbound)
@@ -175,6 +181,60 @@ export async function POST(request: NextRequest) {
     console.error('WhatsApp webhook callback error:', message);
     // Still return 200 to prevent WhatsApp from retrying
     return NextResponse.json({ success: true, warning: message });
+  }
+}
+
+/**
+ * Handle Meta WABA activation / review webhooks (`account_update`, `account_review_update`,
+ * `phone_number_name_update`) and promote pending providers to `active` once verified.
+ */
+async function handleAccountLifecycleUpdate(
+  wabaEntryId: string | undefined,
+  field: string,
+  value: Record<string, unknown>,
+) {
+  try {
+    if (!wabaEntryId) return;
+    const provider = await db.communicationProvider.findFirst({
+      where: {
+        type: 'whatsapp',
+        isPlatform: false,
+        configJson: { contains: wabaEntryId },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!provider?.configJson) return;
+
+    const cfg = JSON.parse(provider.configJson) as Record<string, any>;
+    const eventStr = String(value.event || '').toUpperCase();
+    const decisionStr = String(value.decision || '').toUpperCase();
+    const approved =
+      (field === 'account_update' && (eventStr === 'VERIFIED_ACCOUNT' || eventStr === 'APPROVED')) ||
+      (field === 'account_review_update' && decisionStr === 'APPROVED') ||
+      (field === 'phone_number_name_update' && decisionStr === 'APPROVED');
+
+    if (field === 'account_review_update' && decisionStr) {
+      cfg.accountReviewStatus = decisionStr;
+    }
+    if (field === 'phone_number_name_update' && decisionStr) {
+      cfg.nameStatus = decisionStr;
+    }
+    if (approved) {
+      cfg.activationStatus = 'active';
+      cfg.phoneStatus = cfg.phoneStatus || 'CONNECTED';
+    }
+
+    const updatedJson = JSON.stringify(cfg);
+    const shouldActivate = approved && Boolean(cfg.phoneNumberId) && Boolean(cfg.accessToken);
+    await db.communicationProvider.update({
+      where: { id: provider.id },
+      data: {
+        configJson: updatedJson,
+        ...(shouldActivate ? { status: 'active', sendingEnabled: true } : {}),
+      },
+    });
+  } catch (err) {
+    console.warn('[WhatsApp Callback] account lifecycle update notice:', err);
   }
 }
 

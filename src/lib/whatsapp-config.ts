@@ -1,5 +1,19 @@
 import { db } from '@/lib/db'
 
+export interface PendingWhatsAppProviderMeta {
+  id: string;
+  accessToken?: string;
+  phoneNumberId?: string;
+  wabaId?: string;
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+  coexistenceMode?: boolean;
+  phoneStatus?: string;
+  codeVerificationStatus?: string;
+  accountReviewStatus?: string;
+  configJson?: string | null;
+}
+
 export interface WhatsAppConfig {
   accessToken: string;
   phoneNumberId: string;
@@ -12,6 +26,8 @@ export interface WhatsAppConfig {
   messagingLimitTier?: string;
   qualityRating?: string;
   coexistenceMode?: boolean;
+  activationStatus?: 'active' | 'pending' | 'none';
+  pendingProvider?: PendingWhatsAppProviderMeta;
 }
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
@@ -89,11 +105,38 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
       // of silently sending via Fieseros' WABA.
       const anyTenantWaRow = await db.communicationProvider.findFirst({
         where: { type: 'whatsapp', tenantId, isPlatform: false },
-        select: { id: true, status: true, sendingEnabled: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, status: true, sendingEnabled: true, configJson: true },
       })
       if (anyTenantWaRow) {
-        console.warn(`[WhatsApp Config] tenant ${tenantId} has a tenant-owned whatsapp provider row (status=${anyTenantWaRow.status}, sendingEnabled=${anyTenantWaRow.sendingEnabled}) but no valid credentials — NOT falling back to platform WABA. Fix your BYO connection.`)
-        return { accessToken: '', phoneNumberId: '', verifyToken: '', source: 'none' }
+        const pendingMeta: PendingWhatsAppProviderMeta | undefined =
+          anyTenantWaRow.status === 'pending'
+            ? (() => {
+                const cfg = safeJsonParse(anyTenantWaRow.configJson || null, {}) as Record<string, any>
+                return {
+                  id: anyTenantWaRow.id,
+                  accessToken: normalizeWhatsAppAccessToken(cfg.accessToken || ''),
+                  phoneNumberId: (cfg.phoneNumberId || '').trim() || undefined,
+                  wabaId: (cfg.wabaId || '').trim() || undefined,
+                  displayPhoneNumber: (cfg.displayPhoneNumber || cfg.phoneNumber || '').trim() || undefined,
+                  verifiedName: (cfg.verifiedName || '').trim() || undefined,
+                  coexistenceMode: Boolean(cfg.coexistenceMode),
+                  phoneStatus: (cfg.phoneStatus || '').trim() || undefined,
+                  codeVerificationStatus: (cfg.codeVerificationStatus || '').trim() || undefined,
+                  accountReviewStatus: (cfg.accountReviewStatus || '').trim() || undefined,
+                  configJson: anyTenantWaRow.configJson,
+                }
+              })()
+            : undefined
+        console.warn(`[WhatsApp Config] tenant ${tenantId} has a tenant-owned whatsapp provider row (status=${anyTenantWaRow.status}, sendingEnabled=${anyTenantWaRow.sendingEnabled}) — NOT falling back to platform WABA.`)
+        return {
+          accessToken: '',
+          phoneNumberId: '',
+          verifyToken: '',
+          source: 'none',
+          activationStatus: anyTenantWaRow.status === 'pending' ? 'pending' : 'none',
+          pendingProvider: pendingMeta,
+        }
       }
     }
 

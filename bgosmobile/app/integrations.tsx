@@ -31,6 +31,8 @@ interface Account {
 interface WhatsAppConfig {
   isConfigured: boolean;
   mode: string;
+  activationStatus?: 'active' | 'pending' | 'none';
+  pendingActivation?: boolean;
   phoneNumberId: string;
   source?: 'platform' | 'tenant-own' | 'tenant' | 'custom' | 'env' | 'none' | string;
   displayPhoneNumber?: string | null;
@@ -38,6 +40,8 @@ interface WhatsAppConfig {
   nameStatus?: string | null;
   messagingLimitTier?: string | null;
   qualityRating?: string | null;
+  phoneStatus?: string | null;
+  accountReviewStatus?: string | null;
   coexistenceMode?: boolean;
   waMeUrl?: string | null;
   qrCodeDataUrl?: string | null;
@@ -157,6 +161,8 @@ function IntegrationsScreen() {
   const [waSaving, setWaSaving] = useState(false);
   const [waTestResult, setWaTestResult] = useState<string | null>(null);
   const [syncingGbpWa, setSyncingGbpWa] = useState(false);
+  const [waConnecting, setWaConnecting] = useState(false);
+  const [waCheckingActivation, setWaCheckingActivation] = useState(false);
 
   const refreshAll = async () => {
     await Promise.all([accountsRes.refresh(), waConfig.refresh()]).catch(() => {});
@@ -169,7 +175,46 @@ function IntegrationsScreen() {
     waConfig.data?.source !== 'platform' &&
     waConfig.data?.source !== 'env',
   );
+  const waPending = Boolean(
+    !waActive &&
+    (waConfig.data?.mode === 'pending_activation' ||
+      waConfig.data?.pendingActivation ||
+      waConfig.data?.activationStatus === 'pending'),
+  );
   const totalConnected = activeAccounts.length + (waActive ? 1 : 0);
+
+  const handleCheckWhatsAppActivation = async (silent = false) => {
+    if (!silent) setWaCheckingActivation(true);
+    try {
+      const latest = await apiRequest<WhatsAppConfig>('/api/whatsapp/config?refresh=1');
+      await waConfig.refresh();
+      if (!silent) {
+        if (latest?.isConfigured) {
+          Alert.alert('WhatsApp Activated', 'Your WhatsApp Business account is now active and connected!');
+        } else {
+          Alert.alert(
+            'Still Waiting for Activation',
+            'Your submission is still being activated by Meta. We will switch this card to Connected automatically once ready.',
+          );
+        }
+      }
+    } catch {
+      if (!silent) {
+        Alert.alert('Status Check', 'Could not reach Meta status check right now. Please try again shortly.');
+      }
+    } finally {
+      if (!silent) setWaCheckingActivation(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!waPending) return;
+    const timer = setInterval(() => {
+      void handleCheckWhatsAppActivation(true);
+    }, 6000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waPending]);
 
   const openWhatsAppSetup = () => {
     setWaTestResult(null);
@@ -178,7 +223,9 @@ function IntegrationsScreen() {
   };
 
   const handleEmbeddedWhatsAppConnect = async () => {
+    if (waConnecting) return;
     setWaModalOpen(false);
+    setWaConnecting(true);
     try {
       const outcome = await connectSocialPlatform('whatsapp', {
         returnView: 'growth',
@@ -188,6 +235,7 @@ function IntegrationsScreen() {
         Alert.alert('WhatsApp Connection Notice', outcome.error);
       }
     } finally {
+      setWaConnecting(false);
       await refreshAll();
     }
   };
@@ -378,6 +426,7 @@ function IntegrationsScreen() {
             const isWa = ch.key === 'whatsapp';
             const matchedAccount = isWa ? null : activeAccounts.find((a) => a.platform === ch.key);
             const isConnected = isWa ? waActive : Boolean(matchedAccount);
+            const isPendingWa = isWa && waPending;
 
             return (
               <View key={ch.key} style={styles.channelCard}>
@@ -397,6 +446,11 @@ function IntegrationsScreen() {
                           <View style={styles.greenDot} />
                           <Text style={styles.connectedBadgeText}>Connected</Text>
                         </View>
+                      ) : isPendingWa ? (
+                        <View style={[styles.connectedBadge, { backgroundColor: '#FEF3C7' }]}>
+                          <View style={[styles.greenDot, { backgroundColor: '#D97706' }]} />
+                          <Text style={[styles.connectedBadgeText, { color: '#92400E' }]}>Waiting</Text>
+                        </View>
                       ) : (
                         <View style={styles.notConnectedBadge}>
                           <Text style={styles.notConnectedBadgeText}>Not Connected</Text>
@@ -409,6 +463,28 @@ function IntegrationsScreen() {
 
                 {/* Capability Description */}
                 <Text style={styles.channelDesc}>{ch.desc}</Text>
+
+                {isPendingWa ? (
+                  <View
+                    style={{
+                      backgroundColor: '#FFFBEB',
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      borderRadius: 10,
+                      padding: 10,
+                      gap: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E' }}>
+                      Submitted — Waiting for Meta Activation
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#B45309', lineHeight: 16 }}>
+                      {waConfig.data?.displayPhoneNumber
+                        ? `${waConfig.data.displayPhoneNumber} is submitted and waiting for Meta to activate. Connect is paused so you don&apos;t re-submit.`
+                        : 'Your WhatsApp Business account has been submitted and is waiting for Meta activation. Once active, this card switches to Connected automatically.'}
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* Account details if connected */}
                 {matchedAccount ? (
@@ -516,17 +592,53 @@ function IntegrationsScreen() {
                         </>
                       ) : null}
                     </>
+                  ) : isPendingWa ? (
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Check WhatsApp Activation Status"
+                        disabled={waCheckingActivation}
+                        onPress={() => void handleCheckWhatsAppActivation(false)}
+                        style={[
+                          styles.connectBtn,
+                          { backgroundColor: '#D97706', opacity: waCheckingActivation ? 0.65 : 1 },
+                        ]}
+                      >
+                        {waCheckingActivation ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <MaterialIcons name="hourglass-top" size={18} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.connectBtnText}>
+                          {waCheckingActivation ? 'Checking Activation…' : 'Waiting · Check Status'}
+                        </Text>
+                      </Pressable>
+                      <Pressable onPress={openWhatsAppSetup} style={{ alignSelf: 'center', paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B' }}>
+                          Connect a Different Number Instead
+                        </Text>
+                      </Pressable>
+                    </View>
                   ) : (
                     <View style={{ flex: 1, gap: 6 }}>
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Connect ${ch.name}`}
+                        disabled={isWa && waConnecting}
                         onPress={() => handleConnect(ch)}
-                        style={styles.connectBtn}
+                        style={[styles.connectBtn, isWa && waConnecting ? { opacity: 0.6 } : null]}
                       >
-                        <MaterialIcons name="add-link" size={18} color="#FFFFFF" />
+                        {isWa && waConnecting ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <MaterialIcons name="add-link" size={18} color="#FFFFFF" />
+                        )}
                         <Text style={styles.connectBtnText}>
-                          {isWa ? 'Connect WhatsApp (2-Min OTP/QR)' : `Connect ${ch.name.split(' ')[0]}`}
+                          {isWa
+                            ? waConnecting
+                              ? 'Connecting…'
+                              : 'Connect WhatsApp (2-Min OTP/QR)'
+                            : `Connect ${ch.name.split(' ')[0]}`}
                         </Text>
                       </Pressable>
                       {isWa ? (

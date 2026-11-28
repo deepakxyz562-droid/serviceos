@@ -1,21 +1,29 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   ExternalLink,
   Loader2,
   Lock,
   MessageCircle,
+  RefreshCw,
   ShieldCheck,
   Smartphone,
   ArrowLeft,
 } from 'lucide-react';
-import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
+import {
+  WA_HANDOFF_TOKEN_STORAGE_KEY,
+  WA_OAUTH_PENDING_STORAGE_KEY,
+  WhatsAppEmbeddedSignupButton,
+} from '@/components/whatsapp/whatsapp-embedded-signup-button';
 import { authHeaders } from '@/lib/client-auth';
+
+const WA_FLOW_CONTEXT_STORAGE_KEY = 'bgos_wa_flow_ctx';
 
 type HandoffExchangeResult = {
   ok: boolean;
@@ -23,8 +31,48 @@ type HandoffExchangeResult = {
   token?: string | null;
 };
 
-// Deduplicate ticket-to-session exchange across React StrictMode remounts
+type StoredFlowContext = {
+  isMobileClient?: boolean;
+  returnUrl?: string;
+  nextPath?: string;
+};
+
+// Deduplicate ticket-to-session exchange & redirect OAuth code submission across React StrictMode remounts
 const handoffExchangePromises = new Map<string, Promise<HandoffExchangeResult>>();
+const processedRedirectCodes = new Map<string, Promise<void>>();
+
+function readStoredJson<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredJson(key: string, value: unknown): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+function readStoredString(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function removeStoredKey(key: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch {}
+}
 
 function exchangeMobileHandoffTicket(ticket: string): Promise<HandoffExchangeResult> {
   const existing = handoffExchangePromises.get(ticket);
@@ -55,11 +103,27 @@ type AuthGateState = 'checking' | 'authenticated' | 'unauthenticated' | 'custome
 function WhatsAppConnectContent() {
   const searchParams = useSearchParams();
   const ticket = searchParams.get('ticket') || '';
+  const oauthCode = searchParams.get('code') || '';
+  const oauthState = searchParams.get('state') || '';
+  const oauthError = searchParams.get('error') || '';
+  const oauthErrorDesc = searchParams.get('error_description') || '';
+
+  const storedFlowCtx = useMemo(() => readStoredJson<StoredFlowContext>(WA_FLOW_CONTEXT_STORAGE_KEY), []);
   const clientParam = searchParams.get('client') || '';
   const rawReturnUrl = searchParams.get('returnUrl') || '';
-  const isMobileClient = clientParam === 'mobile' || rawReturnUrl.startsWith('bgos://');
-  const returnUrl = rawReturnUrl || (isMobileClient ? 'bgos://gbp-callback' : '');
-  const nextPath = searchParams.get('next') || '/integrations';
+  const isMobileClient = Boolean(
+    clientParam === 'mobile' ||
+      rawReturnUrl.startsWith('bgos://') ||
+      ((oauthCode || oauthError) && storedFlowCtx?.isMobileClient),
+  );
+  const returnUrl =
+    rawReturnUrl ||
+    ((oauthCode || oauthError) ? storedFlowCtx?.returnUrl : '') ||
+    (isMobileClient ? 'bgos://gbp-callback' : '');
+  const nextPath =
+    searchParams.get('next') ||
+    ((oauthCode || oauthError) ? storedFlowCtx?.nextPath : '') ||
+    '/integrations';
 
   const handoffTokenRef = useRef<string | null>(null);
   const [handoffToken, setHandoffToken] = useState<string | null>(null);
@@ -67,11 +131,19 @@ function WhatsAppConnectContent() {
   const [ticketExpired, setTicketExpired] = useState(false);
   const [mode, setMode] = useState<'coexistence' | 'cloud_api'>('coexistence');
   const [showPersonalGuide, setShowPersonalGuide] = useState(false);
+  const [submittingCode, setSubmittingCode] = useState(false);
+  const [connectingInProgress, setConnectingInProgress] = useState(false);
+  const [checkingActivation, setCheckingActivation] = useState(false);
+  const [allowReconnectOverride, setAllowReconnectOverride] = useState(false);
   const [configMeta, setConfigMeta] = useState<{
     metaAppId?: string | null;
     embeddedConfigId?: string | null;
     isConfigured?: boolean;
+    mode?: string;
+    activationStatus?: 'active' | 'pending' | 'none';
     displayPhoneNumber?: string | null;
+    verifiedName?: string | null;
+    coexistenceMode?: boolean;
     source?: string;
   }>({});
   const [connectedResult, setConnectedResult] = useState<{
@@ -80,15 +152,106 @@ function WhatsAppConnectContent() {
     displayPhoneNumber?: string;
     coexistenceMode?: boolean;
   } | null>(null);
+  const [pendingResult, setPendingResult] = useState<{
+    phoneNumberId?: string;
+    wabaId?: string;
+    displayPhoneNumber?: string | null;
+    verifiedName?: string | null;
+    coexistenceMode?: boolean;
+  } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const buildRequestHeaders = useCallback((extra?: Record<string, string>) => {
+    const activeToken = handoffTokenRef.current || readStoredString(WA_HANDOFF_TOKEN_STORAGE_KEY);
+    return authHeaders({
+      ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
+      ...extra,
+    });
+  }, []);
+
+  const buildDeepLink = useCallback(
+    (statusParam: string) => {
+      const target = returnUrl || 'bgos://gbp-callback';
+      const sep = target.includes('?') ? '&' : '?';
+      return `${target}${sep}${statusParam}&next=${encodeURIComponent(nextPath)}`;
+    },
+    [nextPath, returnUrl],
+  );
+
+  // Persist mobile flow context across full-page redirects to facebook.com/dialog/oauth
+  useEffect(() => {
+    if (isMobileClient || rawReturnUrl || searchParams.get('next')) {
+      writeStoredJson(WA_FLOW_CONTEXT_STORAGE_KEY, {
+        isMobileClient,
+        returnUrl,
+        nextPath,
+      });
+    }
+  }, [isMobileClient, nextPath, rawReturnUrl, returnUrl, searchParams]);
 
   const loginHref = useMemo(() => {
     const cleanParams = new URLSearchParams(searchParams.toString());
     cleanParams.delete('ticket');
+    cleanParams.delete('code');
+    cleanParams.delete('state');
+    cleanParams.delete('error');
+    cleanParams.delete('error_description');
     const query = cleanParams.toString();
     const target = query ? `/whatsapp-connect?${query}` : '/whatsapp-connect';
     return `/?auth=login&returnUrl=${encodeURIComponent(target)}`;
   }, [searchParams]);
+
+  const applyConfigPayload = useCallback((json: any) => {
+    if (!json) return;
+    setConfigMeta(json);
+    if (json.mode === 'pending_activation' || json.activationStatus === 'pending') {
+      setPendingResult({
+        phoneNumberId: json.phoneNumberId || undefined,
+        displayPhoneNumber: json.displayPhoneNumber || null,
+        verifiedName: json.verifiedName || null,
+        coexistenceMode: Boolean(json.coexistenceMode),
+      });
+    } else if (json.isConfigured && json.source === 'tenant-own') {
+      setPendingResult(null);
+      setConnectedResult((prev) =>
+        prev || {
+          phoneNumberId: json.phoneNumberId || '',
+          wabaId: '',
+          displayPhoneNumber: json.displayPhoneNumber || undefined,
+          coexistenceMode: Boolean(json.coexistenceMode),
+        },
+      );
+    }
+  }, []);
+
+  const checkActivationStatus = useCallback(
+    async (redirectWhenActivated = false) => {
+      setCheckingActivation(true);
+      try {
+        const res = await fetch('/api/whatsapp/config?refresh=1', {
+          headers: buildRequestHeaders(),
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const json = await res.json().catch(() => null);
+        applyConfigPayload(json);
+        if (
+          redirectWhenActivated &&
+          json?.isConfigured &&
+          json?.source === 'tenant-own' &&
+          returnUrl.startsWith('bgos://')
+        ) {
+          setTimeout(() => {
+            window.location.href = buildDeepLink('whatsapp=connected');
+          }, 700);
+        }
+      } finally {
+        setCheckingActivation(false);
+      }
+    },
+    [applyConfigPayload, buildDeepLink, buildRequestHeaders, returnUrl],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +259,12 @@ function WhatsAppConnectContent() {
     async function verifySessionAndLoadConfig() {
       setAuthState((prev) => (prev === 'authenticated' ? prev : 'checking'));
       setTicketExpired(false);
+
+      const storedHandoff = readStoredString(WA_HANDOFF_TOKEN_STORAGE_KEY);
+      if (storedHandoff && !handoffTokenRef.current) {
+        handoffTokenRef.current = storedHandoff;
+        setHandoffToken(storedHandoff);
+      }
 
       if (ticket) {
         const exchange = await exchangeMobileHandoffTicket(ticket);
@@ -110,6 +279,9 @@ function WhatsAppConnectContent() {
           if (exchange.token) {
             handoffTokenRef.current = exchange.token;
             setHandoffToken(exchange.token);
+            try {
+              sessionStorage.setItem(WA_HANDOFF_TOKEN_STORAGE_KEY, exchange.token);
+            } catch {}
           }
           if (typeof window !== 'undefined') {
             const cleanUrl = new URL(window.location.href);
@@ -119,10 +291,7 @@ function WhatsAppConnectContent() {
         }
       }
 
-      const activeToken = handoffTokenRef.current;
-      const reqHeaders = authHeaders(
-        activeToken ? { Authorization: `Bearer ${activeToken}` } : undefined,
-      );
+      const reqHeaders = buildRequestHeaders();
 
       try {
         const meRes = await fetch('/api/auth/me', {
@@ -144,6 +313,110 @@ function WhatsAppConnectContent() {
 
         setAuthState('authenticated');
 
+        if (oauthError) {
+          setErrorMsg(oauthErrorDesc || 'WhatsApp authorization was cancelled or declined in Meta.');
+          removeStoredKey(WA_OAUTH_PENDING_STORAGE_KEY);
+          if (typeof window !== 'undefined') {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('error');
+            cleanUrl.searchParams.delete('error_description');
+            window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+          }
+        }
+
+        if (oauthCode && !oauthError) {
+          setSubmittingCode(true);
+          let codeJob = processedRedirectCodes.get(oauthCode);
+          if (!codeJob) {
+            codeJob = (async () => {
+              const pendingMeta = readStoredJson<{
+                state?: string;
+                mode?: 'coexistence' | 'cloud_api';
+                redirectUri?: string;
+              }>(WA_OAUTH_PENDING_STORAGE_KEY);
+
+              if (typeof window !== 'undefined') {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('code');
+                cleanUrl.searchParams.delete('state');
+                window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+              }
+
+              if (pendingMeta?.state && oauthState && pendingMeta.state !== oauthState) {
+                throw new Error('Security check failed while returning from Meta. Please tap Connect again.');
+              }
+
+              const chosenMode = pendingMeta?.mode || 'coexistence';
+              const fallbackRedirectUri =
+                typeof window !== 'undefined'
+                  ? `${window.location.origin}/whatsapp-connect`
+                  : 'https://bgos.site/whatsapp-connect';
+
+              const signupRes = await fetch('/api/whatsapp/embedded-signup', {
+                method: 'POST',
+                headers: buildRequestHeaders({ 'Content-Type': 'application/json' }),
+                credentials: 'include',
+                body: JSON.stringify({
+                  code: oauthCode,
+                  state: oauthState || undefined,
+                  redirectUri: pendingMeta?.redirectUri || fallbackRedirectUri,
+                  isCoexistence: chosenMode === 'coexistence',
+                  featureType:
+                    chosenMode === 'coexistence'
+                      ? 'whatsapp_business_app_onboarding'
+                      : undefined,
+                }),
+              });
+              const data = await signupRes.json().catch(() => ({}));
+              if (!signupRes.ok || !data?.success) {
+                throw new Error(data?.error || 'Failed to finalize WhatsApp connection.');
+              }
+
+              removeStoredKey(WA_OAUTH_PENDING_STORAGE_KEY);
+              removeStoredKey(WA_HANDOFF_TOKEN_STORAGE_KEY);
+
+              if (data.pendingActivation || data.activationStatus === 'pending') {
+                setPendingResult({
+                  phoneNumberId: data.phoneNumberId || undefined,
+                  wabaId: data.wabaId || undefined,
+                  displayPhoneNumber: data.displayPhoneNumber || null,
+                  verifiedName: data.verifiedName || null,
+                  coexistenceMode: Boolean(data.coexistenceMode),
+                });
+                if (returnUrl.startsWith('bgos://')) {
+                  setTimeout(() => {
+                    window.location.href = buildDeepLink('whatsapp=pending');
+                  }, 1100);
+                }
+              } else {
+                setConnectedResult({
+                  phoneNumberId: data.phoneNumberId || '',
+                  wabaId: data.wabaId || '',
+                  displayPhoneNumber: data.displayPhoneNumber,
+                  coexistenceMode: Boolean(data.coexistenceMode),
+                });
+                if (returnUrl.startsWith('bgos://')) {
+                  setTimeout(() => {
+                    window.location.href = buildDeepLink('whatsapp=connected');
+                  }, 700);
+                }
+              }
+            })();
+            processedRedirectCodes.set(oauthCode, codeJob);
+          }
+
+          try {
+            await codeJob;
+          } catch (err) {
+            if (!cancelled) {
+              setErrorMsg(err instanceof Error ? err.message : 'Failed to connect WhatsApp.');
+            }
+          } finally {
+            if (!cancelled) setSubmittingCode(false);
+          }
+          return;
+        }
+
         const cfgRes = await fetch('/api/whatsapp/config', {
           headers: reqHeaders,
           credentials: 'include',
@@ -151,7 +424,7 @@ function WhatsAppConnectContent() {
         }).catch(() => null);
         if (!cancelled && cfgRes?.ok) {
           const json = await cfgRes.json().catch(() => null);
-          if (json) setConfigMeta(json);
+          applyConfigPayload(json);
         }
       } catch {
         if (!cancelled) setAuthState('unauthenticated');
@@ -162,13 +435,28 @@ function WhatsAppConnectContent() {
     return () => {
       cancelled = true;
     };
-  }, [ticket]);
+  }, [
+    applyConfigPayload,
+    buildDeepLink,
+    buildRequestHeaders,
+    oauthCode,
+    oauthError,
+    oauthErrorDesc,
+    oauthState,
+    returnUrl,
+    ticket,
+  ]);
 
-  const buildDeepLink = (statusParam: string) => {
-    const target = returnUrl || 'bgos://gbp-callback';
-    const sep = target.includes('?') ? '&' : '?';
-    return `${target}${sep}${statusParam}&next=${encodeURIComponent(nextPath)}`;
-  };
+  // Auto-poll Meta activation while waiting screen is open
+  useEffect(() => {
+    if (authState !== 'authenticated' || !pendingResult || connectedResult || allowReconnectOverride) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void checkActivationStatus(true);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [allowReconnectOverride, authState, checkActivationStatus, connectedResult, pendingResult]);
 
   const safeWebNextPath = nextPath.startsWith('/') ? nextPath : '/integrations';
 
@@ -178,6 +466,8 @@ function WhatsAppConnectContent() {
     meta?: { displayPhoneNumber?: string; coexistenceMode?: boolean },
   ) => {
     setErrorMsg(null);
+    removeStoredKey(WA_OAUTH_PENDING_STORAGE_KEY);
+    removeStoredKey(WA_HANDOFF_TOKEN_STORAGE_KEY);
     setConnectedResult({
       phoneNumberId,
       wabaId,
@@ -206,10 +496,19 @@ function WhatsAppConnectContent() {
           </div>
         </div>
 
-        {authState === 'checking' ? (
+        {authState === 'checking' || submittingCode ? (
           <div className="py-10 flex flex-col items-center justify-center gap-3 text-center">
             <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-            <p className="text-sm font-medium text-slate-600">Verifying your BGOS session…</p>
+            <p className="text-sm font-semibold text-slate-800">
+              {submittingCode
+                ? 'Submitting & activating your WhatsApp account…'
+                : 'Verifying your BGOS session…'}
+            </p>
+            {submittingCode ? (
+              <p className="text-xs text-slate-500 max-w-xs">
+                Please wait a moment while we link your number with Meta. Do not tap back or resubmit.
+              </p>
+            ) : null}
           </div>
         ) : authState !== 'authenticated' ? (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
@@ -243,6 +542,51 @@ function WhatsAppConnectContent() {
                 </a>
               ) : null}
             </div>
+          </div>
+        ) : pendingResult && !connectedResult && !allowReconnectOverride ? (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
+                <Clock className="w-5 h-5 shrink-0" />
+                Submitted — Waiting for Meta Activation
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                {pendingResult.displayPhoneNumber
+                  ? `Number ${pendingResult.displayPhoneNumber} has been submitted to Meta. `
+                  : 'Your WhatsApp Business account has been submitted to Meta. '}
+                We have locked re-submission while Meta activates your number — once active, BGOS switches to <strong>Connected</strong> automatically.
+              </p>
+              <button
+                type="button"
+                onClick={() => void checkActivationStatus(true)}
+                disabled={checkingActivation}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-semibold text-sm py-2.5 px-4 transition"
+              >
+                {checkingActivation ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Checking Activation…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" /> Check Activation Status
+                  </>
+                )}
+              </button>
+              <a
+                href={isMobileClient ? buildDeepLink('whatsapp=pending') : safeWebNextPath}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-amber-200 text-amber-900 font-semibold text-sm py-2 px-4 hover:bg-amber-100/50 transition"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {isMobileClient ? 'Return to BGOS App' : 'Back to BGOS Dashboard'}
+              </a>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAllowReconnectOverride(true)}
+              className="w-full text-center text-[11px] font-medium text-slate-500 hover:text-slate-700 underline"
+            >
+              Need to connect a different phone number instead?
+            </button>
           </div>
         ) : connectedResult ? (
           <div className="space-y-3">
@@ -401,14 +745,21 @@ function WhatsAppConnectContent() {
             ) : null}
 
             <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[11.5px] text-slate-600 leading-relaxed">
-              <strong className="text-slate-800">Just 1 popup step:</strong> After approving below, you&apos;re ready immediately inside BGOS. If Meta later displays a <em>&quot;Get started (8 tasks)&quot;</em> page on <code className="text-[11px]">business.facebook.com</code>, you can ignore it — only add a payment card later if you send paid promotional broadcasts.
+              <strong className="text-slate-800">Just 1 popup step:</strong> After approving with Facebook, tap <em>Continue to feature setup</em> (skip <em>Add payment method</em> — inbound AI chat is free). If Meta later shows a <em>&quot;Get started (8 tasks)&quot;</em> page on <code className="text-[11px]">business.facebook.com</code>, you can ignore it.
             </div>
 
             <WhatsAppEmbeddedSignupButton
-              label="Continue with Facebook & WhatsApp"
+              label={
+                connectingInProgress
+                  ? 'Waiting for Meta Confirmation…'
+                  : 'Continue with Facebook & WhatsApp'
+              }
               mode={mode}
               handoffTicket={ticket}
               authToken={handoffToken || undefined}
+              preferRedirectFlow={isMobileClient}
+              onSubmittingChange={setConnectingInProgress}
+              disabled={connectingInProgress || submittingCode}
               configId={configMeta.embeddedConfigId || undefined}
               metaAppId={configMeta.metaAppId || undefined}
               onSuccess={handleSuccess}

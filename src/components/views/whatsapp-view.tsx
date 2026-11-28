@@ -199,6 +199,7 @@ export function WhatsAppView() {
   const [waStatus, setWaStatus] = useState<{
     enabled: boolean;
     connected: boolean;
+    pending?: boolean;
     phoneNumber?: string;
     reason?: string;
   } | null>(null);
@@ -327,15 +328,19 @@ export function WhatsAppView() {
 
   // Fetch the real WhatsApp connection state (BYO check — only tenant-owned
   // providers count, NOT the platform-managed fallback).
-  const fetchWhatsAppStatus = useCallback(async () => {
+  const fetchWhatsAppStatus = useCallback(async (refreshMeta = false) => {
     try {
+      if (refreshMeta) {
+        await fetch('/api/whatsapp/config?refresh=1', { credentials: 'include' }).catch(() => null);
+      }
       const res = await fetch('/api/whatsapp/status', { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
       setWaStatus({
         enabled: data.enabled,
-        connected: data.ownConnected ?? data.enabled,
-        phoneNumber: data.ownProvider?.phoneNumber ?? undefined,
+        connected: Boolean(data.ownConnected ?? data.enabled),
+        pending: Boolean(data.pendingActivation && !data.ownConnected),
+        phoneNumber: data.ownProvider?.phoneNumber ?? data.ownPendingProvider?.phoneNumber ?? undefined,
         reason: data.reason,
       });
     } catch {
@@ -594,7 +599,28 @@ export function WhatsAppView() {
           a credit banner. See Issue 5. */}
 
       {/* ── Connection Status / Connect CTA ── */}
-      {waStatus && !waStatus.connected && (
+      {waStatus && !waStatus.connected && waStatus.pending && (
+        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30">
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                  Submitted — Waiting for WhatsApp Account Activation
+                  {waStatus.phoneNumber ? ` (${waStatus.phoneNumber})` : ''}
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Your Meta WhatsApp connection has been submitted and is activating. Connecting is disabled to avoid duplicate submissions; once Meta finishes activation, this flips to Connected automatically.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void fetchWhatsAppStatus(true)}>
+              <RefreshCw className="size-3.5 mr-1.5" /> Check Status
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {waStatus && !waStatus.connected && !waStatus.pending && (
         <Card className="border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30">
           <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="space-y-1">
@@ -614,7 +640,7 @@ export function WhatsAppView() {
               className="bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
               onSuccess={() => {
                 toast.success('WhatsApp connected! Reloading…');
-                fetchWhatsAppStatus();
+                void fetchWhatsAppStatus(true);
               }}
             />
           </CardContent>
@@ -629,7 +655,7 @@ export function WhatsAppView() {
                 Connected{waStatus.phoneNumber ? ` (${waStatus.phoneNumber})` : ''}
               </span>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchWhatsAppStatus}>
+            <Button variant="outline" size="sm" onClick={() => void fetchWhatsAppStatus(true)}>
               <RefreshCw className="size-3.5 mr-1.5" /> Refresh status
             </Button>
           </CardContent>

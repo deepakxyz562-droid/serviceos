@@ -64,8 +64,34 @@ export async function GET() {
       }
     }
 
+    // Check for pending tenant-owned WhatsApp provider awaiting Meta activation
+    const pendingProvider = !ownConnected
+      ? await db.communicationProvider.findFirst({
+          where: {
+            tenantId,
+            type: 'whatsapp',
+            status: 'pending',
+            isPlatform: false,
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true, name: true, provider: true, configJson: true },
+        })
+      : null;
+
+    let pendingPhoneNumber: string | null = null;
+    let pendingVerifiedName: string | null = null;
+    if (pendingProvider?.configJson) {
+      try {
+        const cfg = JSON.parse(pendingProvider.configJson);
+        pendingPhoneNumber = cfg.displayPhoneNumber || cfg.phoneNumber || null;
+        pendingVerifiedName = cfg.verifiedName || null;
+      } catch {
+        /* ignore */
+      }
+    }
+
     // Check for a platform-managed WhatsApp provider fallback
-    const platformProvider = !ownConnected ? await db.communicationProvider.findFirst({
+    const platformProvider = !ownConnected && !pendingProvider ? await db.communicationProvider.findFirst({
       where: {
         type: 'whatsapp',
         status: 'active',
@@ -85,6 +111,8 @@ export async function GET() {
     if (!enabled) {
       if (!isPaid) {
         reason = 'not_paid';
+      } else if (pendingProvider) {
+        reason = 'pending_activation';
       } else if (!ownConnected) {
         reason = 'own_not_connected';
       }
@@ -96,6 +124,16 @@ export async function GET() {
       planStatus,
       isPaid,
       ownConnected,
+      pendingActivation: Boolean(!ownConnected && pendingProvider),
+      ownPendingProvider: pendingProvider
+        ? {
+            id: pendingProvider.id,
+            name: pendingProvider.name,
+            provider: pendingProvider.provider,
+            phoneNumber: pendingPhoneNumber,
+            verifiedName: pendingVerifiedName,
+          }
+        : null,
       ownProvider: ownConnected
         ? {
             id: ownProvider.id,

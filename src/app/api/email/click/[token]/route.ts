@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { normalizeClickDestination, recordEmailEvent } from '@/lib/email-consent'
+import { normalizeClickDestination, recordTokenClickEvent } from '@/lib/email-consent'
 
 /**
  * Click-redirect endpoint — NO AUTH.
  *
- * Every http(s) link in a marketing email body is rewritten to:
+ * Every external http(s) link in a marketing email body is rewritten to:
  *   /api/email/click/[token]?u=<original-url-encoded>
  *
  * On GET we record a 'click' EmailEvent, bump the campaign's clickedCount
- * (once per recipient), then 302 redirect to the original URL.
- *
- *   GET /api/email/click/[token]?u=https%3A%2F%2Fexample.com%2Fpromo
+ * (once per recipient), then 302 redirect to the original URL (or 200 JSON
+ * when `beacon=1` is passed by native App Link / Universal Link opens).
  */
 
 export async function GET(
@@ -31,43 +29,15 @@ export async function GET(
     return NextResponse.json({ ok: false, error: 'invalid destination url' }, { status: 400 })
   }
 
-  try {
-    const row = await db.emailUnsubscribeToken.findUnique({ where: { token } })
-    if (row) {
-      await recordEmailEvent({
-        type: 'click',
-        campaignId: row.campaignId,
-        recipientEmail: row.recipientEmail,
-        token,
-        url: destination,
-        tenantId: row.tenantId,
-        userAgent: request.headers.get('user-agent'),
-        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
-      })
+  await recordTokenClickEvent({
+    token,
+    destination,
+    userAgent: request.headers.get('user-agent'),
+    ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+  })
 
-      if (row.campaignId) {
-        try {
-          const updated = await db.campaignMessage.updateMany({
-            where: {
-              campaignId: row.campaignId,
-              recipientEmail: row.recipientEmail,
-              clickedAt: null,
-            },
-            data: { clickedAt: new Date() },
-          })
-          if (updated.count > 0) {
-            await db.campaign.update({
-              where: { id: row.campaignId },
-              data: { clickedCount: { increment: 1 } },
-            })
-          }
-        } catch {
-          /* non-fatal */
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[email/click] failed:', err)
+  if (url.searchParams.get('beacon') === '1') {
+    return NextResponse.json({ ok: true })
   }
 
   // Always redirect — don't punish the user for a tracking failure.

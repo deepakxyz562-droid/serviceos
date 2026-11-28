@@ -35,6 +35,43 @@ export function actionLabelForOpenView(view: string, socialTab: string): string 
   return 'Opening BGOS App';
 }
 
+function buildDeepLinkQueryParams(input: {
+  view: string;
+  socialTab?: string;
+  tab?: string;
+  mode?: string;
+  extra?: Record<string, string>;
+}): URLSearchParams {
+  const qs = new URLSearchParams(input.extra);
+  qs.set('view', input.view);
+  if (input.socialTab) qs.set('socialTab', input.socialTab);
+  if (input.tab) qs.set('tab', input.tab);
+  if (input.mode) qs.set('mode', input.mode);
+  return qs;
+}
+
+/**
+ * Builds canonical `/open` destination URL (without tracking tokens) for analytics
+ * recording when `/open?ct=<token>` is visited directly.
+ */
+export function buildCleanBgosOpenDestination(input: {
+  baseUrl?: string;
+  view?: string;
+  socialTab?: string;
+  tab?: string;
+  mode?: string;
+}): string {
+  const origin = (input.baseUrl || 'https://bgos.site').replace(/\/+$/, '');
+  const view = (input.view || '').trim() || 'dashboard';
+  const qs = buildDeepLinkQueryParams({
+    view,
+    socialTab: (input.socialTab || '').trim(),
+    tab: (input.tab || '').trim(),
+    mode: (input.mode || '').trim(),
+  });
+  return `${origin}/open?${qs.toString()}`;
+}
+
 /**
  * Builds Android Play Store URL with campaign/deep-link install referrer so
  * first-time installs from emails carry target view attribution.
@@ -57,14 +94,11 @@ export function buildAndroidPlayStoreUrl(params: {
     if (!parsed.searchParams.has('id')) {
       parsed.searchParams.set('id', BGOS_ANDROID_PACKAGE);
     }
-    const refParts = [
-      'utm_source=bgos_mailer',
-      'utm_medium=email',
-      `view=${encodeURIComponent(params.view)}`,
-    ];
-    if (params.socialTab) refParts.push(`socialTab=${encodeURIComponent(params.socialTab)}`);
-    if (params.tab) refParts.push(`tab=${encodeURIComponent(params.tab)}`);
-    if (params.mode) refParts.push(`mode=${encodeURIComponent(params.mode)}`);
+    const refParts = ['utm_source=bgos_mailer', 'utm_medium=email'];
+    const deepQs = buildDeepLinkQueryParams(params);
+    deepQs.forEach((value, key) => {
+      refParts.push(`${key}=${encodeURIComponent(value)}`);
+    });
     parsed.searchParams.set('referrer', refParts.join('&'));
     return parsed.toString();
   } catch {
@@ -86,17 +120,16 @@ export function buildBgosOpenHandoffConfig(input: {
   const tab = (input.tab || '').trim();
   const mode = (input.mode || '').trim();
 
-  const webQs = new URLSearchParams({ product: 'bgos', view });
-  if (socialTab) webQs.set('socialTab', socialTab);
-  if (tab) webQs.set('tab', tab);
-  if (mode) webQs.set('mode', mode);
+  const webQs = buildDeepLinkQueryParams({
+    view,
+    socialTab,
+    tab,
+    mode,
+    extra: { product: 'bgos' },
+  });
   const webFallbackUrl = `/app?${webQs.toString()}`;
 
-  const appQs = new URLSearchParams({ view });
-  if (socialTab) appQs.set('socialTab', socialTab);
-  if (tab) appQs.set('tab', tab);
-  if (mode) appQs.set('mode', mode);
-  const query = appQs.toString();
+  const query = buildDeepLinkQueryParams({ view, socialTab, tab, mode }).toString();
   const appSchemeUrl = `bgos://open?${query}`;
 
   const playStoreUrl = buildAndroidPlayStoreUrl({

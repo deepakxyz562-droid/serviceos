@@ -732,4 +732,215 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
       else process.env.SOCIAL_CRYPTO_KEY = prevKey;
     }
   });
+
+  it('supports Meta dialog/oauth redirectUri exchange, pending activation state, live refresh promotion, and webhook activation', async () => {
+    const cryptoMod = await import('node:crypto');
+    const prevEnv = { ...process.env };
+    process.env.META_APP_ID = '2180370786060435';
+    process.env.META_APP_SECRET = 'meta_secret_redirect_1';
+    process.env.WHATSAPP_APP_SECRET = 'meta_secret_redirect_1';
+
+    try {
+      const { POST: embeddedPost } = await import('@/app/api/whatsapp/embedded-signup/route');
+      const { GET: configGet } = await import('@/app/api/whatsapp/config/route');
+      const { POST: callbackPost } = await import('@/app/api/whatsapp/callback/route');
+
+      mockGetAuthUser.mockResolvedValue({ id: 'u_redir', tenantId: 'ten_redir_1', role: 'owner' });
+
+      // Reject disallowed external redirectUri
+      const badRes = await embeddedPost(
+        new Request('https://bgos.site/api/whatsapp/embedded-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'code_x', redirectUri: 'https://evil.example/steal' }),
+        }) as any,
+      );
+      expect(badRes.status).toBe(400);
+
+      // Simulate Meta returning PHONE status PENDING during redirect code exchange
+      let phoneMetaState = { status: 'PENDING', code_verification_status: 'NOT_VERIFIED', account_review_status: 'PENDING' };
+      const capturedTokenBodies: string[] = [];
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, init?: RequestInit) => {
+        const target = String(url);
+        if (target.includes('/oauth/access_token')) {
+          capturedTokenBodies.push(String(init?.body || ''));
+          return new Response(JSON.stringify({ access_token: 'EAA_REDIRECT_TOK' }), { status: 200 });
+        }
+        if (target.includes('/debug_token')) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                granular_scopes: [
+                  { scope: 'whatsapp_business_management', target_ids: ['waba_redir_1'] },
+                ],
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (target.includes('/waba_redir_1/phone_numbers')) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: 'pn_redir_1',
+                  display_phone_number: '+91 82108 83772',
+                  verified_name: 'FieserOS',
+                  status: phoneMetaState.status,
+                  code_verification_status: phoneMetaState.code_verification_status,
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        if (target.includes('/waba_redir_1?fields=')) {
+          return new Response(
+            JSON.stringify({ id: 'waba_redir_1', account_review_status: phoneMetaState.account_review_status }),
+            { status: 200 },
+          );
+        }
+        if (target.includes('/subscribed_apps') || target.includes('/smb_app_data')) {
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+        return new Response(JSON.stringify({}), { status: 200 });
+      });
+
+      mockDb.communicationProvider.findFirst.mockResolvedValueOnce(null);
+      mockDb.communicationProvider.create.mockResolvedValue({ id: 'prov_redir_1' });
+      mockDb.tenant.findUnique.mockResolvedValue({ settingsJson: '{}', country: 'IN' });
+
+      const signupRes = await embeddedPost(
+        new Request('https://bgos.site/api/whatsapp/embedded-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'oauth_redirect_code_1',
+            state: 'csrf_st_1',
+            redirectUri: 'https://bgos.site/whatsapp-connect',
+            isCoexistence: true,
+            featureType: 'whatsapp_business_app_onboarding',
+          }),
+        }) as any,
+      );
+      const signupJson = await signupRes.json();
+      expect(signupRes.status).toBe(200);
+      expect(signupJson.pendingActivation).toBe(true);
+      expect(signupJson.activationStatus).toBe('pending');
+      expect(capturedTokenBodies[0]).toContain(
+        `redirect_uri=${encodeURIComponent('https://bgos.site/whatsapp-connect')}`,
+      );
+      expect(mockDb.communicationProvider.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'pending',
+            sendingEnabled: false,
+          }),
+        }),
+      );
+
+      // GET /api/whatsapp/config without refresh returns pending_activation
+      const storedPendingCfg = JSON.stringify({
+        accessToken: 'EAA_REDIRECT_TOK',
+        phoneNumberId: 'pn_redir_1',
+        wabaId: 'waba_redir_1',
+        displayPhoneNumber: '+91 82108 83772',
+        verifiedName: 'FieserOS',
+        phoneStatus: 'PENDING',
+        activationStatus: 'pending',
+        coexistenceMode: true,
+      });
+      mockDb.communicationProvider.findFirst
+        .mockResolvedValueOnce(null) // active isPlatform:false check
+        .mockResolvedValueOnce({
+          id: 'prov_redir_1',
+          status: 'pending',
+          sendingEnabled: false,
+          configJson: storedPendingCfg,
+        });
+      const pendingCfgRes = await configGet(
+        new Request('https://bgos.site/api/whatsapp/config') as any,
+      );
+      const pendingCfgJson = await pendingCfgRes.json();
+      expect(pendingCfgJson.mode).toBe('pending_activation');
+      expect(pendingCfgJson.isConfigured).toBe(false);
+      expect(pendingCfgJson.pendingActivation).toBe(true);
+
+      // Simulate Meta activating the number → GET ?refresh=1 promotes row to active
+      phoneMetaState = { status: 'CONNECTED', code_verification_status: 'VERIFIED', account_review_status: 'APPROVED' };
+      const activePromotedCfg = JSON.stringify({
+        accessToken: 'EAA_REDIRECT_TOK',
+        phoneNumberId: 'pn_redir_1',
+        wabaId: 'waba_redir_1',
+        displayPhoneNumber: '+91 82108 83772',
+        verifiedName: 'FieserOS',
+        activationStatus: 'active',
+        coexistenceMode: true,
+      });
+      mockDb.communicationProvider.findFirst
+        .mockResolvedValueOnce(null) // initial active check
+        .mockResolvedValueOnce({
+          id: 'prov_redir_1',
+          status: 'pending',
+          sendingEnabled: false,
+          configJson: storedPendingCfg,
+        })
+        .mockResolvedValueOnce({
+          id: 'prov_redir_1',
+          configJson: activePromotedCfg,
+          credential: null,
+        });
+      mockDb.communicationProvider.update.mockResolvedValue({ id: 'prov_redir_1', status: 'active' });
+
+      const refreshedRes = await configGet(
+        new Request('https://bgos.site/api/whatsapp/config?refresh=1') as any,
+      );
+      const refreshedJson = await refreshedRes.json();
+      expect(mockDb.communicationProvider.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prov_redir_1' },
+          data: expect.objectContaining({ status: 'active', sendingEnabled: true }),
+        }),
+      );
+      expect(refreshedJson.isConfigured).toBe(true);
+      expect(refreshedJson.mode).toBe('live');
+
+      // Webhook account_update VERIFIED_ACCOUNT also promotes pending provider
+      mockDb.communicationProvider.findFirst.mockResolvedValueOnce({
+        id: 'prov_redir_hook',
+        configJson: storedPendingCfg,
+      });
+      mockDb.communicationProvider.update.mockClear();
+      const hookPayload = JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            id: 'waba_redir_1',
+            changes: [{ field: 'account_update', value: { event: 'VERIFIED_ACCOUNT' } }],
+          },
+        ],
+      });
+      const sig =
+        'sha256=' +
+        cryptoMod.createHmac('sha256', 'meta_secret_redirect_1').update(hookPayload).digest('hex');
+      const hookRes = await callbackPost(
+        new Request('https://bgos.site/api/whatsapp/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-hub-signature-256': sig },
+          body: hookPayload,
+        }) as any,
+      );
+      expect(hookRes.status).toBe(200);
+      expect(mockDb.communicationProvider.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prov_redir_hook' },
+          data: expect.objectContaining({ status: 'active', sendingEnabled: true }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    } finally {
+      process.env = prevEnv;
+    }
+  });
 });

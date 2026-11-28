@@ -5,6 +5,8 @@ import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { resolveWhatsAppConfig, WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
 import { normalizeWhatsAppDigits, resolveCountryCode } from '@/lib/bgos-business-sanitizers';
 import { db } from '@/lib/db';
+import { fetchMetaAccountActivationSnapshot } from '@/lib/whatsapp/activation';
+import { syncTenantWhatsAppIdentity } from '@/lib/whatsapp/identity-sync';
 
 function maskString(value: string): string {
   if (!value || value.length <= 4) return value ? '****' : '';
@@ -57,12 +59,73 @@ export async function GET(request: NextRequest) {
     }
     const tenantId = caller.tenantId;
 
-    const config = await resolveWhatsAppConfig(tenantId);
+    let config = await resolveWhatsAppConfig(tenantId);
+    const shouldRefreshPending =
+      new URL(request.url).searchParams.get('refresh') === '1';
+
+    if (
+      shouldRefreshPending &&
+      config.pendingProvider?.accessToken &&
+      (config.pendingProvider.wabaId || config.pendingProvider.phoneNumberId)
+    ) {
+      const pendingProv = config.pendingProvider;
+      const snapshot = await fetchMetaAccountActivationSnapshot({
+        wabaId: pendingProv.wabaId,
+        phoneNumberId: pendingProv.phoneNumberId,
+        accessToken: pendingProv.accessToken!,
+      });
+      if (snapshot.activationStatus === 'active' && snapshot.phoneNumberId) {
+        let prevCfg: Record<string, any> = {};
+        try {
+          prevCfg = JSON.parse(pendingProv.configJson || '{}') as Record<string, any>;
+        } catch {}
+        const updatedJson = JSON.stringify({
+          ...prevCfg,
+          phoneNumberId: snapshot.phoneNumberId || prevCfg.phoneNumberId || '',
+          wabaId: snapshot.wabaId || prevCfg.wabaId || '',
+          displayPhoneNumber: snapshot.displayPhoneNumber || prevCfg.displayPhoneNumber || '',
+          verifiedName: snapshot.verifiedName || prevCfg.verifiedName || '',
+          nameStatus: snapshot.nameStatus || prevCfg.nameStatus || '',
+          messagingLimitTier: snapshot.messagingLimitTier || prevCfg.messagingLimitTier || '',
+          qualityRating: snapshot.qualityRating || prevCfg.qualityRating || '',
+          phoneStatus: snapshot.phoneStatus || 'CONNECTED',
+          codeVerificationStatus: snapshot.codeVerificationStatus || 'VERIFIED',
+          accountReviewStatus: snapshot.accountReviewStatus || 'APPROVED',
+          activationStatus: 'active',
+        });
+        await db.communicationProvider
+          .update({
+            where: { id: pendingProv.id },
+            data: { status: 'active', sendingEnabled: true, configJson: updatedJson },
+          })
+          .catch(() => {});
+        await db.tenant
+          .update({
+            where: { id: tenantId },
+            data: {
+              whatsappConfigJson: updatedJson,
+              ...(snapshot.displayPhoneNumber ? { whatsappPhone: snapshot.displayPhoneNumber } : {}),
+            },
+          })
+          .catch(() => {});
+        if (snapshot.displayPhoneNumber) {
+          await syncTenantWhatsAppIdentity({
+            tenantId,
+            phone: snapshot.displayPhoneNumber,
+            syncChatbot: true,
+            syncGoogleBusiness: true,
+          }).catch(() => {});
+        }
+        config = await resolveWhatsAppConfig(tenantId);
+      }
+    }
+
     const configured = Boolean(
       config.accessToken &&
       config.phoneNumberId &&
       config.source === 'tenant-own',
     );
+    const pendingActivation = Boolean(!configured && config.pendingProvider);
     let googleMapsWhatsappUrl: string | null = null;
     let googleMapsWhatsappSynced = false;
     let googleMapsWhatsappWarnings: string[] = [];
@@ -118,16 +181,36 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       isConfigured: configured,
-      mode: configured ? 'live' : 'not_connected',
+      mode: configured ? 'live' : pendingActivation ? 'pending_activation' : 'not_connected',
+      activationStatus: configured ? 'active' : pendingActivation ? 'pending' : 'none',
+      pendingActivation,
       platformGatewayAvailable: config.source === 'platform' || config.source === 'env',
-      phoneNumberId: configured ? maskString(config.phoneNumberId) : '',
-      source: config.source || 'none',
-      displayPhoneNumber: configured ? config.displayPhoneNumber || null : null,
-      verifiedName: configured ? config.verifiedName || null : null,
+      phoneNumberId: configured
+        ? maskString(config.phoneNumberId)
+        : pendingActivation && config.pendingProvider?.phoneNumberId
+          ? maskString(config.pendingProvider.phoneNumberId)
+          : '',
+      source: pendingActivation ? 'tenant-own' : config.source || 'none',
+      displayPhoneNumber: configured
+        ? config.displayPhoneNumber || null
+        : pendingActivation
+          ? config.pendingProvider?.displayPhoneNumber || null
+          : null,
+      verifiedName: configured
+        ? config.verifiedName || null
+        : pendingActivation
+          ? config.pendingProvider?.verifiedName || null
+          : null,
       nameStatus: configured ? config.nameStatus || null : null,
       messagingLimitTier: configured ? config.messagingLimitTier || null : null,
       qualityRating: configured ? config.qualityRating || null : null,
-      coexistenceMode: configured ? Boolean(config.coexistenceMode) : false,
+      phoneStatus: pendingActivation ? config.pendingProvider?.phoneStatus || null : null,
+      accountReviewStatus: pendingActivation ? config.pendingProvider?.accountReviewStatus || null : null,
+      coexistenceMode: configured
+        ? Boolean(config.coexistenceMode)
+        : pendingActivation
+          ? Boolean(config.pendingProvider?.coexistenceMode)
+          : false,
       waMeUrl,
       qrCodeDataUrl,
       googleMapsWhatsappUrl,

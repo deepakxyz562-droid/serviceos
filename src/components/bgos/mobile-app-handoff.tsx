@@ -41,12 +41,13 @@ export function MobileAppHandoff({
         appOpenedRef.current = true;
       }
     };
-    const markPageHide = () => {
+    const markBackgrounded = () => {
       appOpenedRef.current = true;
     };
 
     document.addEventListener('visibilitychange', markOpened);
-    window.addEventListener('pagehide', markPageHide);
+    window.addEventListener('pagehide', markBackgrounded);
+    window.addEventListener('blur', markBackgrounded);
 
     const launchTimer = window.setTimeout(() => {
       try {
@@ -62,24 +63,25 @@ export function MobileAppHandoff({
       }
     }, 60);
 
-    // If the app didn't background the browser within 1.5s, show / redirect to store.
+    // If the app didn't launch or prompt within 1.8s, surface / open store fallback.
     const fallbackTimer = window.setTimeout(() => {
       if (appOpenedRef.current || document.visibilityState === 'hidden') return;
       setFallbackReady(true);
-      if (storeUrl) {
+      if (storeUrl && document.hasFocus()) {
         try {
           window.location.href = storeUrl;
         } catch {
           // Keep visible store button available below
         }
       }
-    }, 1500);
+    }, 1800);
 
     return () => {
       window.clearTimeout(launchTimer);
       window.clearTimeout(fallbackTimer);
       document.removeEventListener('visibilitychange', markOpened);
-      window.removeEventListener('pagehide', markPageHide);
+      window.removeEventListener('pagehide', markBackgrounded);
+      window.removeEventListener('blur', markBackgrounded);
     };
   }, [primaryLaunchUrl, appSchemeUrl, storeUrl]);
 
