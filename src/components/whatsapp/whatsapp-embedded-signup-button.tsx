@@ -178,6 +178,7 @@ export function WhatsAppEmbeddedSignupButton({
     (resolvedConfigId: string) => {
       const extras: Record<string, unknown> = {
         setup: {},
+        version: 'v4',
         sessionInfoVersion: '3',
       };
       if (mode === 'coexistence') {

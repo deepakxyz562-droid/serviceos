@@ -244,3 +244,28 @@ export async function isWhatsAppConfiguredAsync(tenantId?: string): Promise<bool
 }
 
 export const WHATSAPP_API_VERSION = 'v25.0';
+
+const DEV_WEBHOOK_VERIFY_FALLBACKS = ['fieseros_verify_token', 'flowforge_verify_token'];
+
+/**
+ * Resolve valid webhook verify tokens for GET subscription verification.
+ * Always honors explicitly configured env vars (and custom non-fallback DB tokens);
+ * only allows well-known dev fallback strings implicitly outside production.
+ */
+export function resolveAllowedWebhookVerifyTokens(dbVerifyToken?: string | null): Set<string> {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const explicitEnvTokens = [
+    process.env.WHATSAPP_VERIFY_TOKEN?.trim(),
+    process.env.META_VERIFY_TOKEN?.trim(),
+  ].filter(Boolean) as string[];
+
+  const trimmedDbToken = dbVerifyToken?.trim();
+  const hasCustomDbToken =
+    Boolean(trimmedDbToken) && !DEV_WEBHOOK_VERIFY_FALLBACKS.includes(trimmedDbToken!);
+
+  return new Set<string>([
+    ...explicitEnvTokens,
+    ...(hasCustomDbToken ? [trimmedDbToken!] : []),
+    ...(!isProduction ? DEV_WEBHOOK_VERIFY_FALLBACKS : []),
+  ]);
+}

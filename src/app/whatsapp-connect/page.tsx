@@ -214,10 +214,15 @@ function WhatsAppConnectContent() {
             {errorMsg ? (
               <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 space-y-1.5">
                 <p>{errorMsg}</p>
-                {/(personal|messenger|ineligible|coexist|register|linked|app)/i.test(errorMsg) ? (
-                  <p className="text-[11px] text-red-800">
-                    Tip: Make sure your number is updated inside the free <strong>WhatsApp Business app</strong> (not regular WhatsApp Messenger) and temporarily unlink older WhatsApp Desktop/WearOS companions before retrying.
-                  </p>
+                {/(personal|messenger|ineligible|coexist|register|linked|app|3441107|cancelled)/i.test(errorMsg) ? (
+                  <div className="text-[11px] text-red-800 space-y-1">
+                    <p>
+                      Tip: Ensure your phone is on the latest <strong>WhatsApp Business app</strong> (v2.24.17+) and check <em>Settings → Account → Business Platform</em> to disconnect any previous partner link before retrying.
+                    </p>
+                    <p>
+                      If Meta shows error <strong>#3441107</strong> (&quot;partner&apos;s app isn&apos;t set up yet&quot;), Coexistence setup for WhatsApp Business app numbers is still awaiting Meta partner/app verification — or choose <strong>Connect Dedicated API Number</strong> if setting up a dedicated or spare number.
+                    </p>
+                  </div>
                 ) : null}
               </div>
             ) : null}

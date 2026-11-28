@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
+import { resolveAllowedWebhookVerifyTokens, resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 import { maybeAutoReply } from '@/lib/auto-reply';
 import { createInboundMessage } from '@/lib/inbox-message-service';
@@ -17,11 +17,6 @@ import {
 import { checkAvailability } from '@/lib/scheduling/ai-tools';
 import { getLocalDateParts, resolveTenantLocale } from '@/lib/locale-timezone';
 import crypto from 'crypto';
-
-// Well-known dev fallback tokens — accepted ONLY outside production so local
-// webhook setup keeps working. In production, verification requires a real
-// configured token (resolveWhatsAppConfig / WHATSAPP_VERIFY_TOKEN / META_VERIFY_TOKEN).
-const DEV_FALLBACK_TOKENS = ['fieseros_verify_token', 'flowforge_verify_token'];
 
 /**
  * Verify the X-Hub-Signature-256 header sent by Meta.
@@ -79,21 +74,7 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    // Production (NODE_ENV=production) with no configured token rejects
-    // verification (fail-closed); outside production the dev fallback tokens
-    // above are still accepted so local webhook setup doesn't break.
-    const isProduction = process.env.NODE_ENV === 'production';
-    const candidates = [
-      config.verifyToken,
-      process.env.WHATSAPP_VERIFY_TOKEN,
-      process.env.META_VERIFY_TOKEN,
-      ...(isProduction ? [] : DEV_FALLBACK_TOKENS),
-    ].filter(Boolean) as string[];
-    // The well-known dev tokens must never verify a production webhook, even
-    // when the config fallback chain (whatsapp-config.ts) returns one of them.
-    const validTokens = new Set(
-      isProduction ? candidates.filter((t) => !DEV_FALLBACK_TOKENS.includes(t)) : candidates,
-    );
+    const validTokens = resolveAllowedWebhookVerifyTokens(config.verifyToken);
 
     if (mode === 'subscribe' && token && validTokens.has(token)) {
       console.log('WhatsApp webhook verified successfully');

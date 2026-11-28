@@ -627,4 +627,32 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
     fetchSpy.mockRestore();
     process.env = prevEnv;
   });
+
+  it('GET /api/whatsapp/callback honors explicit WHATSAPP_VERIFY_TOKEN in production and fails closed when unconfigured', async () => {
+    const prevEnv = process.env;
+    try {
+      process.env = { ...prevEnv, NODE_ENV: 'production' };
+      delete process.env.WHATSAPP_VERIFY_TOKEN;
+      delete process.env.META_VERIFY_TOKEN;
+
+      const { GET: webhookGet } = await import('@/app/api/whatsapp/callback/route');
+      const unconfiguredRes = await webhookGet(
+        new Request(
+          'https://fieseros.com/api/whatsapp/callback?hub.mode=subscribe&hub.verify_token=fieseros_verify_token&hub.challenge=98765',
+        ) as any,
+      );
+      expect(unconfiguredRes.status).toBe(403);
+
+      process.env.WHATSAPP_VERIFY_TOKEN = 'flowforge_verify_token';
+      const configuredRes = await webhookGet(
+        new Request(
+          'https://fieseros.com/api/whatsapp/callback?hub.mode=subscribe&hub.verify_token=flowforge_verify_token&hub.challenge=98765',
+        ) as any,
+      );
+      expect(configuredRes.status).toBe(200);
+      expect(await configuredRes.text()).toBe('98765');
+    } finally {
+      process.env = prevEnv;
+    }
+  });
 });

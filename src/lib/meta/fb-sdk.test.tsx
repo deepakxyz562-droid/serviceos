@@ -26,6 +26,17 @@ describe('Meta Facebook JS SDK callback validation', () => {
       if (kind !== '[object Function]') {
         throw new Error(`Expression is of type ${kind}, not function`);
       }
+      expect(opts).toMatchObject({
+        config_id: '1726144922272991',
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          version: 'v4',
+          sessionInfoVersion: '3',
+          featureType: 'whatsapp_business_app_onboarding',
+        },
+      });
       cb({ authResponse: { code: 'wa_auth_code_1', state: 'st_1' } });
     });
 
@@ -53,7 +64,7 @@ describe('Meta Facebook JS SDK callback validation', () => {
         label="Continue with Facebook & WhatsApp"
         mode="coexistence"
         metaAppId="meta_app_1"
-        configId="1822859788621036"
+        configId="1726144922272991"
         onSuccess={onSuccess}
       />,
     );
