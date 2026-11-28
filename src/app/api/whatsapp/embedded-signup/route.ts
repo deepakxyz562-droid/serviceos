@@ -82,8 +82,11 @@ export async function POST(request: NextRequest) {
         authUser = {
           id: verified.userId,
           email: verified.email,
+          name: null,
           role: verified.role as any,
           tenantId: verified.tenantId,
+          workspaceId: null,
+          avatar: null,
         };
       }
     }
