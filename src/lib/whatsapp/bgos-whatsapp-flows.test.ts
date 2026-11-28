@@ -419,4 +419,41 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
     expect(cfgJson.googleMapsWhatsappUrl).toBe('https://wa.me/919800012345');
     expect(cfgJson.googleMapsWhatsappSynced).toBe(true);
   });
+
+  it('GET /api/whatsapp/config treats platform fallback as isConfigured=false and routing/CSP allow Meta Embedded Signup', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    mockGetAuthUser.mockResolvedValue({ id: 'u2', tenantId: 'ten_unconnected', role: 'owner' });
+    mockDb.tenant.findUnique.mockResolvedValue({ settingsJson: '{}' });
+    mockDb.communicationProvider.findFirst
+      .mockResolvedValueOnce(null) // isPlatform: false active check
+      .mockResolvedValueOnce(null) // any tenant row BYO check
+      .mockResolvedValueOnce({
+        id: 'prov_platform',
+        configJson: JSON.stringify({
+          accessToken: 'EAA_PLATFORM',
+          phoneNumberId: '99995898',
+          displayPhoneNumber: '+919900005898',
+        }),
+        credential: null,
+      });
+
+    const { GET: getWaConfig } = await import('@/app/api/whatsapp/config/route');
+    const res = await getWaConfig(new Request('http://localhost/api/whatsapp/config') as any);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.source).toBe('platform');
+    expect(json.isConfigured).toBe(false);
+    expect(json.platformGatewayAvailable).toBe(true);
+    expect(json.displayPhoneNumber).toBeNull();
+    expect(json.qrCodeDataUrl).toBeNull();
+
+    const proxySrc = fs.readFileSync(path.join(process.cwd(), 'src/proxy.ts'), 'utf8');
+    const nextConfigSrc = fs.readFileSync(path.join(process.cwd(), 'next.config.ts'), 'utf8');
+    expect(proxySrc).toContain("'whatsapp-connect'");
+    expect(nextConfigSrc).toContain('https://connect.facebook.net');
+    expect(nextConfigSrc).toContain('https://www.facebook.com');
+  });
 });

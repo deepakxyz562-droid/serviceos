@@ -164,7 +164,11 @@ function IntegrationsScreen() {
 
   const accounts = accountsRes.data?.data || [];
   const activeAccounts = accounts.filter((a) => a.isActive);
-  const waActive = Boolean(waConfig.data?.isConfigured);
+  const waActive = Boolean(
+    waConfig.data?.isConfigured &&
+    waConfig.data?.source !== 'platform' &&
+    waConfig.data?.source !== 'env',
+  );
   const totalConnected = activeAccounts.length + (waActive ? 1 : 0);
 
   const openWhatsAppSetup = () => {
@@ -383,9 +387,11 @@ function IntegrationsScreen() {
                     <MaterialIcons name={ch.icon} size={22} color={ch.iconColor} />
                   </View>
 
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={styles.channelName}>{ch.name}</Text>
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <Text style={styles.channelName} numberOfLines={2}>
+                        {ch.name}
+                      </Text>
                       {isConnected ? (
                         <View style={styles.connectedBadge}>
                           <View style={styles.greenDot} />
@@ -860,6 +866,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   channelName: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
@@ -871,6 +879,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   connectedBadge: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -891,6 +900,7 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   notConnectedBadge: {
+    flexShrink: 0,
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -925,8 +935,9 @@ const styles = StyleSheet.create({
   },
   cardActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,

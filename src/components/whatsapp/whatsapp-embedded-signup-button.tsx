@@ -38,11 +38,52 @@ export function WhatsAppEmbeddedSignupButton({
   mode = 'coexistence',
 }: WhatsAppEmbeddedSignupButtonProps) {
   const [loading, setLoading] = useState(false);
+  const resolvedIdsRef = useRef<{ appId: string; configId: string }>({
+    appId:
+      metaAppIdProp ||
+      process.env.NEXT_PUBLIC_META_APP_ID ||
+      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+      '',
+    configId:
+      configIdProp ||
+      process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
+      DEFAULT_TECH_PROVIDER_CONFIG_ID,
+  });
   const sessionInfoRef = useRef<{
     wabaId?: string;
     phoneNumberId?: string;
     isCoexistence?: boolean;
   }>({});
+
+  // Preload & initialize Facebook JS SDK on mount so FB.login runs synchronously inside
+  // the user's tap gesture (prevents popup blockers in iOS Safari / ASWebAuthenticationSession).
+  useEffect(() => {
+    async function warmSdk() {
+      let appId =
+        metaAppIdProp ||
+        process.env.NEXT_PUBLIC_META_APP_ID ||
+        process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+        resolvedIdsRef.current.appId;
+      let cfgId =
+        configIdProp ||
+        process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
+        resolvedIdsRef.current.configId;
+
+      if (!appId || !cfgId) {
+        const cfgRes = await fetch('/api/whatsapp/config').catch(() => null);
+        if (cfgRes?.ok) {
+          const cfgJson = await cfgRes.json().catch(() => ({}));
+          if (!appId && cfgJson.metaAppId) appId = cfgJson.metaAppId;
+          if (!cfgId && cfgJson.embeddedConfigId) cfgId = cfgJson.embeddedConfigId;
+        }
+      }
+      resolvedIdsRef.current = { appId, configId: cfgId };
+      if (appId && typeof window !== 'undefined') {
+        await loadFBSDK(appId).catch(() => {});
+      }
+    }
+    void warmSdk();
+  }, [metaAppIdProp, configIdProp]);
 
   useEffect(() => {
     const onWindowMessage = (event: MessageEvent) => {
@@ -80,11 +121,13 @@ export function WhatsAppEmbeddedSignupButton({
     try {
       let resolvedAppId =
         metaAppIdProp ||
+        resolvedIdsRef.current.appId ||
         process.env.NEXT_PUBLIC_META_APP_ID ||
         process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
         '';
       let resolvedConfigId =
         configIdProp ||
+        resolvedIdsRef.current.configId ||
         process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
         DEFAULT_TECH_PROVIDER_CONFIG_ID;
 
@@ -209,6 +252,12 @@ function loadFBSDK(explicitAppId?: string): Promise<void> {
       return;
     }
 
+    const existingPromise = (window as any).__bgosFbSdkPromise as Promise<void> | undefined;
+    if (existingPromise) {
+      existingPromise.then(resolve, reject);
+      return;
+    }
+
     const appId =
       explicitAppId ||
       process.env.NEXT_PUBLIC_META_APP_ID ||
@@ -218,23 +267,39 @@ function loadFBSDK(explicitAppId?: string): Promise<void> {
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://connect.facebook.net/en_US/sdk.js';
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
+    const p = new Promise<void>((resInner, rejInner) => {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        'script[src*="connect.facebook.net"]',
+      );
+      if (existingScript && (window as any).FB) {
+        resInner();
+        return;
+      }
 
-    script.onload = () => {
-      (window as any).FB.init({
-        appId,
-        cookie: true,
-        xfbml: true,
-        version: 'v21.0',
-      });
-      resolve();
-    };
+      const script = document.createElement('script');
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
 
-    script.onerror = () => reject(new Error('Failed to load Facebook SDK'));
-    document.head.appendChild(script);
+      script.onload = () => {
+        (window as any).FB?.init({
+          appId,
+          cookie: true,
+          xfbml: true,
+          version: 'v21.0',
+        });
+        resInner();
+      };
+
+      script.onerror = () => {
+        delete (window as any).__bgosFbSdkPromise;
+        rejInner(new Error('Failed to load Facebook SDK'));
+      };
+      document.head.appendChild(script);
+    });
+
+    (window as any).__bgosFbSdkPromise = p;
+    p.then(resolve, reject);
   });
 }

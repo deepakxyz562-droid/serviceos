@@ -37,8 +37,14 @@ export async function GET(request: NextRequest) {
     }
 
     const config = await resolveWhatsAppConfig(tenantId);
-    const configured = !!(config.accessToken && config.phoneNumberId);
-    const phoneDigits = (config.displayPhoneNumber || '').replace(/\D/g, '');
+    const configured = Boolean(
+      config.accessToken &&
+      config.phoneNumberId &&
+      config.source === 'tenant-own',
+    );
+    const phoneDigits = configured
+      ? (config.displayPhoneNumber || '').replace(/\D/g, '')
+      : '';
     const waMeUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
     const qrCodeDataUrl = waMeUrl
       ? await QRCode.toDataURL(waMeUrl, { margin: 2, width: 320 }).catch(() => null)
@@ -79,15 +85,16 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       isConfigured: configured,
-      mode: configured ? 'live' : 'demo',
-      phoneNumberId: maskString(config.phoneNumberId),
+      mode: configured ? 'live' : 'not_connected',
+      platformGatewayAvailable: config.source === 'platform' || config.source === 'env',
+      phoneNumberId: configured ? maskString(config.phoneNumberId) : '',
       source: config.source || 'none',
-      displayPhoneNumber: config.displayPhoneNumber || null,
-      verifiedName: config.verifiedName || null,
-      nameStatus: config.nameStatus || null,
-      messagingLimitTier: config.messagingLimitTier || null,
-      qualityRating: config.qualityRating || null,
-      coexistenceMode: Boolean(config.coexistenceMode),
+      displayPhoneNumber: configured ? config.displayPhoneNumber || null : null,
+      verifiedName: configured ? config.verifiedName || null : null,
+      nameStatus: configured ? config.nameStatus || null : null,
+      messagingLimitTier: configured ? config.messagingLimitTier || null : null,
+      qualityRating: configured ? config.qualityRating || null : null,
+      coexistenceMode: configured ? Boolean(config.coexistenceMode) : false,
       waMeUrl,
       qrCodeDataUrl,
       googleMapsWhatsappUrl,

@@ -262,7 +262,13 @@ export async function resolveWorkspaceData(
     const waProviderRow = db.communicationProvider?.findFirst
       ? await db.communicationProvider
           .findFirst({
-            where: { tenantId: user.tenantId, type: 'whatsapp', status: 'active' },
+            where: {
+              tenantId: user.tenantId,
+              type: 'whatsapp',
+              status: 'active',
+              sendingEnabled: true,
+              isPlatform: false,
+            },
             select: { id: true },
           })
           .catch(() => null)
