@@ -2,7 +2,16 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, MessageCircle, ShieldCheck, Smartphone, ArrowLeft } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  MessageCircle,
+  ShieldCheck,
+  Smartphone,
+  ArrowLeft,
+} from 'lucide-react';
 import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
 
 function WhatsAppConnectContent() {
@@ -12,6 +21,7 @@ function WhatsAppConnectContent() {
   const nextPath = searchParams.get('next') || '/integrations';
 
   const [mode, setMode] = useState<'coexistence' | 'cloud_api'>('coexistence');
+  const [showPersonalGuide, setShowPersonalGuide] = useState(false);
   const [configMeta, setConfigMeta] = useState<{
     metaAppId?: string | null;
     embeddedConfigId?: string | null;
@@ -105,28 +115,82 @@ function WhatsAppConnectContent() {
                 Choose Setup Mode
               </p>
 
-              <button
-                type="button"
-                onClick={() => setMode('coexistence')}
+              <div
                 className={`w-full text-left rounded-xl border p-3.5 transition ${
                   mode === 'coexistence'
                     ? 'border-emerald-600 bg-emerald-50/70'
                     : 'border-slate-200 bg-white'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-emerald-700" />
-                    Keep My WhatsApp Business App
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    Recommended
-                  </span>
+                <button
+                  type="button"
+                  onClick={() => setMode('coexistence')}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-emerald-700" />
+                      Keep My WhatsApp Business App
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      Recommended
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Link your existing number running on the free <strong>WhatsApp Business</strong> app via QR / OTP. Keep replying on your phone while BGOS AI handles leads &amp; bookings.
+                  </p>
+                </button>
+
+                <div className="mt-2.5 pt-2 border-t border-emerald-200/70">
+                  <button
+                    type="button"
+                    onClick={() => setShowPersonalGuide((v) => !v)}
+                    className="w-full flex items-center justify-between text-[11.5px] font-semibold text-emerald-800 hover:text-emerald-900"
+                  >
+                    <span>Using Personal WhatsApp? Keep your same number (no new SIM)</span>
+                    {showPersonalGuide ? (
+                      <ChevronUp className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 shrink-0" />
+                    )}
+                  </button>
+
+                  {showPersonalGuide ? (
+                    <div className="mt-2 rounded-lg bg-white border border-emerald-200/80 p-2.5 text-[11.5px] text-slate-700 space-y-1.5">
+                      <p className="text-slate-600">
+                        Meta only supports linking the free <strong>WhatsApp Business app</strong> (not regular Personal WhatsApp Messenger). Switch your existing number cleanly in 2 minutes without losing chats:
+                      </p>
+                      <p>
+                        <strong>1. Back up chats:</strong> Open Personal WhatsApp → <em>Settings → Chats → Chat backup</em>.
+                      </p>
+                      <p>
+                        <strong>2. Install free WhatsApp Business app:</strong> Verify your <strong>same mobile number</strong> &amp; tap Restore when prompted.
+                      </p>
+                      <p>
+                        <strong>3. Link below:</strong> Tap <em>Continue with Facebook &amp; WhatsApp</em> and scan the QR / enter OTP.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <a
+                          href="https://apps.apple.com/app/whatsapp-business/id1386412985"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 underline"
+                        >
+                          iPhone App Store <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <a
+                          href="https://play.google.com/store/apps/details?id=com.whatsapp.w4b"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 underline"
+                        >
+                          Android Play Store <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <p className="text-xs text-slate-600 mt-1">
-                  Link your existing WhatsApp Business number via QR / OTP. Keep using the phone app for manual chats while BGOS AI handles leads & bookings.
-                </p>
-              </button>
+              </div>
 
               <button
                 type="button"
@@ -142,14 +206,19 @@ function WhatsAppConnectContent() {
                   Connect Dedicated API Number
                 </div>
                 <p className="text-xs text-slate-600 mt-1">
-                  Register a fresh phone number exclusively on Meta Cloud API for full automated AI reception and bulk campaigns.
+                  Only for a brand-new or spare phone number. Registering an active mobile WhatsApp number here will log out your phone app.
                 </p>
               </button>
             </div>
 
             {errorMsg ? (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
-                {errorMsg}
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 space-y-1.5">
+                <p>{errorMsg}</p>
+                {/(personal|messenger|ineligible|coexist|register|linked|app)/i.test(errorMsg) ? (
+                  <p className="text-[11px] text-red-800">
+                    Tip: Make sure your number is updated inside the free <strong>WhatsApp Business app</strong> (not regular WhatsApp Messenger) and temporarily unlink older WhatsApp Desktop/WearOS companions before retrying.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 

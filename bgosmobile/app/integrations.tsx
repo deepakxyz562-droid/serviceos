@@ -563,7 +563,7 @@ function IntegrationsScreen() {
               </Pressable>
             </View>
             <Text style={[styles.modalSubheading, { textAlign: 'left' }]}>
-              Connect your business number with Meta Embedded Signup in 2 minutes (supports keeping your existing WhatsApp Business app via Coexistence).
+              Keep your existing SIM / mobile number in 2 minutes: Meta Coexistence links the free WhatsApp Business app (switch from Personal WhatsApp without losing chats, or buy no new number).
             </Text>
 
             <Pressable

@@ -165,6 +165,15 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Handle Coexistence initial history backfill (without firing AI auto-replies)
+        if (change.field === 'history' || Array.isArray(value?.history)) {
+          await handleCoexistenceHistorySync(value);
+        }
+
+        if (change.field === 'smb_app_state_sync' && value) {
+          console.log('[WhatsApp Callback] smb_app_state_sync received');
+        }
+
         if (change.field === 'account_update' && value) {
           console.log('[WhatsApp Callback] account_update event received:', JSON.stringify(value));
         }
@@ -518,6 +527,71 @@ async function resolveTenantIdByPhoneNumberId(
   }
 }
 
+async function upsertWhatsAppInboxConversation(params: {
+  tenantId: string;
+  customerPhone: string;
+  direction: 'inbound' | 'outbound';
+  previewBody: string;
+  timestamp?: Date;
+  pauseAi?: boolean;
+}): Promise<string> {
+  const { tenantId, customerPhone, direction, previewBody, timestamp, pauseAi = false } = params;
+  const digits = customerPhone.replace(/\D/g, '');
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  const conv = await db.conversation.findFirst({
+    where: {
+      tenantId,
+      channel: 'whatsapp',
+      status: 'active',
+      OR: [
+        { customerPhone },
+        ...(digits ? [{ customerPhone: `+${digits}` }, { customerPhone: digits }] : []),
+        ...(last10.length >= 10 ? [{ customerPhone: { endsWith: last10 } }] : []),
+      ],
+    },
+    orderBy: { lastMessageAt: 'desc' },
+  }).catch(() => null);
+
+  const eventDate = timestamp || new Date();
+  if (conv) {
+    const isNewer = !conv.lastMessageAt || eventDate >= new Date(conv.lastMessageAt);
+    if (isNewer || pauseAi) {
+      await db.conversation.update({
+        where: { id: conv.id },
+        data: {
+          ...(isNewer
+            ? {
+                lastMessageAt: eventDate,
+                lastMessageBody: previewBody,
+                lastDirection: direction,
+              }
+            : {}),
+          ...(pauseAi ? { aiPaused: true } : {}),
+        },
+      });
+    }
+    return conv.conversationId;
+  }
+
+  const conversationId = `conv_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await db.conversation.create({
+    data: {
+      conversationId,
+      customerPhone,
+      channel: 'whatsapp',
+      status: 'active',
+      aiPaused: pauseAi,
+      currentStage: pauseAi ? 'human_takeover' : 'new',
+      lastMessageAt: eventDate,
+      lastMessageBody: previewBody,
+      lastDirection: direction,
+      tenantId,
+      messagesJson: '[]',
+    },
+  });
+  return conversationId;
+}
+
 /**
  * Sync manual replies sent from the owner's WhatsApp Business phone app (Coexistence)
  * into BGOS Inbox and auto-pause the AI agent on that conversation so AI never talks over the owner.
@@ -557,51 +631,13 @@ async function handleCoexistenceMessageEcho(
       if (dup) return;
     }
 
-    const digits = customerPhone.replace(/\D/g, '');
-    const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
-    const conv = await db.conversation.findFirst({
-      where: {
-        tenantId,
-        channel: 'whatsapp',
-        status: 'active',
-        OR: [
-          { customerPhone },
-          ...(digits ? [{ customerPhone: `+${digits}` }, { customerPhone: digits }] : []),
-          ...(last10.length >= 10 ? [{ customerPhone: { endsWith: last10 } }] : []),
-        ],
-      },
-      orderBy: { lastMessageAt: 'desc' },
-    }).catch(() => null);
-
-    let conversationId = conv?.conversationId || '';
-    if (conv) {
-      await db.conversation.update({
-        where: { id: conv.id },
-        data: {
-          lastMessageAt: new Date(),
-          lastMessageBody: textBody,
-          lastDirection: 'outbound',
-          aiPaused: true,
-        },
-      });
-    } else {
-      conversationId = `conv_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      await db.conversation.create({
-        data: {
-          conversationId,
-          customerPhone,
-          channel: 'whatsapp',
-          status: 'active',
-          aiPaused: true,
-          currentStage: 'human_takeover',
-          lastMessageAt: new Date(),
-          lastMessageBody: textBody,
-          lastDirection: 'outbound',
-          tenantId,
-          messagesJson: '[]',
-        },
-      });
-    }
+    const conversationId = await upsertWhatsAppInboxConversation({
+      tenantId,
+      customerPhone,
+      direction: 'outbound',
+      previewBody: textBody,
+      pauseAi: true,
+    });
 
     await db.inboxMessage.create({
       data: {
@@ -625,6 +661,106 @@ async function handleCoexistenceMessageEcho(
     });
   } catch (err) {
     console.warn('[WhatsApp Callback] Coexistence echo handling error:', err);
+  }
+}
+
+/**
+ * Backfill historical 1-to-1 chats synced by Meta Coexistence (`history` webhook)
+ * into BGOS Inbox without triggering AI auto-replies.
+ */
+async function handleCoexistenceHistorySync(value?: Record<string, unknown>) {
+  try {
+    if (!value) return;
+    const phoneNumberId =
+      (value as { metadata?: { phone_number_id?: string } })?.metadata?.phone_number_id || '';
+    const businessDigits = (
+      (value as { metadata?: { display_phone_number?: string } })?.metadata?.display_phone_number || ''
+    ).replace(/\D/g, '');
+    const tenantId = await resolveTenantIdByPhoneNumberId(phoneNumberId, false);
+    if (!tenantId) return;
+
+    const historyChunks = Array.isArray((value as { history?: unknown[] }).history)
+      ? ((value as { history?: Array<Record<string, unknown>> }).history || [])
+      : [{ threads: (value as { threads?: unknown[] }).threads }];
+
+    for (const chunk of historyChunks) {
+      const threads = Array.isArray(chunk?.threads)
+        ? (chunk.threads as Array<Record<string, unknown>>)
+        : [];
+      for (const thread of threads) {
+        const threadPhone = String(thread?.id || '').trim();
+        const messages = Array.isArray(thread?.messages)
+          ? (thread.messages as Array<Record<string, unknown>>)
+          : [];
+        for (const msg of messages) {
+          const messageId = String(msg?.id || '').trim();
+          const fromStr = String(msg?.from || '').trim();
+          const toStr = String(msg?.to || '').trim();
+          const historyCtx = msg?.history_context as { from_me?: boolean } | undefined;
+          const fromDigits = fromStr.replace(/\D/g, '');
+          const isOutbound =
+            Boolean(historyCtx?.from_me) ||
+            (businessDigits.length >= 7 && fromDigits === businessDigits);
+          const customerPhone = threadPhone || (isOutbound ? toStr : fromStr);
+          if (!customerPhone) continue;
+
+          const msgType = String(msg?.type || 'text').trim();
+          const content = String(
+            (msg?.text as { body?: string } | undefined)?.body ||
+              (msg?.image as { caption?: string } | undefined)?.caption ||
+              (msg?.document as { caption?: string } | undefined)?.caption ||
+              `[${msgType}]`,
+          ).trim();
+          if (!content) continue;
+
+          if (messageId) {
+            const dup = await db.inboxMessage.findFirst({
+              where: { tenantId, channel: 'whatsapp', externalId: messageId },
+              select: { id: true },
+            }).catch(() => null);
+            if (dup) continue;
+          }
+
+          const rawTs = Number(msg?.timestamp);
+          const msgDate =
+            Number.isFinite(rawTs) && rawTs > 0
+              ? new Date(rawTs > 1e12 ? rawTs : rawTs * 1000)
+              : new Date();
+
+          const conversationId = await upsertWhatsAppInboxConversation({
+            tenantId,
+            customerPhone,
+            direction: isOutbound ? 'outbound' : 'inbound',
+            previewBody: content,
+            timestamp: msgDate,
+            pauseAi: false,
+          });
+
+          await db.inboxMessage.create({
+            data: {
+              tenantId,
+              conversationId,
+              channel: 'whatsapp',
+              senderId: isOutbound ? businessDigits || 'owner' : customerPhone,
+              senderName: isOutbound ? 'Owner (History Sync)' : customerPhone,
+              senderType: isOutbound ? 'human' : 'customer',
+              direction: isOutbound ? 'outbound' : 'inbound',
+              content,
+              messageType: msgType === 'image' || msgType === 'document' ? msgType : 'text',
+              externalId: messageId || null,
+              status: isOutbound ? 'delivered' : 'read',
+              metadataJson: JSON.stringify({
+                coexistenceHistory: true,
+                whatsappMessageId: messageId || undefined,
+                phoneNumberId: phoneNumberId || undefined,
+              }),
+            },
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[WhatsApp Callback] Coexistence history sync error:', err);
   }
 }
 

@@ -22,7 +22,7 @@ const {
     tenant: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn().mockResolvedValue({}) },
     customer: { findFirst: vi.fn(), findMany: vi.fn() },
     lead: { findMany: vi.fn() },
-    conversation: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    conversation: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn().mockResolvedValue({}), updateMany: vi.fn() },
     inboxMessage: { findFirst: vi.fn(), create: vi.fn() },
     campaignTemplate: { findFirst: vi.fn(), findMany: vi.fn() },
     campaign: { create: vi.fn(), updateMany: vi.fn() },
@@ -489,5 +489,142 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
     expect(proxySrc).toContain("'whatsapp-connect'");
     expect(nextConfigSrc).toContain('https://connect.facebook.net');
     expect(nextConfigSrc).toContain('https://www.facebook.com');
+  });
+
+  it('POST /api/whatsapp/embedded-signup triggers smb_app_data sync in Coexistence mode without calling /register, and history webhook backfills without auto-reply', async () => {
+    const cryptoMod = await import('node:crypto');
+    const prevEnv = { ...process.env };
+    process.env.META_APP_ID = 'meta_app_1';
+    process.env.META_APP_SECRET = 'meta_secret_1';
+    process.env.WHATSAPP_APP_SECRET = 'meta_secret_1';
+
+    mockGetAuthUser.mockResolvedValue({ id: 'u_coex', tenantId: 'ten_coex', role: 'owner' });
+    mockDb.communicationProvider.findFirst.mockResolvedValueOnce(null);
+    mockDb.communicationProvider.create.mockResolvedValue({ id: 'prov_coex' });
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: '{}',
+      phone: null,
+      whatsappPhone: null,
+      country: 'IN',
+      address: 'Jaipur, RJ',
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+      const target = String(url);
+      if (target.includes('/oauth/access_token')) {
+        return new Response(JSON.stringify({ access_token: 'EAA_COEX_LONG' }), { status: 200 });
+      }
+      if (target.includes('/phone_numbers')) {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: 'pn_coex_1', display_phone_number: '+919829012345', verified_name: 'Shop' }],
+          }),
+          { status: 200 },
+        );
+      }
+      if (target.includes('/subscribed_apps') || target.includes('/smb_app_data')) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (target.includes('/register')) {
+        throw new Error('Must NOT call /register in Coexistence mode');
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const { POST: embeddedSignupPost } = await import('@/app/api/whatsapp/embedded-signup/route');
+    const signupRes = await embeddedSignupPost(
+      new Request('https://bgos.site/api/whatsapp/embedded-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: 'auth_code_1',
+          wabaId: 'waba_coex_1',
+          phoneNumberId: 'pn_coex_1',
+          isCoexistence: true,
+          featureType: 'whatsapp_business_app_onboarding',
+        }),
+      }) as any,
+    );
+    const signupJson = await signupRes.json();
+
+    expect(signupRes.status).toBe(200);
+    expect(signupJson.coexistenceMode).toBe(true);
+    expect(signupJson.coexistenceSyncRequested).toBe(true);
+
+    const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes('/pn_coex_1/register'))).toBe(false);
+    expect(calledUrls.filter((u) => u.includes('/pn_coex_1/smb_app_data')).length).toBe(2);
+
+    // Verify Coexistence history webhook syncs without auto-reply
+    mockDb.communicationProvider.findFirst.mockResolvedValueOnce({
+      id: 'prov_coex',
+      tenantId: 'ten_coex',
+    });
+    mockDb.inboxMessage.findFirst.mockResolvedValueOnce(null);
+    mockDb.conversation.findFirst.mockResolvedValueOnce(null);
+
+    const historyPayload = JSON.stringify({
+      entry: [
+        {
+          changes: [
+            {
+              field: 'history',
+              value: {
+                metadata: { phone_number_id: 'pn_coex_1', display_phone_number: '919829012345' },
+                history: [
+                  {
+                    threads: [
+                      {
+                        id: '919811122233',
+                        messages: [
+                          {
+                            id: 'wamid_hist_1',
+                            from: '919811122233',
+                            timestamp: '1764300000',
+                            type: 'text',
+                            text: { body: 'Hi, is this shop open today?' },
+                            history_context: { from_me: false },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const sig =
+      'sha256=' +
+      cryptoMod.createHmac('sha256', 'meta_secret_1').update(historyPayload).digest('hex');
+
+    const { POST: webhookPost } = await import('@/app/api/whatsapp/callback/route');
+    const hookRes = await webhookPost(
+      new Request('https://bgos.site/api/whatsapp/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-hub-signature-256': sig,
+        },
+        body: historyPayload,
+      }) as any,
+    );
+    expect(hookRes.status).toBe(200);
+    expect(mockDb.conversation.create).toHaveBeenCalledTimes(1);
+    expect(mockDb.inboxMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 'ten_coex',
+          externalId: 'wamid_hist_1',
+          direction: 'inbound',
+          content: 'Hi, is this shop open today?',
+        }),
+      }),
+    );
+
+    fetchSpy.mockRestore();
+    process.env = prevEnv;
   });
 });

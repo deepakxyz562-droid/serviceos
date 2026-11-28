@@ -15,6 +15,45 @@ import { syncTenantWhatsAppIdentity } from '@/lib/whatsapp/identity-sync';
 
 const META_GRAPH_API = 'https://graph.facebook.com/v21.0';
 
+/**
+ * Trigger best-effort Meta Coexistence initial sync for recent chats and contacts.
+ */
+async function triggerCoexistenceInitialSync(
+  phoneNumberId: string,
+  accessToken: string,
+): Promise<boolean> {
+  const syncTypes = ['smb_app_state_sync', 'history'] as const;
+  let anyRequested = false;
+
+  await Promise.all(
+    syncTypes.map(async (syncType) => {
+      try {
+        const res = await fetch(`${META_GRAPH_API}/${phoneNumberId}/smb_app_data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            sync_type: syncType,
+          }),
+        });
+        if (res.ok) {
+          anyRequested = true;
+        } else {
+          const errText = await res.text().catch(() => '');
+          console.warn(`[whatsapp/embedded-signup] ${syncType} sync notice:`, errText);
+        }
+      } catch (err) {
+        console.warn(`[whatsapp/embedded-signup] ${syncType} sync failed:`, err);
+      }
+    }),
+  );
+
+  return anyRequested;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -173,8 +212,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Register Cloud API number ONLY for non-coexistence accounts
-    // (Coexistence phone numbers remain registered inside the business owner's WA Business app)
+    // 5. Register Cloud API number ONLY for non-coexistence accounts;
+    // for Coexistence, request initial chat/contact sync via smb_app_data
+    let coexistenceSyncRequested = false;
     if (phoneNumberId && !isCoexistence) {
       try {
         await fetch(`${META_GRAPH_API}/${phoneNumberId}/register`, {
@@ -191,6 +231,11 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.warn('[whatsapp/embedded-signup] Phone registration notice:', err);
       }
+    } else if (phoneNumberId && isCoexistence) {
+      coexistenceSyncRequested = await triggerCoexistenceInitialSync(
+        phoneNumberId,
+        longLivedToken,
+      );
     }
 
     // 6. Store credentials & rich Meta status in tenant-owned CommunicationProvider
@@ -267,6 +312,7 @@ export async function POST(request: NextRequest) {
       verifiedName: verifiedName || '',
       messagingLimitTier: messagingLimitTier || '',
       coexistenceMode: isCoexistence,
+      coexistenceSyncRequested,
       chatbotEnsured: Boolean(identitySync?.chatbotEnsured),
       googleMapsSynced: Boolean(identitySync?.syncedToGoogle),
       whatsappUrl: identitySync?.whatsappUrl || '',
