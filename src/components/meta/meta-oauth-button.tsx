@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Instagram, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  getLoadedFbSdk,
+  invokeFbLogin,
+  loadFBSDK,
+  type FbLoginResponse,
+} from '@/lib/meta/fb-sdk';
 
 interface MetaOAuthButtonProps {
   /**
@@ -53,75 +59,98 @@ export function MetaOAuthButton({
   const defaultLabel = provider === 'instagram' ? 'Connect Instagram' : 'Connect Facebook Page';
   const Icon = provider === 'instagram' ? Instagram : MessageSquare;
 
-  const handleSignup = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Load Facebook JS SDK if not already loaded
-      if (typeof window === 'undefined' || !(window as any).FB) {
-        await loadFBSDK();
-      }
+  useEffect(() => {
+    void loadFBSDK().catch(() => {});
+  }, []);
 
-      const FB = (window as any).FB;
-      if (!FB) {
-        toast.error('Failed to load Facebook SDK. Please refresh and try again.');
+  const processOAuthResponse = useCallback(
+    async (response: FbLoginResponse) => {
+      try {
+        if (response.authResponse?.code) {
+          const res = await fetch('/api/meta/oauth/exchange', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              provider,
+              code: response.authResponse.code,
+              state: response.authResponse.state,
+            }),
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            toast.success(
+              provider === 'instagram'
+                ? 'Instagram connected successfully!'
+                : 'Facebook Page connected successfully!',
+            );
+            onSuccess?.();
+          } else {
+            toast.error(data.error || `Failed to connect ${provider}`);
+          }
+        } else if (response.status === 'cancelled') {
+          toast.info(`${provider} connection cancelled`);
+        } else {
+          toast.error(`Failed to connect ${provider}. Please try again.`);
+        }
+      } catch (err) {
+        toast.error(`Failed to complete ${provider} connection`);
+        console.error(`[meta-oauth/${provider}] Backend error:`, err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [provider, onSuccess],
+  );
+
+  const launchOAuth = useCallback(() => {
+    const scopes =
+      provider === 'instagram'
+        ? 'instagram_manage_messages,instagram_manage_insights,pages_show_list'
+        : 'pages_messaging,pages_manage_metadata,pages_show_list';
+
+    invokeFbLogin(
+      {
+        scope: scopes,
+        response_type: 'code',
+        override_default_response_type: true,
+      },
+      function onMetaOAuthResponse(res) {
+        void processOAuthResponse(res);
+      },
+    );
+  }, [provider, processOAuthResponse]);
+
+  const handleSignup = useCallback(() => {
+    setLoading(true);
+    if (getLoadedFbSdk()) {
+      try {
+        launchOAuth();
+        return;
+      } catch (err) {
+        console.error(`[meta-oauth/${provider}] Error:`, err);
+        toast.error(`Failed to start ${provider} OAuth`);
+        setLoading(false);
         return;
       }
-
-      // Launch the OAuth popup with the appropriate scopes
-      const scopes =
-        provider === 'instagram'
-          ? 'instagram_manage_messages,instagram_manage_insights,pages_show_list'
-          : 'pages_messaging,pages_manage_metadata,pages_show_list';
-
-      FB.login(
-        async (response: any) => {
-          if (response.authResponse?.code) {
-            // Exchange the code on our backend
-            try {
-              const res = await fetch('/api/meta/oauth/exchange', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  provider,
-                  code: response.authResponse.code,
-                  state: response.authResponse.state,
-                }),
-              });
-              const data = await res.json();
-
-              if (data.success) {
-                toast.success(
-                  provider === 'instagram'
-                    ? 'Instagram connected successfully!'
-                    : 'Facebook Page connected successfully!'
-                );
-                onSuccess?.();
-              } else {
-                toast.error(data.error || `Failed to connect ${provider}`);
-              }
-            } catch (err) {
-              toast.error(`Failed to complete ${provider} connection`);
-              console.error(`[meta-oauth/${provider}] Backend error:`, err);
-            }
-          } else if (response.status === 'cancelled') {
-            toast.info(`${provider} connection cancelled`);
-          } else {
-            toast.error(`Failed to connect ${provider}. Please try again.`);
-          }
-          setLoading(false);
-        },
-        {
-          scope: scopes,
-          response_type: 'code',
-          override_default_response_type: true,
-        }
-      );
-    } catch (err) {
-      console.error(`[meta-oauth/${provider}] Error:`, err);
-      toast.error(`Failed to start ${provider} OAuth`);
-      setLoading(false);
     }
-  }, [provider, onSuccess]);
+
+    void (async () => {
+      try {
+        await loadFBSDK();
+        if (!getLoadedFbSdk()) {
+          toast.error('Failed to load Facebook SDK. Please refresh and try again.');
+          setLoading(false);
+          return;
+        }
+        launchOAuth();
+      } catch (err) {
+        console.error(`[meta-oauth/${provider}] Error:`, err);
+        toast.error(`Failed to start ${provider} OAuth`);
+        setLoading(false);
+      }
+    })();
+  }, [provider, launchOAuth]);
 
   return (
     <Button
@@ -137,42 +166,4 @@ export function MetaOAuthButton({
       )}
     </Button>
   );
-}
-
-/**
- * Load the Facebook JavaScript SDK.
- * Same loader as the WhatsApp Embedded Signup button.
- */
-function loadFBSDK(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).FB) {
-      resolve();
-      return;
-    }
-
-    const appId = process.env.NEXT_PUBLIC_META_APP_ID || process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-    if (!appId) {
-      reject(new Error('NEXT_PUBLIC_META_APP_ID not set'));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://connect.facebook.net/en_US/sdk.js';
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = 'anonymous';
-
-    script.onload = () => {
-      (window as any).FB.init({
-        appId,
-        cookie: true,
-        xfbml: true,
-        version: 'v21.0',
-      });
-      resolve();
-    };
-
-    script.onerror = () => reject(new Error('Failed to load Facebook SDK'));
-    document.head.appendChild(script);
-  });
 }

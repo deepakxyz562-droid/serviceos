@@ -4,6 +4,12 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  getLoadedFbSdk,
+  invokeFbLogin,
+  loadFBSDK,
+  type FbLoginResponse,
+} from '@/lib/meta/fb-sdk';
 
 interface WhatsAppEmbeddedSignupButtonProps {
   /** Called after successful Embedded Signup + backend registration */
@@ -115,44 +121,61 @@ export function WhatsAppEmbeddedSignupButton({
     return () => window.removeEventListener('message', onWindowMessage);
   }, [mode]);
 
-  const handleSignup = useCallback(async () => {
-    setLoading(true);
-    sessionInfoRef.current = {};
-    try {
-      let resolvedAppId =
-        metaAppIdProp ||
-        resolvedIdsRef.current.appId ||
-        process.env.NEXT_PUBLIC_META_APP_ID ||
-        process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-        '';
-      let resolvedConfigId =
-        configIdProp ||
-        resolvedIdsRef.current.configId ||
-        process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
-        DEFAULT_TECH_PROVIDER_CONFIG_ID;
+  const processSignupResponse = useCallback(
+    async (response: FbLoginResponse) => {
+      try {
+        if (response.authResponse?.code) {
+          const res = await fetch('/api/whatsapp/embedded-signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: response.authResponse.code,
+              state: response.authResponse.state,
+              wabaId: sessionInfoRef.current.wabaId,
+              phoneNumberId: sessionInfoRef.current.phoneNumberId,
+              isCoexistence:
+                sessionInfoRef.current.isCoexistence ?? mode === 'coexistence',
+              featureType:
+                mode === 'coexistence' ? 'whatsapp_business_app_onboarding' : undefined,
+              ticket: handoffTicket || undefined,
+            }),
+          });
+          const data = await res.json();
 
-      if (!resolvedAppId || !resolvedConfigId) {
-        const cfgRes = await fetch('/api/whatsapp/config').catch(() => null);
-        if (cfgRes?.ok) {
-          const cfgJson = await cfgRes.json().catch(() => ({}));
-          if (!resolvedAppId && cfgJson.metaAppId) resolvedAppId = cfgJson.metaAppId;
-          if (!resolvedConfigId && cfgJson.embeddedConfigId) resolvedConfigId = cfgJson.embeddedConfigId;
+          if (data.success) {
+            toast.success('WhatsApp connected successfully!');
+            onSuccess?.(data.phoneNumberId, data.wabaId, {
+              displayPhoneNumber: data.displayPhoneNumber,
+              coexistenceMode: Boolean(data.coexistenceMode),
+            });
+          } else {
+            const msg = data.error || 'Failed to connect WhatsApp';
+            toast.error(msg);
+            onError?.(msg);
+          }
+        } else if (response.status === 'cancelled') {
+          const msg = 'WhatsApp connection cancelled';
+          toast.info(msg);
+          onError?.(msg);
+        } else {
+          const msg = 'Failed to connect WhatsApp. Please try again.';
+          toast.error(msg);
+          onError?.(msg);
         }
-      }
-
-      if (typeof window === 'undefined' || !(window as any).FB) {
-        await loadFBSDK(resolvedAppId);
-      }
-
-      const FB = (window as any).FB;
-      if (!FB) {
-        const msg = 'Failed to load Facebook SDK. Please refresh and try again.';
+      } catch (err) {
+        const msg = 'Failed to complete WhatsApp connection';
         toast.error(msg);
         onError?.(msg);
+        console.error('[whatsapp-embedded-signup] Backend error:', err);
+      } finally {
         setLoading(false);
-        return;
       }
+    },
+    [handoffTicket, mode, onError, onSuccess],
+  );
 
+  const launchSignupWithLoadedSdk = useCallback(
+    (resolvedConfigId: string) => {
       const extras: Record<string, unknown> = {
         setup: {},
         sessionInfoVersion: '3',
@@ -161,70 +184,83 @@ export function WhatsAppEmbeddedSignupButton({
         extras.featureType = 'whatsapp_business_app_onboarding';
       }
 
-      FB.login(
-        async (response: any) => {
-          if (response.authResponse?.code) {
-            try {
-              const res = await fetch('/api/whatsapp/embedded-signup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  code: response.authResponse.code,
-                  state: response.authResponse.state,
-                  wabaId: sessionInfoRef.current.wabaId,
-                  phoneNumberId: sessionInfoRef.current.phoneNumberId,
-                  isCoexistence:
-                    sessionInfoRef.current.isCoexistence ?? mode === 'coexistence',
-                  featureType:
-                    mode === 'coexistence' ? 'whatsapp_business_app_onboarding' : undefined,
-                  ticket: handoffTicket || undefined,
-                }),
-              });
-              const data = await res.json();
-
-              if (data.success) {
-                toast.success('WhatsApp connected successfully!');
-                onSuccess?.(data.phoneNumberId, data.wabaId, {
-                  displayPhoneNumber: data.displayPhoneNumber,
-                  coexistenceMode: Boolean(data.coexistenceMode),
-                });
-              } else {
-                const msg = data.error || 'Failed to connect WhatsApp';
-                toast.error(msg);
-                onError?.(msg);
-              }
-            } catch (err) {
-              const msg = 'Failed to complete WhatsApp connection';
-              toast.error(msg);
-              onError?.(msg);
-              console.error('[whatsapp-embedded-signup] Backend error:', err);
-            }
-          } else if (response.status === 'cancelled') {
-            const msg = 'WhatsApp connection cancelled';
-            toast.info(msg);
-            onError?.(msg);
-          } else {
-            const msg = 'Failed to connect WhatsApp. Please try again.';
-            toast.error(msg);
-            onError?.(msg);
-          }
-          setLoading(false);
-        },
+      invokeFbLogin(
         {
           config_id: resolvedConfigId,
           response_type: 'code',
           override_default_response_type: true,
           extras,
         },
+        function onMetaSignupResponse(res) {
+          void processSignupResponse(res);
+        },
       );
-    } catch (err) {
-      console.error('[whatsapp-embedded-signup] Error:', err);
-      const msg = err instanceof Error ? err.message : 'Failed to start WhatsApp signup';
-      toast.error(msg);
-      onError?.(msg);
-      setLoading(false);
+    },
+    [mode, processSignupResponse],
+  );
+
+  // Keep click handler synchronous when FB SDK is already loaded so iOS Safari / ASWebAuthenticationSession
+  // allows the Meta popup directly inside the tap gesture.
+  const handleSignup = useCallback(() => {
+    setLoading(true);
+    sessionInfoRef.current = {};
+
+    const currentConfigId =
+      configIdProp ||
+      resolvedIdsRef.current.configId ||
+      process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
+      DEFAULT_TECH_PROVIDER_CONFIG_ID;
+
+    if (getLoadedFbSdk()) {
+      try {
+        launchSignupWithLoadedSdk(currentConfigId);
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to start WhatsApp signup';
+        toast.error(msg);
+        onError?.(msg);
+        setLoading(false);
+        return;
+      }
     }
-  }, [configIdProp, metaAppIdProp, handoffTicket, mode, onSuccess, onError]);
+
+    void (async () => {
+      try {
+        let resolvedAppId =
+          metaAppIdProp ||
+          resolvedIdsRef.current.appId ||
+          process.env.NEXT_PUBLIC_META_APP_ID ||
+          process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+          '';
+        let resolvedConfigId = currentConfigId;
+
+        if (!resolvedAppId || !resolvedConfigId) {
+          const cfgRes = await fetch('/api/whatsapp/config').catch(() => null);
+          if (cfgRes?.ok) {
+            const cfgJson = await cfgRes.json().catch(() => ({}));
+            if (!resolvedAppId && cfgJson.metaAppId) resolvedAppId = cfgJson.metaAppId;
+            if (!resolvedConfigId && cfgJson.embeddedConfigId) resolvedConfigId = cfgJson.embeddedConfigId;
+          }
+        }
+
+        await loadFBSDK(resolvedAppId);
+        if (!getLoadedFbSdk()) {
+          const msg = 'Failed to load Facebook SDK. Please refresh and try again.';
+          toast.error(msg);
+          onError?.(msg);
+          setLoading(false);
+          return;
+        }
+        launchSignupWithLoadedSdk(resolvedConfigId);
+      } catch (err) {
+        console.error('[whatsapp-embedded-signup] Error:', err);
+        const msg = err instanceof Error ? err.message : 'Failed to start WhatsApp signup';
+        toast.error(msg);
+        onError?.(msg);
+        setLoading(false);
+      }
+    })();
+  }, [configIdProp, metaAppIdProp, launchSignupWithLoadedSdk, onError]);
 
   return (
     <Button
@@ -240,66 +276,4 @@ export function WhatsAppEmbeddedSignupButton({
       )}
     </Button>
   );
-}
-
-/**
- * Load the Facebook JavaScript SDK.
- */
-function loadFBSDK(explicitAppId?: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).FB) {
-      resolve();
-      return;
-    }
-
-    const existingPromise = (window as any).__bgosFbSdkPromise as Promise<void> | undefined;
-    if (existingPromise) {
-      existingPromise.then(resolve, reject);
-      return;
-    }
-
-    const appId =
-      explicitAppId ||
-      process.env.NEXT_PUBLIC_META_APP_ID ||
-      process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-    if (!appId) {
-      reject(new Error('NEXT_PUBLIC_META_APP_ID not set'));
-      return;
-    }
-
-    const p = new Promise<void>((resInner, rejInner) => {
-      const existingScript = document.querySelector<HTMLScriptElement>(
-        'script[src*="connect.facebook.net"]',
-      );
-      if (existingScript && (window as any).FB) {
-        resInner();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://connect.facebook.net/en_US/sdk.js';
-      script.async = true;
-      script.defer = true;
-      script.crossOrigin = 'anonymous';
-
-      script.onload = () => {
-        (window as any).FB?.init({
-          appId,
-          cookie: true,
-          xfbml: true,
-          version: 'v21.0',
-        });
-        resInner();
-      };
-
-      script.onerror = () => {
-        delete (window as any).__bgosFbSdkPromise;
-        rejInner(new Error('Failed to load Facebook SDK'));
-      };
-      document.head.appendChild(script);
-    });
-
-    (window as any).__bgosFbSdkPromise = p;
-    p.then(resolve, reject);
-  });
 }
