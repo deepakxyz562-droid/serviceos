@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveWhatsAppConfig, isWhatsAppConfiguredAsync, WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
+import QRCode from 'qrcode';
+import { getAuthUser } from '@/lib/auth';
+import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
+import { resolveWhatsAppConfig, WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
+import { db } from '@/lib/db';
 
 function maskString(value: string): string {
   if (!value || value.length <= 4) return value ? '****' : '';
@@ -7,7 +11,7 @@ function maskString(value: string): string {
 }
 
 /**
- * GET - Return current WhatsApp configuration status
+ * GET - Return current WhatsApp configuration status, live metadata & QR standee URL
  * Resolves from DB: tenant's own → platform (SuperAdmin) → .env fallback
  */
 export async function GET(request: NextRequest) {
@@ -16,16 +20,81 @@ export async function GET(request: NextRequest) {
     try {
       const { searchParams } = new URL(request.url);
       tenantId = searchParams.get('tenantId') || undefined;
-    } catch { /* no tenant context */ }
+      if (!tenantId) {
+        const ticket = searchParams.get('ticket');
+        if (ticket) {
+          const verified = verifyHandoffTicket(ticket);
+          if (verified?.tenantId) tenantId = verified.tenantId;
+        }
+      }
+    } catch { /* no query context */ }
+
+    if (!tenantId) {
+      const authUser = await getAuthUser(request).catch(() => null);
+      if (authUser?.tenantId) {
+        tenantId = authUser.tenantId;
+      }
+    }
 
     const config = await resolveWhatsAppConfig(tenantId);
     const configured = !!(config.accessToken && config.phoneNumberId);
+    const phoneDigits = (config.displayPhoneNumber || '').replace(/\D/g, '');
+    const waMeUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
+    const qrCodeDataUrl = waMeUrl
+      ? await QRCode.toDataURL(waMeUrl, { margin: 2, width: 320 }).catch(() => null)
+      : null;
+
+    let googleMapsWhatsappUrl: string | null = null;
+    let googleMapsWhatsappSynced = false;
+    let googleMapsWhatsappWarnings: string[] = [];
+    if (tenantId) {
+      const tenantRow = await db.tenant
+        .findUnique({ where: { id: tenantId }, select: { settingsJson: true } })
+        .catch(() => null);
+      if (tenantRow?.settingsJson) {
+        try {
+          const s = JSON.parse(tenantRow.settingsJson) as Record<string, any>;
+          googleMapsWhatsappUrl = s?.googlePlaceActions?.whatsappUri || s?.whatsappChatLink || null;
+          googleMapsWhatsappSynced = Boolean(s?.googlePlaceActions?.whatsappSyncedToGoogle);
+          if (Array.isArray(s?.googlePlaceActions?.whatsappWarnings)) {
+            googleMapsWhatsappWarnings = s.googlePlaceActions.whatsappWarnings.filter(
+              (w: unknown) => typeof w === 'string',
+            );
+          }
+        } catch {}
+      }
+    }
+
+    const embeddedConfigId = (
+      process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||
+      process.env.WHATSAPP_EMBEDDED_CONFIG_ID ||
+      ''
+    ).trim();
+    const metaAppId = (
+      process.env.NEXT_PUBLIC_META_APP_ID ||
+      process.env.META_APP_ID ||
+      process.env.FACEBOOK_APP_ID ||
+      ''
+    ).trim();
 
     return NextResponse.json({
       isConfigured: configured,
       mode: configured ? 'live' : 'demo',
       phoneNumberId: maskString(config.phoneNumberId),
       source: config.source || 'none',
+      displayPhoneNumber: config.displayPhoneNumber || null,
+      verifiedName: config.verifiedName || null,
+      nameStatus: config.nameStatus || null,
+      messagingLimitTier: config.messagingLimitTier || null,
+      qualityRating: config.qualityRating || null,
+      coexistenceMode: Boolean(config.coexistenceMode),
+      waMeUrl,
+      qrCodeDataUrl,
+      googleMapsWhatsappUrl,
+      googleMapsWhatsappSynced,
+      googleMapsWhatsappWarnings,
+      embeddedConfigId: embeddedConfigId || null,
+      metaAppId: metaAppId || null,
       webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/api/whatsapp/callback`,
       apiVersion: WHATSAPP_API_VERSION,
       verifyTokenSet: !!config.verifyToken && config.verifyToken !== 'fieseros_verify_token',
@@ -38,8 +107,8 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT - Validate WhatsApp configuration
- * Actual config saving is done via CommunicationProvider API endpoints.
+ * PUT - Validate WhatsApp configuration against Meta Graph API
+ * Actual config saving is done via /api/whatsapp/manual-config or /api/whatsapp/embedded-signup.
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -52,18 +121,23 @@ export async function PUT(request: NextRequest) {
 
     let validated = false;
     let validationError: string | undefined;
+    let verifiedName: string | undefined;
+    let displayPhoneNumber: string | undefined;
 
     try {
-      const testUrl = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}`;
+      const testUrl = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}?fields=id,verified_name,display_phone_number,quality_rating`;
       const response = await fetch(testUrl, {
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.ok) {
+        const phoneMeta = await response.json().catch(() => ({}));
         validated = true;
+        verifiedName = phoneMeta.verified_name;
+        displayPhoneNumber = phoneMeta.display_phone_number;
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         validationError = errorData?.error?.message || `API returned status ${response.status}`;
       }
     } catch (err) {
@@ -71,12 +145,14 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({
-      success: true,
+      success: validated,
       validated,
+      verifiedName,
+      displayPhoneNumber,
       error: validated ? undefined : validationError,
       message: validated
-        ? 'WhatsApp configuration validated. Save it via Communication Providers settings.'
-        : 'Validation failed. Please check your credentials.',
+        ? 'WhatsApp configuration validated. Save it via Connect or Manual Setup.'
+        : validationError || 'Validation failed. Please check your credentials.',
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to validate WhatsApp config';

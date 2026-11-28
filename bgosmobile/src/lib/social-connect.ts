@@ -9,7 +9,8 @@ export type SocialConnectPlatform =
   | 'instagram'
   | 'linkedin'
   | 'pinterest'
-  | 'threads';
+  | 'threads'
+  | 'whatsapp';
 
 /**
  * Shared mobile OAuth launcher matching the Channels screen (`app/integrations.tsx`).
@@ -18,7 +19,7 @@ export type SocialConnectPlatform =
  */
 export async function connectSocialPlatform(
   platform: SocialConnectPlatform,
-  options?: { returnView?: string; oauthPath?: string },
+  options?: { returnView?: string; oauthPath?: string; next?: string },
 ): Promise<{ error?: string }> {
   const ticket = await getMobileHandoffTicket();
   const returnUrl = 'bgos://gbp-callback';
@@ -27,14 +28,19 @@ export async function connectSocialPlatform(
   const basePath = options?.oauthPath || `/api/oauth/${platform}`;
 
   const targetUrl =
-    platform === 'googlebusiness'
-      ? `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=${encodeURIComponent(returnView)}` +
-        `&redirectUri=${encodeURIComponent(returnUrl)}` +
-        `&originHost=${encodeURIComponent(WEB_URL)}` +
-        authQuery
-      : `${WEB_URL}${basePath}?product=bgos&originHost=${encodeURIComponent(WEB_URL)}` +
+    platform === 'whatsapp'
+      ? `${WEB_URL}/whatsapp-connect?product=bgos&client=mobile` +
         `&returnUrl=${encodeURIComponent(returnUrl)}` +
-        authQuery;
+        `&next=${encodeURIComponent(options?.next || '/integrations')}` +
+        authQuery
+      : platform === 'googlebusiness'
+        ? `${WEB_URL}/api/oauth/googlebusiness/connect?product=bgos&client=mobile&returnView=${encodeURIComponent(returnView)}` +
+          `&redirectUri=${encodeURIComponent(returnUrl)}` +
+          `&originHost=${encodeURIComponent(WEB_URL)}` +
+          authQuery
+        : `${WEB_URL}${basePath}?product=bgos&originHost=${encodeURIComponent(WEB_URL)}` +
+          `&returnUrl=${encodeURIComponent(returnUrl)}` +
+          authQuery;
 
   try {
     const result = await WebBrowser.openAuthSessionAsync(targetUrl, returnUrl);

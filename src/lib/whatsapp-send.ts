@@ -8,12 +8,14 @@ interface SendWhatsAppOptions {
   to: string
   message: string
   credentialId?: string
-  type?: 'text' | 'template' | 'document' | 'image'
+  type?: 'text' | 'template' | 'document' | 'image' | 'interactive'
   mediaUrl?: string
   mediaFilename?: string
   templateName?: string
   templateLanguage?: string
   templateComponents?: Array<Record<string, unknown>>
+  interactiveButtons?: Array<{ id: string; title: string }>
+  interactiveFooter?: string
   tenantId?: string
 }
 
@@ -272,6 +274,42 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         link: options.mediaUrl,
         caption: message,
         filename: options.mediaFilename || 'Document.pdf',
+      },
+    }
+  } else if (type === 'image' && options.mediaUrl) {
+    payload = {
+      messaging_product: 'whatsapp',
+      to: recipientPhone,
+      type: 'image',
+      image: {
+        link: options.mediaUrl,
+        ...(message ? { caption: message } : {}),
+      },
+    }
+  } else if (
+    type === 'interactive' &&
+    Array.isArray(options.interactiveButtons) &&
+    options.interactiveButtons.length > 0
+  ) {
+    payload = {
+      messaging_product: 'whatsapp',
+      to: recipientPhone,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: message.slice(0, 1024) },
+        ...(options.interactiveFooter
+          ? { footer: { text: options.interactiveFooter.slice(0, 60) } }
+          : {}),
+        action: {
+          buttons: options.interactiveButtons.slice(0, 3).map((b) => ({
+            type: 'reply',
+            reply: {
+              id: String(b.id).slice(0, 256),
+              title: String(b.title).slice(0, 20),
+            },
+          })),
+        },
       },
     }
   } else if (type === 'template') {

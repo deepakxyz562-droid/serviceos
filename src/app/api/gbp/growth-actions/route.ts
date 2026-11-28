@@ -125,7 +125,16 @@ export async function GET(request: NextRequest) {
       }).catch(() => []),
       db.tenant.findUnique({
         where: { id: tenantId },
-        select: { settingsJson: true, name: true, industry: true, phone: true, slug: true, publicSlug: true },
+        select: {
+          settingsJson: true,
+          name: true,
+          industry: true,
+          phone: true,
+          whatsappPhone: true,
+          whatsappConfigJson: true,
+          slug: true,
+          publicSlug: true,
+        },
       }),
     ]);
 
@@ -216,9 +225,20 @@ export async function GET(request: NextRequest) {
       tenantSettings = JSON.parse(tenant?.settingsJson || '{}');
     } catch {}
 
+    let waConfigPhone = '';
+    try {
+      const parsedWaCfg = JSON.parse(tenant?.whatsappConfigJson || '{}');
+      if (typeof parsedWaCfg?.displayPhoneNumber === 'string') {
+        waConfigPhone = parsedWaCfg.displayPhoneNumber.trim();
+      }
+    } catch {}
+
     const effectivePhone = String(
       tenantSettings.communicationPhone ||
       tenantSettings.whatsappNumber ||
+      tenant?.whatsappPhone ||
+      waConfigPhone ||
+      tenantSettings.bookingPageConfig?.whatsapp ||
       tenant?.phone ||
       ''
     ).trim();
@@ -227,7 +247,10 @@ export async function GET(request: NextRequest) {
     const defaultWhatsappUrl = normalizedWhatsappDigits ? `https://wa.me/${normalizedWhatsappDigits}` : '';
     const activeWhatsappUrl = String(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink || defaultWhatsappUrl).trim();
     const hasWhatsappChat = Boolean(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink);
-    const resolvedUrls = resolveTenantPublicUrls(tenant || {}, tenantSettings);
+    const resolvedUrls = resolveTenantPublicUrls(
+      { name: tenant?.name || 'Business', slug: tenant?.slug, publicSlug: tenant?.publicSlug },
+      tenantSettings,
+    );
     const effectiveBookingUrl = String(
       tenantSettings.googlePlaceActions?.appointmentUri ||
       tenantSettings.bookingLink ||
@@ -1195,78 +1218,26 @@ export async function POST(request: NextRequest) {
       const rawPhone = typeof body?.phone === 'string' ? body.phone.trim() : '';
       const rawUrl = typeof body?.whatsappUrl === 'string' ? body.whatsappUrl.trim() : '';
 
-      const tenant = await db.tenant.findUnique({
-        where: { id: user.tenantId },
-        select: { settingsJson: true, phone: true },
+      const { syncTenantWhatsAppIdentity } = await import('@/lib/whatsapp/identity-sync');
+      const syncResult = await syncTenantWhatsAppIdentity({
+        tenantId: user.tenantId,
+        phone: rawPhone,
+        whatsappUrl: rawUrl,
+        locationId: typeof body?.locationId === 'string' ? body.locationId : undefined,
+        syncChatbot: true,
+        syncGoogleBusiness: true,
       });
-      let settings: Record<string, any> = {};
-      try {
-        settings = JSON.parse(tenant?.settingsJson || '{}');
-      } catch {}
-
-      const phoneToUse = rawPhone || settings.communicationPhone || settings.whatsappNumber || tenant?.phone || '';
-      const cleanDigits = phoneToUse.replace(/[^0-9]/g, '');
-      const normalizedDigits = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
-      const resolvedUrl = rawUrl || (normalizedDigits ? `https://wa.me/${normalizedDigits}` : '');
-
-      settings.communicationPhone = phoneToUse;
-      settings.whatsappNumber = phoneToUse;
-      settings.whatsappChatLink = resolvedUrl;
-      if (!settings.googlePlaceActions) settings.googlePlaceActions = {};
-      settings.googlePlaceActions.whatsappUri = resolvedUrl;
-
-      await db.tenant.update({
-        where: { id: user.tenantId },
-        data: { settingsJson: JSON.stringify(settings) },
-      });
-
-      // Sync WhatsApp direct chat link to Google Business Profile if connected
-      let syncedToGoogle = false;
-      const googleWarnings: string[] = [];
-      try {
-        const googleAccount = await prepareGoogleAccount(user.tenantId, typeof body?.locationId === 'string' ? body.locationId : undefined);
-        if (googleAccount?.accessToken) {
-          const gbpRes = await updateGoogleBusinessProfile(googleAccount, {
-            whatsappUrl: resolvedUrl,
-          });
-          syncedToGoogle = gbpRes.appliedMasks.includes('attributes/url_whatsapp');
-          if (gbpRes.warnings.length > 0) {
-            googleWarnings.push(...gbpRes.warnings);
-          }
-        }
-      } catch (err: unknown) {
-        googleWarnings.push(err instanceof Error ? err.message : 'Google WhatsApp sync notice');
-      }
-
-      if (syncedToGoogle) {
-        const newPending: PendingGoogleUpdate = {
-          status: 'PENDING',
-          type: 'whatsapp',
-          label: 'WhatsApp Chat Button',
-          submittedAt: new Date().toISOString(),
-          targetFields: ['attributes/url_whatsapp'],
-          hasPendingEdits: true,
-        };
-        await setPendingGoogleUpdate(user.tenantId, newPending).catch(() => {});
-        sendBgosGbpUpdatePendingEmail({
-          tenantId: user.tenantId,
-          updateLabel: 'WhatsApp Chat Button',
-          updateType: 'whatsapp',
-          requiresVerification: false,
-        }).catch((err) => console.warn('[sendBgosGbpUpdatePendingEmail error]:', err));
-      }
-
-      invalidateBootstrapCache(user.tenantId);
 
       return NextResponse.json({
         success: true,
-        whatsappUrl: resolvedUrl,
-        phone: phoneToUse,
-        syncedToGoogle,
-        googleWarnings,
-        message: syncedToGoogle
-          ? `WhatsApp chat button synced to Google Maps (${resolvedUrl}).`
-          : `WhatsApp chat link configured (${resolvedUrl}).`,
+        whatsappUrl: syncResult.whatsappUrl,
+        phone: syncResult.phone,
+        syncedToGoogle: syncResult.syncedToGoogle,
+        chatbotEnsured: syncResult.chatbotEnsured,
+        googleWarnings: syncResult.googleWarnings,
+        message: syncResult.syncedToGoogle
+          ? `WhatsApp chat button synced to Google Maps (${syncResult.whatsappUrl}).`
+          : `WhatsApp chat link saved to BGOS & Booking Page (${syncResult.whatsappUrl}).`,
       });
     }
 

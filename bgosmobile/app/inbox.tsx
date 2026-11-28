@@ -41,32 +41,71 @@ export function InboxView({ embedded = false }: { embedded?: boolean }) {
   const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
   const [activeTab, setActiveTab] = useState<'inbox' | 'engage' | 'tickets'>('inbox');
   const [selected, setSelected] = useState<BgosConversation | null>(null);
-  const { conversationId: paramConvId, sessionId: paramSessionId } = useLocalSearchParams<{
+  const {
+    conversationId: paramConvId,
+    sessionId: paramSessionId,
+    phone: paramPhone,
+    customerName: paramCustomerName,
+  } = useLocalSearchParams<{
     conversationId?: string;
     sessionId?: string;
+    phone?: string;
+    customerName?: string;
   }>();
   const [channelFilter, setChannelFilter] = useState('all');
   const [search, setSearch] = useState('');
   const handledDeepLinkRef = useRef<string>('');
 
   useEffect(() => {
-    const targetKey = paramConvId || (paramSessionId ? `live_chat_${paramSessionId}` : '');
+    const cleanPhoneDigits = (paramPhone || '').replace(/\D/g, '');
+    const phoneTail = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : cleanPhoneDigits;
+    const targetKey =
+      paramConvId ||
+      (paramSessionId ? `live_chat_${paramSessionId}` : '') ||
+      (phoneTail ? `phone_${phoneTail}` : '') ||
+      (paramCustomerName ? `name_${paramCustomerName}` : '');
     if (!targetKey || handledDeepLinkRef.current === targetKey || !Array.isArray(inbox.data)) return;
-    const match = inbox.data.find(
-      (c) =>
-        c.id === paramConvId ||
-        c.externalConversationId === paramConvId ||
-        (paramSessionId
-          ? c.externalConversationId === `live_chat_${paramSessionId}` || c.id === `live_chat_${paramSessionId}`
-          : false),
-    );
+
+    const match = inbox.data.find((c) => {
+      if (
+        paramConvId &&
+        (c.id === paramConvId || c.externalConversationId === paramConvId)
+      ) {
+        return true;
+      }
+      if (
+        paramSessionId &&
+        (c.externalConversationId === `live_chat_${paramSessionId}` ||
+          c.id === `live_chat_${paramSessionId}`)
+      ) {
+        return true;
+      }
+      const cPhone = String((c as { customerPhone?: string }).customerPhone || c.customerName || '').replace(/\D/g, '');
+      if (phoneTail && cPhone && cPhone.slice(-10) === phoneTail) {
+        return true;
+      }
+      if (
+        paramCustomerName &&
+        c.customerName &&
+        c.customerName.trim().toLowerCase() === paramCustomerName.trim().toLowerCase()
+      ) {
+        return true;
+      }
+      return false;
+    });
+
     if (match) {
       handledDeepLinkRef.current = targetKey;
       setActiveTab('inbox');
       setChannelFilter('all');
       setSelected(match);
+    } else if (paramPhone || paramCustomerName) {
+      handledDeepLinkRef.current = targetKey;
+      setActiveTab('inbox');
+      setChannelFilter('all');
+      setSearch((paramCustomerName || paramPhone || '').trim());
     }
-  }, [inbox.data, paramConvId, paramSessionId]);
+  }, [inbox.data, paramConvId, paramSessionId, paramPhone, paramCustomerName]);
   const agents = useResource<{ agents: { id: string; slug?: string }[] }>('/api/forms/agents');
 
   const rawList = inbox.data || [];

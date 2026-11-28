@@ -6,14 +6,17 @@ import {
   Linking,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Screen, Card, Action, Badge, ErrorNotice, Loading, ui, colors } from '../src/components/ui';
 import { apiRequest } from '../src/lib/api';
+import { uploadFileToStorage } from '../src/lib/upload';
 import { useResource } from '../src/hooks/use-resource';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
@@ -90,14 +93,16 @@ function WhatsAppCampaignsScreen() {
   const [tone, setTone] = useState<'english' | 'hinglish'>('hinglish');
   const [customOffer, setCustomOffer] = useState('');
   const [brochureUrl, setBrochureUrl] = useState('');
+  const [hasInitializedBrochure, setHasInitializedBrochure] = useState(false);
   const [audience, setAudience] = useState<'all_leads' | 'past_customers' | 'inactive_60_days'>('inactive_60_days');
 
   useEffect(() => {
     const savedBrochure = workspaceRes.data?.links?.brochure;
-    if (savedBrochure && !brochureUrl.trim()) {
+    if (!hasInitializedBrochure && savedBrochure) {
       setBrochureUrl(savedBrochure);
+      setHasInitializedBrochure(true);
     }
-  }, [workspaceRes.data?.links?.brochure, brochureUrl]);
+  }, [workspaceRes.data?.links?.brochure, hasInitializedBrochure]);
 
   const [campaignTitle, setCampaignTitle] = useState('Customer Comeback & Seasonal Offer');
   const [whatsappMessage, setWhatsappMessage] = useState(
@@ -108,6 +113,9 @@ function WhatsAppCampaignsScreen() {
 
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadedPdfName, setUploadedPdfName] = useState<string | null>(null);
+  const [savingAutoWelcome, setSavingAutoWelcome] = useState(false);
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [audienceData, setAudienceData] = useState<AudiencePreviewResponse | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
@@ -181,6 +189,55 @@ function WhatsAppCampaignsScreen() {
       setError((e as Error).message || 'Failed to generate campaign draft');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handlePickBrochurePdf() {
+    try {
+      setUploadingPdf(true);
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+      const file = res.assets[0];
+      const uploadedUrl = await uploadFileToStorage(
+        {
+          uri: file.uri,
+          name: file.name || 'brochure.pdf',
+          mimeType: file.mimeType || 'application/pdf',
+          fileSize: typeof file.size === 'number' ? file.size : undefined,
+          file: (file as any).file,
+        },
+        { folder: 'brochures', visibility: 'public' },
+      );
+      setBrochureUrl(uploadedUrl);
+      setUploadedPdfName(file.name || 'brochure.pdf');
+      await apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: { brochureUrl: uploadedUrl },
+      });
+      void workspaceRes.refresh();
+      Alert.alert('Brochure Saved', `"${file.name || 'Brochure.pdf'}" is ready to attach in WhatsApp campaigns.`);
+    } catch (err: any) {
+      Alert.alert('Upload Failed', err?.message || 'Could not upload PDF brochure. Please try again.');
+    } finally {
+      setUploadingPdf(false);
+    }
+  }
+
+  async function toggleLeadAutoWelcome(enabled: boolean) {
+    setSavingAutoWelcome(true);
+    try {
+      await apiRequest('/api/bgos/workspace', {
+        method: 'PATCH',
+        body: { leadAutoWelcome: { enabled } },
+      });
+      await workspaceRes.refresh();
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message || 'Could not update new-lead auto welcome.');
+    } finally {
+      setSavingAutoWelcome(false);
     }
   }
 
@@ -466,14 +523,77 @@ function WhatsAppCampaignsScreen() {
           style={[ui.input, { minHeight: 95, textAlignVertical: 'top', paddingTop: 10 }]}
         />
 
-        <TextInput
-          value={brochureUrl}
-          onChangeText={setBrochureUrl}
-          placeholder="Optional Brochure / Booking Page URL to attach"
-          placeholderTextColor={colors.muted}
-          autoCapitalize="none"
-          style={ui.input}
-        />
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.muted }}>
+              Brochure PDF or Booking Link Attachment
+            </Text>
+            <Pressable
+              disabled={uploadingPdf}
+              onPress={() => void handlePickBrochurePdf()}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: colors.brandSoft,
+                borderWidth: 1,
+                borderColor: colors.brand,
+              }}
+            >
+              {uploadingPdf ? (
+                <ActivityIndicator size="small" color={colors.brandDark} />
+              ) : (
+                <MaterialIcons name="upload-file" size={14} color={colors.brandDark} />
+              )}
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.brandDark }}>
+                {brochureUrl ? 'Replace PDF' : 'Upload PDF'}
+              </Text>
+            </Pressable>
+          </View>
+          {uploadedPdfName || brochureUrl.toLowerCase().endsWith('.pdf') ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <MaterialIcons name="picture-as-pdf" size={15} color="#15803D" />
+                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: '#15803D', flex: 1 }}>
+                  {uploadedPdfName || 'Brochure PDF ready for WhatsApp attachment'}
+                </Text>
+              </View>
+              <Pressable onPress={() => { setBrochureUrl(''); setUploadedPdfName(null); }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#B91C1C' }}>Clear</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <TextInput
+            value={brochureUrl}
+            onChangeText={setBrochureUrl}
+            placeholder="Optional Brochure PDF / Booking Page URL to attach"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            style={ui.input}
+          />
+        </View>
+      </Card>
+
+      {/* Auto-Welcome Trigger for Newly Added Leads */}
+      <Card style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.ink }}>
+              Auto-Welcome New Leads on WhatsApp
+            </Text>
+            <Text style={{ fontSize: 11.5, color: colors.muted, lineHeight: 16 }}>
+              Instantly greets new leads with Brochure &amp; Book buttons — AI Chat Agent handles replies automatically.
+            </Text>
+          </View>
+          <Switch
+            value={Boolean(workspaceRes.data?.automations?.leadAutoWelcome?.enabled)}
+            disabled={savingAutoWelcome}
+            onValueChange={(val) => void toggleLeadAutoWelcome(val)}
+          />
+        </View>
       </Card>
 
       {/* 3. Customer Group & Send */}

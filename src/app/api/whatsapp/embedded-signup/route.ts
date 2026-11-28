@@ -1,50 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { db } from '@/lib/db';
+import { syncTenantWhatsAppIdentity } from '@/lib/whatsapp/identity-sync';
 
 /**
- * WhatsApp Embedded Signup — Code Exchange + WABA Registration
- * ==============================================================
+ * WhatsApp Embedded Signup — Code Exchange + WABA Registration + Coexistence
+ * =========================================================================
  *
- * Receives the authorization code from Meta's Embedded Signup popup
- * (launched via FB.login in whatsapp-embedded-signup-button.tsx),
- * and:
- *
- * 1. Exchanges the code for a short-lived user access token
- * 2. Exchanges the short-lived token for a long-lived token (60 days)
- * 3. Discovers the WABA ID and phone number ID from the granted assets
- * 4. Subscribes the WABA to webhooks (so we receive incoming messages)
- * 5. Registers the phone number (enables messaging)
- * 6. Stores credentials in CommunicationProvider + Credential (encrypted)
- *
- * This is the flow Meta expects for Tech Provider App Review.
+ * Supports both Standard Cloud API Onboarding and WhatsApp Business App Coexistence
+ * (`featureType: 'whatsapp_business_app_onboarding'`), as well as Web session cookies
+ * and BGOS Mobile short-lived handoff tickets.
  */
 
 const META_GRAPH_API = 'https://graph.facebook.com/v21.0';
-// NOTE: This route uses v21.0 to match the Facebook JS SDK version
-// (whatsapp-embedded-signup-button.tsx loads FB SDK with version: 'v21.0').
-// The send path (src/lib/whatsapp-send.ts) uses v25.0 — that's fine because
-// the Graph API is backward-compatible and the send path doesn't use the
-// FB SDK. The stored apiVersion in configJson is 'v21.0' for traceability.
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user || !user.tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = await request.json().catch(() => ({}));
+    const {
+      code,
+      state,
+      wabaId: sessionWabaId,
+      phoneNumberId: sessionPhoneNumberId,
+      isCoexistence: rawIsCoexistence,
+      featureType,
+      ticket,
+    } = body as {
+      code?: string;
+      state?: string;
+      wabaId?: string;
+      phoneNumberId?: string;
+      isCoexistence?: boolean;
+      featureType?: string;
+      ticket?: string;
+    };
+
+    let authUser = await getAuthUser(request);
+    if (!authUser?.tenantId && ticket) {
+      const verified = verifyHandoffTicket(ticket);
+      if (verified?.tenantId) {
+        authUser = {
+          id: verified.userId,
+          email: verified.email,
+          role: verified.role as any,
+          tenantId: verified.tenantId,
+        };
+      }
     }
 
-    const { code, state } = await request.json();
+    if (!authUser || !authUser.tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     if (!code) {
       return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 });
     }
 
-    const appId = process.env.META_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID;
-    const appSecret = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET;
+    const appId =
+      process.env.META_APP_ID ||
+      process.env.NEXT_PUBLIC_META_APP_ID ||
+      process.env.FACEBOOK_APP_ID;
+    const appSecret =
+      process.env.WHATSAPP_APP_SECRET ||
+      process.env.META_APP_SECRET ||
+      process.env.FACEBOOK_APP_SECRET;
 
     if (!appId || !appSecret) {
-      console.error('[whatsapp/embedded-signup] META_APP_ID or WHATSAPP_APP_SECRET not configured');
+      console.error('[whatsapp/embedded-signup] META_APP_ID or META_APP_SECRET not configured');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
@@ -55,7 +78,7 @@ export async function POST(request: NextRequest) {
       body: new URLSearchParams({
         client_id: appId,
         client_secret: appSecret,
-        redirect_uri: '',  // Empty for Embedded Signup
+        redirect_uri: '',
         code,
       }),
     });
@@ -86,61 +109,73 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    let longLivedToken = shortLivedToken; // fallback to short-lived
+    let longLivedToken = shortLivedToken;
     if (longLivedRes.ok) {
       const longLivedData = await longLivedRes.json();
       longLivedToken = longLivedData.access_token || shortLivedToken;
     }
 
-    // 3. Discover WABA ID from the granted WhatsApp Business Accounts
-    const wabaRes = await fetch(`${META_GRAPH_API}/debug_token?input_token=${longLivedToken}`, {
-      headers: { Authorization: `Bearer ${appId}|${appSecret}` },
-    });
-
-    let wabaId: string | null = null;
-    let phoneNumberId: string | null = null;
+    // 3. Resolve WABA ID & Phone Number ID (prefer exact session info from WA_EMBEDDED_SIGNUP)
+    let wabaId: string | null = sessionWabaId?.trim() || null;
+    let phoneNumberId: string | null = sessionPhoneNumberId?.trim() || null;
     let displayPhoneNumber: string | null = null;
+    let verifiedName: string | null = null;
+    let nameStatus: string | null = null;
+    let messagingLimitTier: string | null = null;
+    let qualityRating: string | null = null;
 
-    if (wabaRes.ok) {
-      const debugData = await wabaRes.json();
-      // The debug_token response includes the WhatsApp Business Account ID
-      // in the granular_scopes or data.waba_id field
-      const wabaScope = debugData.data?.granular_scopes?.find(
-        (s: any) => s.scope === 'whatsapp_business_management'
-      );
-      if (wabaScope?.target_ids?.length > 0) {
-        wabaId = wabaScope.target_ids[0];
+    if (!wabaId) {
+      const wabaRes = await fetch(`${META_GRAPH_API}/debug_token?input_token=${longLivedToken}`, {
+        headers: { Authorization: `Bearer ${appId}|${appSecret}` },
+      });
+      if (wabaRes.ok) {
+        const debugData = await wabaRes.json();
+        const wabaScope = debugData.data?.granular_scopes?.find(
+          (s: any) => s.scope === 'whatsapp_business_management',
+        );
+        if (wabaScope?.target_ids?.length > 0) {
+          wabaId = wabaScope.target_ids[0];
+        }
       }
     }
 
-    // If we got the WABA ID, fetch phone numbers
+    const isCoexistence =
+      Boolean(rawIsCoexistence) ||
+      featureType === 'whatsapp_business_app_onboarding';
+
     if (wabaId) {
-      const phoneRes = await fetch(`${META_GRAPH_API}/${wabaId}/phone_numbers?access_token=${longLivedToken}`);
+      const phoneRes = await fetch(
+        `${META_GRAPH_API}/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating,messaging_limit_tier&access_token=${longLivedToken}`,
+      );
       if (phoneRes.ok) {
         const phoneData = await phoneRes.json();
-        if (phoneData.data?.length > 0) {
-          phoneNumberId = phoneData.data[0].id;
-          // Capture the display phone number (E.164) so the Publish card
-          // can show the real number the tenant connected.
-          displayPhoneNumber = phoneData.data[0].display_phone_number ||
-            phoneData.data[0].verified_name || null;
+        const numbers: any[] = Array.isArray(phoneData.data) ? phoneData.data : [];
+        const matched =
+          (phoneNumberId && numbers.find((n) => n.id === phoneNumberId)) || numbers[0];
+        if (matched) {
+          phoneNumberId = matched.id || phoneNumberId;
+          displayPhoneNumber = matched.display_phone_number || null;
+          verifiedName = matched.verified_name || null;
+          nameStatus = matched.name_status || null;
+          messagingLimitTier = matched.messaging_limit_tier || null;
+          qualityRating = matched.quality_rating || null;
         }
       }
 
-      // 4. Subscribe the WABA to webhooks
+      // 4. Subscribe the WABA to app webhooks (messages + Coexistence smb_message_echoes)
       try {
         await fetch(`${META_GRAPH_API}/${wabaId}/subscribed_apps`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${longLivedToken}` },
         });
-        console.log('[whatsapp/embedded-signup] WABA subscribed to webhooks');
       } catch (err) {
         console.warn('[whatsapp/embedded-signup] Failed to subscribe WABA:', err);
       }
     }
 
-    // 5. Register the phone number (if found)
-    if (phoneNumberId) {
+    // 5. Register Cloud API number ONLY for non-coexistence accounts
+    // (Coexistence phone numbers remain registered inside the business owner's WA Business app)
+    if (phoneNumberId && !isCoexistence) {
       try {
         await fetch(`${META_GRAPH_API}/${phoneNumberId}/register`, {
           method: 'POST',
@@ -150,41 +185,34 @@ export async function POST(request: NextRequest) {
           },
           body: JSON.stringify({
             messaging_product: 'whatsapp',
-            pin: '000000', // 6-digit PIN — user can change later
+            pin: '000000',
           }),
         });
-        console.log('[whatsapp/embedded-signup] Phone number registered');
       } catch (err) {
-        console.warn('[whatsapp/embedded-signup] Phone registration failed (may already be registered):', err);
+        console.warn('[whatsapp/embedded-signup] Phone registration notice:', err);
       }
     }
 
-    // 6. Store credentials in CommunicationProvider
+    // 6. Store credentials & rich Meta status in tenant-owned CommunicationProvider
     const configJson = JSON.stringify({
       accessToken: longLivedToken,
       phoneNumberId: phoneNumberId || '',
       wabaId: wabaId || '',
       displayPhoneNumber: displayPhoneNumber || '',
+      verifiedName: verifiedName || '',
+      nameStatus: nameStatus || '',
+      messagingLimitTier: messagingLimitTier || '',
+      qualityRating: qualityRating || '',
+      coexistenceMode: isCoexistence,
       apiVersion: 'v21.0',
-      source: 'embedded_signup',
+      source: isCoexistence ? 'embedded_signup_coexistence' : 'embedded_signup',
       connectedAt: new Date().toISOString(),
-      connectedBy: user.id,
+      connectedBy: authUser.id,
+      state: state || undefined,
     });
 
-    // Upsert the CommunicationProvider record for this tenant.
-    //
-    // BUG FIXES (Phase B):
-    //   1. findFirst now filters isPlatform: false — we must ONLY match
-    //      tenant-owned rows, never the platform-managed fallback.
-    //      Without this filter, tenant1's seeded platform provider would be
-    //      matched and its configJson overwritten with the tenant's tokens.
-    //   2. Removed the invalid `isActive: true` field — CommunicationProvider
-    //      has no `isActive` column (it has `status` + `isPlatform`).
-    //      Prisma mode throws; Supabase adapter silently strips it.
-    //   3. CREATE branch now includes the required `provider` field
-    //      (schema requires it, no default) + explicit `isPlatform: false`.
     const existing = await db.communicationProvider.findFirst({
-      where: { tenantId: user.tenantId, type: 'whatsapp', isPlatform: false },
+      where: { tenantId: authUser.tenantId, type: 'whatsapp', isPlatform: false },
     });
 
     if (existing) {
@@ -194,19 +222,18 @@ export async function POST(request: NextRequest) {
           configJson,
           status: 'active',
           sendingEnabled: true,
-          // Ensure a previously-platform row is converted to tenant-owned.
-          // (Safeguard — the findFirst filter above should prevent this, but
-          // if a row was mis-flagged in a prior version, this corrects it.)
           isPlatform: false,
         },
       });
     } else {
       await db.communicationProvider.create({
         data: {
-          tenantId: user.tenantId,
+          tenantId: authUser.tenantId,
           type: 'whatsapp',
           provider: 'meta_cloud_api',
-          name: 'WhatsApp Business (Embedded Signup)',
+          name: isCoexistence
+            ? 'WhatsApp Business App (Coexistence)'
+            : 'WhatsApp Business (Embedded Signup)',
           configJson,
           status: 'active',
           sendingEnabled: true,
@@ -215,30 +242,40 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Also update Tenant.whatsappConfigJson for backward compatibility
-    await db.tenant.update({
-      where: { id: user.tenantId },
-      data: { whatsappConfigJson: configJson },
-    }).catch(() => {});
+    await db.tenant
+      .update({
+        where: { id: authUser.tenantId },
+        data: {
+          whatsappConfigJson: configJson,
+          ...(displayPhoneNumber ? { whatsappPhone: displayPhoneNumber } : {}),
+        },
+      })
+      .catch(() => {});
 
-    console.log('[whatsapp/embedded-signup] WhatsApp connected successfully:', {
-      wabaId,
-      phoneNumberId,
-      displayPhoneNumber,
-      tenantId: user.tenantId,
-    });
+    const identitySync = await syncTenantWhatsAppIdentity({
+      tenantId: authUser.tenantId,
+      phone: displayPhoneNumber,
+      syncChatbot: true,
+      syncGoogleBusiness: Boolean(displayPhoneNumber),
+    }).catch(() => null);
 
     return NextResponse.json({
       success: true,
       wabaId: wabaId || '',
       phoneNumberId: phoneNumberId || '',
-      displayPhoneNumber: displayPhoneNumber || '',
+      displayPhoneNumber: displayPhoneNumber || identitySync?.phone || '',
+      verifiedName: verifiedName || '',
+      messagingLimitTier: messagingLimitTier || '',
+      coexistenceMode: isCoexistence,
+      chatbotEnsured: Boolean(identitySync?.chatbotEnsured),
+      googleMapsSynced: Boolean(identitySync?.syncedToGoogle),
+      whatsappUrl: identitySync?.whatsappUrl || '',
     });
   } catch (error) {
     console.error('[whatsapp/embedded-signup] Fatal error:', error);
     return NextResponse.json(
       { error: 'Failed to connect WhatsApp. Please try again.' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

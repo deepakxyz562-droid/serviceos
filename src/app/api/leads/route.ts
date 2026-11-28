@@ -612,6 +612,21 @@ export async function POST(request: NextRequest) {
         } catch (waErr) {
           console.error('[LeadsCreate] Owner WhatsApp notification failed:', waErr);
         }
+
+        // ─── Event-driven Auto-Welcome WhatsApp to the new lead ──────
+        try {
+          const { maybeSendNewLeadWhatsAppWelcome } = await import('@/lib/whatsapp/lead-welcome');
+          await maybeSendNewLeadWhatsAppWelcome({
+            tenantId: leadTenantId,
+            workspaceId: authUser?.workspaceId || null,
+            leadId: lead.id,
+            leadName: lead.name,
+            leadPhone: lead.phone,
+            serviceType: lead.serviceType,
+          });
+        } catch (welcomeErr) {
+          console.error('[LeadsCreate] Lead WhatsApp auto-welcome failed:', welcomeErr);
+        }
       })
       .catch((err) => console.error('[LeadsCreate] Background side-effects failed:', err));
 

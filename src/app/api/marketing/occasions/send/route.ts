@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { checkWhatsAppCredits } from '@/lib/credit-management';
 import { requireBgosRepeatCampaignsAccess } from '@/lib/bgos-plan-access';
+import { buildMetaTemplateSendPayload } from '@/lib/bgos-meta-templates';
+import { recordWhatsAppOutboundInboxMessage } from '@/lib/whatsapp/inbox-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,12 +159,15 @@ export async function GET(request: NextRequest) {
         .findMany({
           where: {
             tenantId: user.tenantId,
-            OR: [{ status: 'approved' }, { isApproved: true }],
+            isApproved: true,
           },
           take: 25,
           orderBy: { createdAt: 'desc' },
-          select: { id: true, name: true, bodyText: true, status: true },
+          select: { id: true, name: true, content: true },
         })
+        .then((rows) =>
+          rows.map((r) => ({ id: r.id, name: r.name, bodyText: r.content, status: 'approved' })),
+        )
         .catch(() => []),
     ]);
 
@@ -229,8 +234,11 @@ export async function POST(request: NextRequest) {
       : allSegmentRecipients
     ).slice(0, 50);
 
+    const cleanBrochureUrl = body.brochureUrl?.trim() || '';
     const extraLinks: string[] = [];
-    if (body.brochureUrl?.trim()) extraLinks.push(`Brochure & Rates: ${body.brochureUrl.trim()}`);
+    if (cleanBrochureUrl && body.sendVia !== 'whatsapp_api') {
+      extraLinks.push(`Brochure & Rates: ${cleanBrochureUrl}`);
+    }
     if (body.posterUrl?.trim() && body.sendVia !== 'whatsapp_api') {
       extraLinks.push(`Offer Details: ${body.posterUrl.trim()}`);
     }
@@ -314,25 +322,148 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No contacts with valid phone numbers in this group.' }, { status: 400 });
     }
 
+    let businessName = 'Our Team';
+    let matchedTemplate: { name: string; content: string; language: string } | null = null;
+    try {
+      const tenantRow = await db.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { name: true, settingsJson: true },
+      });
+      if (tenantRow?.name) businessName = tenantRow.name;
+      if (tenantRow?.settingsJson) {
+        const parsedSettings = JSON.parse(tenantRow.settingsJson) as Record<string, any>;
+        const bpcName = parsedSettings?.bookingPageConfig?.businessName;
+        if (typeof bpcName === 'string' && bpcName.trim()) businessName = bpcName.trim();
+      }
+    } catch {}
+
+    if (body.templateName) {
+      matchedTemplate = await db.campaignTemplate
+        .findFirst({
+          where: { tenantId: user.tenantId, name: body.templateName },
+          select: { name: true, content: true, language: true },
+        })
+        .catch(() => null);
+    }
+
+    const templateBodySource = matchedTemplate?.content || '';
+    const templateVarMatches = templateBodySource.match(/\{\{(\d+)\}\}/g) || [];
+    const templateMaxVar = templateVarMatches.reduce((max, tok) => {
+      const n = Number.parseInt(tok.replace(/[{}]/g, ''), 10);
+      return Number.isFinite(n) && n > max ? n : max;
+    }, 0);
+
     let sentCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
+    const safeFilename = `${businessName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'Business'}-Brochure.pdf`;
 
-    for (const r of prepared) {
-      const res = await sendWhatsAppMessage({
-        tenantId: user.tenantId,
-        to: r.phone,
-        message: r.personalizedMessage,
-        type: body.templateName ? 'template' : body.posterUrl ? 'image' : 'text',
-        mediaUrl: body.posterUrl || undefined,
-        templateName: body.templateName || undefined,
-        templateLanguage: body.templateLanguage || 'en',
-      });
-      if (res.success) {
+    for (const r of selectedRecipients) {
+      const preparedItem = prepared.find((p) => p.id === r.id) || {
+        ...r,
+        personalizedMessage: personalizeText(rawMessage, r.firstName),
+      };
+
+      let sendResult;
+      if (body.templateName) {
+        const defaultSlots = [r.firstName || 'there', businessName, rawMessage.slice(0, 120)];
+        const templateParams = Array.from({ length: templateMaxVar }, (_, i) => defaultSlots[i] || businessName);
+        const built = buildMetaTemplateSendPayload(
+          body.templateName,
+          templateParams,
+          body.templateLanguage || matchedTemplate?.language || 'en',
+        );
+        sendResult = await sendWhatsAppMessage({
+          tenantId: user.tenantId,
+          to: r.phone,
+          message: preparedItem.personalizedMessage,
+          type: 'template',
+          templateName: built.templateName,
+          templateLanguage: built.templateLanguage,
+          templateComponents: built.templateComponents,
+        });
+      } else if (body.posterUrl) {
+        sendResult = await sendWhatsAppMessage({
+          tenantId: user.tenantId,
+          to: r.phone,
+          message: preparedItem.personalizedMessage,
+          type: 'image',
+          mediaUrl: body.posterUrl,
+        });
+      } else if (cleanBrochureUrl) {
+        sendResult = await sendWhatsAppMessage({
+          tenantId: user.tenantId,
+          to: r.phone,
+          message: preparedItem.personalizedMessage,
+          type: 'document',
+          mediaUrl: cleanBrochureUrl,
+          mediaFilename: safeFilename,
+        });
+      } else {
+        sendResult = await sendWhatsAppMessage({
+          tenantId: user.tenantId,
+          to: r.phone,
+          message: preparedItem.personalizedMessage,
+          type: 'text',
+        });
+      }
+
+      if (sendResult.success) {
         sentCount += 1;
+        await recordWhatsAppOutboundInboxMessage({
+          tenantId: user.tenantId,
+          workspaceId: user.workspaceId || null,
+          phone: r.phone,
+          customerName: r.name,
+          leadId: r.source === 'lead' ? r.id : null,
+          content: preparedItem.personalizedMessage,
+          messageType: body.templateName ? 'template' : body.posterUrl ? 'image' : cleanBrochureUrl ? 'document' : 'text',
+          mediaUrl: body.posterUrl || cleanBrochureUrl || null,
+          externalId: sendResult.messageId || null,
+          senderName: `${businessName} Campaign`,
+          metadataJson: {
+            campaignTitle,
+            campaignId: body.campaignId || undefined,
+            audience,
+            templateName: body.templateName || undefined,
+            brochureUrl: cleanBrochureUrl || undefined,
+          },
+        });
+
+        // Follow up with PDF document attachment if primary message was template or image
+        if (cleanBrochureUrl && (body.templateName || body.posterUrl)) {
+          const docCaption = `Here is our updated brochure & rates for ${businessName} 📄 Reply anytime to ask questions or book!`;
+          const docRes = await sendWhatsAppMessage({
+            tenantId: user.tenantId,
+            to: r.phone,
+            message: docCaption,
+            type: 'document',
+            mediaUrl: cleanBrochureUrl,
+            mediaFilename: safeFilename,
+          });
+          if (docRes.success) {
+            await recordWhatsAppOutboundInboxMessage({
+              tenantId: user.tenantId,
+              workspaceId: user.workspaceId || null,
+              phone: r.phone,
+              customerName: r.name,
+              leadId: r.source === 'lead' ? r.id : null,
+              content: docCaption,
+              messageType: 'document',
+              mediaUrl: cleanBrochureUrl,
+              externalId: docRes.messageId || null,
+              senderName: `${businessName} Campaign`,
+              metadataJson: {
+                campaignTitle,
+                campaignId: body.campaignId || undefined,
+                brochureAttachment: true,
+              },
+            });
+          }
+        }
       } else {
         failedCount += 1;
-        if (res.error && errors.length < 3) errors.push(`${r.name}: ${res.error}`);
+        if (sendResult.error && errors.length < 3) errors.push(`${r.name}: ${sendResult.error}`);
       }
     }
 

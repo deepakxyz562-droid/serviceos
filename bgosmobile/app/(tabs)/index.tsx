@@ -169,6 +169,8 @@ const MORE_TOOLS: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
   { label: 'Inbox', route: '/(tabs)/customers?tab=inbox', icon: 'chat-bubble-outline' },
+  { label: 'WhatsApp Campaigns', route: '/whatsapp-campaigns', icon: 'campaign' },
+  { label: 'AI Automations', route: '/automations', icon: 'bolt' },
   { label: 'Leads Pipeline', route: '/(tabs)/customers?tab=leads', icon: 'people-outline' },
   { label: 'Submissions', route: '/submissions', icon: 'assignment' },
   { label: 'Growth Reports', route: '/growth-report', icon: 'insights' },
@@ -729,13 +731,15 @@ export default function HomeScreen() {
       { id: 'edit_services', label: 'Services', icon: 'miscellaneous-services' as const, onPress: () => router.push('/services-management') },
       { id: 'products', label: 'Products', icon: 'shopping-bag' as const, onPress: () => router.push('/products-management') },
       { id: 'reviews', label: 'Reviews', icon: 'star-outline' as const, onPress: () => router.push('/(tabs)/reviews') },
+      { id: 'ai_chatbot', label: 'AI Chatbot', icon: 'smart-toy' as const, onPress: () => router.push('/agents') },
+      { id: 'wa_campaigns', label: 'WA Offers', icon: 'campaign' as const, onPress: () => router.push('/whatsapp-campaigns') },
+      { id: 'automations', label: 'Automations', icon: 'bolt' as const, onPress: () => router.push('/automations') },
       { id: 'add_photo', label: 'Add photo', icon: 'add-a-photo' as const, onPress: () => router.push('/(tabs)/marketing?mode=media') },
       { id: 'qr_standee', label: 'QR Standee', icon: 'qr-code-2' as const, onPress: () => router.push('/qr-standee') },
       { id: 'page_settings', label: 'Page Setup', icon: 'tune' as const, onPress: () => router.push('/booking-page') },
       { id: 'bookings', label: 'Bookings', icon: 'event-available' as const, onPress: () => router.push('/(tabs)/customers?tab=appointments') },
       { id: 'pickup_delivery', label: 'Ordering', icon: 'local-shipping' as const, onPress: () => router.push('/products-management?tab=fulfillment') },
-      { id: 'advertise', label: 'Advertise', icon: 'campaign' as const, onPress: () => router.push('/products-management?tab=social') },
-      { id: 'ai_chatbot', label: 'AI Chatbot', icon: 'smart-toy' as const, onPress: () => router.push('/agents') },
+      { id: 'advertise', label: 'Advertise', icon: 'trending-up' as const, onPress: () => router.push('/products-management?tab=social') },
     ],
     [router],
   );

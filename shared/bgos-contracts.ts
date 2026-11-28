@@ -57,8 +57,10 @@ export interface BgosWorkspace {
   automations: {
     profileAssistant: boolean;
     offlineReply: boolean;
+    whatsappConnected?: boolean;
     bookingReminderHours?: 'none' | '1h' | '24h' | '2d';
     followUp?: { enabled: boolean; delayMinutes: number; languageMode: string };
+    leadAutoWelcome?: { enabled: boolean; message?: string; sendBrochure?: boolean };
     gbp?: Record<string, boolean>;
   };
   bookingPageConfig?: {
@@ -95,7 +97,7 @@ export interface BgosWorkspace {
   usage?: { contacts: number; forms: number; usedLeadCredits: number; leadCreditLimit: number };
 }
 export interface BgosConversation {
-  id: string; externalConversationId?: string; customerName: string; channel: string; lastMessage: string;
+  id: string; externalConversationId?: string; customerName: string; customerPhone?: string; channel: string; lastMessage: string;
   lastMessageTime: string; unreadCount: number; aiPaused: boolean; status: string;
 }
 export interface BgosMessage {

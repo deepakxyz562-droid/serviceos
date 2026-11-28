@@ -30,6 +30,9 @@ type Booking = {
   customerEmail?: string | null;
   scheduledAt?: string;
   status: string;
+  source?: string | null;
+  bookingType?: string | null;
+  confirmedAt?: string | null;
 };
 
 export function AppointmentsView({ embedded = false }: { embedded?: boolean }) {
@@ -437,45 +440,90 @@ export function AppointmentsView({ embedded = false }: { embedded?: boolean }) {
               {b.customerPhone ? (
                 <Text style={ui.caption}>{b.customerPhone}</Text>
               ) : null}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                {(b.source === 'ai_chat_widget' || b.source === 'whatsapp') ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EEF2FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <MaterialIcons name="smart-toy" size={12} color="#4338CA" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#4338CA' }}>Booked by Chat Agent</Text>
+                  </View>
+                ) : null}
+                {(b.status === 'confirmed' || b.confirmedAt) && b.customerPhone ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ECFDF5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <MaterialIcons name="check-circle" size={12} color="#047857" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#047857' }}>Confirmation sent</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
 
-            {b.customerPhone && !['cancelled', 'completed'].includes(b.status) ? (
-              <Pressable
-                onPress={() => {
-                  const digits = String(b.customerPhone).replace(/[^0-9]/g, '');
-                  const timeLabel = b.scheduledAt
-                    ? new Date(b.scheduledAt).toLocaleString([], {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'soon';
-                  const msg = encodeURIComponent(
-                    `Hi ${b.customerName || 'there'}, this is a friendly reminder for your "${b.title}" appointment scheduled on ${timeLabel}. Reply if you need any changes!`,
-                  );
-                  void Linking.openURL(`https://wa.me/${digits}?text=${msg}`).catch(() => {});
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  alignSelf: 'flex-start',
-                  gap: 6,
-                  backgroundColor: '#ECFDF5',
-                  borderColor: '#A7F3D0',
-                  borderWidth: 1,
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                }}
-              >
-                <MaterialIcons name="chat" size={14} color="#047857" />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>
-                  WhatsApp Remind
-                </Text>
-              </Pressable>
-            ) : null}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {b.customerPhone && !['cancelled', 'completed'].includes(b.status) ? (
+                <Pressable
+                  onPress={() => {
+                    const digits = String(b.customerPhone).replace(/[^0-9]/g, '');
+                    const timeLabel = b.scheduledAt
+                      ? new Date(b.scheduledAt).toLocaleString([], {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'soon';
+                    const msg = encodeURIComponent(
+                      `Hi ${b.customerName || 'there'}, this is a friendly reminder for your "${b.title}" appointment scheduled on ${timeLabel}. Reply if you need any changes!`,
+                    );
+                    void Linking.openURL(`https://wa.me/${digits}?text=${msg}`).catch(() => {});
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#ECFDF5',
+                    borderColor: '#A7F3D0',
+                    borderWidth: 1,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                  }}
+                >
+                  <MaterialIcons name="chat" size={14} color="#047857" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>
+                    WhatsApp Remind
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {(b.customerPhone || b.customerName) ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: '/inbox',
+                      params: {
+                        ...(b.customerPhone ? { phone: b.customerPhone } : {}),
+                        ...(b.customerName ? { customerName: b.customerName } : {}),
+                      },
+                    })
+                  }
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#EFF6FF',
+                    borderColor: '#BFDBFE',
+                    borderWidth: 1,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                  }}
+                >
+                  <MaterialIcons name="forum" size={14} color="#1D4ED8" />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#1D4ED8' }}>
+                    Review Chat
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
 
             {!['cancelled', 'completed'].includes(b.status) && (
               <View style={[ui.row, { gap: 10, marginTop: 4 }]}>

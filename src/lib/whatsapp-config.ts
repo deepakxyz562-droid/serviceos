@@ -6,6 +6,12 @@ export interface WhatsAppConfig {
   verifyToken: string;
   wabaId?: string;
   source?: string; // 'tenant-own' | 'platform' | 'env' | 'none'
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+  nameStatus?: string;
+  messagingLimitTier?: string;
+  qualityRating?: string;
+  coexistenceMode?: boolean;
 }
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
@@ -64,6 +70,12 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
             phoneNumberId: resolved.phoneNumberId,
             verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
             wabaId: resolved.wabaId,
+            displayPhoneNumber: resolved.displayPhoneNumber,
+            verifiedName: resolved.verifiedName,
+            nameStatus: resolved.nameStatus,
+            messagingLimitTier: resolved.messagingLimitTier,
+            qualityRating: resolved.qualityRating,
+            coexistenceMode: resolved.coexistenceMode,
             source: 'tenant-own',
           }
         }
@@ -119,6 +131,12 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
           phoneNumberId: resolved.phoneNumberId,
           verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
           wabaId: resolved.wabaId,
+          displayPhoneNumber: resolved.displayPhoneNumber,
+          verifiedName: resolved.verifiedName,
+          nameStatus: resolved.nameStatus,
+          messagingLimitTier: resolved.messagingLimitTier,
+          qualityRating: resolved.qualityRating,
+          coexistenceMode: resolved.coexistenceMode,
           source: 'platform',
         }
       }
@@ -142,12 +160,29 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
 function resolveWACredsFromProvider(prov: {
   configJson: string | null
   credential: { encryptedData: string | null } | null
-}): { accessToken: string; phoneNumberId: string; verifyToken?: string; wabaId?: string } | null {
-  const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
+}): {
+  accessToken: string
+  phoneNumberId: string
+  verifyToken?: string
+  wabaId?: string
+  displayPhoneNumber?: string
+  verifiedName?: string
+  nameStatus?: string
+  messagingLimitTier?: string
+  qualityRating?: string
+  coexistenceMode?: boolean
+} | null {
+  const cfg = safeJsonParse(prov.configJson, {}) as Record<string, any>
   let accessToken = normalizeWhatsAppAccessToken(cfg.accessToken || '')
   let phoneNumberId = (cfg.phoneNumberId || '').trim()
   const verifyToken = (cfg.webhookVerifyToken || cfg.verifyToken || '').trim()
   const wabaId = (cfg.wabaId || '').trim()
+  const displayPhoneNumber = (cfg.displayPhoneNumber || cfg.phoneNumber || '').trim() || undefined
+  const verifiedName = (cfg.verifiedName || '').trim() || undefined
+  const nameStatus = (cfg.nameStatus || '').trim() || undefined
+  const messagingLimitTier = (cfg.messagingLimitTier || '').trim() || undefined
+  const qualityRating = (cfg.qualityRating || '').trim() || undefined
+  const coexistenceMode = Boolean(cfg.coexistenceMode)
 
   if (!accessToken && prov.credential) {
     const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
@@ -156,7 +191,18 @@ function resolveWACredsFromProvider(prov: {
   }
 
   if (accessToken && phoneNumberId) {
-    return { accessToken, phoneNumberId, verifyToken: verifyToken || undefined, wabaId: wabaId || undefined }
+    return {
+      accessToken,
+      phoneNumberId,
+      verifyToken: verifyToken || undefined,
+      wabaId: wabaId || undefined,
+      displayPhoneNumber,
+      verifiedName,
+      nameStatus,
+      messagingLimitTier,
+      qualityRating,
+      coexistenceMode,
+    }
   }
   return null
 }

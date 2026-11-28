@@ -285,6 +285,18 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 AI & AUTOMATION
               </Text>
               <DrawerItem
+                icon="bolt"
+                title="WhatsApp AI Launch Hub"
+                subtitle="Auto-reply, follow-ups & reminders"
+                onPress={() => navigate('/automations')}
+              />
+              <DrawerItem
+                icon="campaign"
+                title="WhatsApp Repeat Campaigns"
+                subtitle="Occasion blasts, brochures & win-back"
+                onPress={() => navigate('/whatsapp-campaigns')}
+              />
+              <DrawerItem
                 icon="smart-toy"
                 title="Train AI Chatbot"
                 subtitle="Auto-trained page bot & Q&A"

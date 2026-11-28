@@ -185,6 +185,10 @@ import { POST as suspensionAppealPost } from '@/app/api/gbp/suspension-appeal/ro
 import { POST as reviewRequestPost } from '@/app/api/reviews/request/route';
 import { POST as inboxMessagePost } from '@/app/api/omnichannel/conversations/[id]/messages/route';
 import { PATCH as workspacePatch } from '@/app/api/bgos/workspace/route';
+import { GET as waConfigGet } from '@/app/api/whatsapp/config/route';
+import { POST as waEmbeddedSignupPost } from '@/app/api/whatsapp/embedded-signup/route';
+import { POST as waCallbackPost } from '@/app/api/whatsapp/callback/route';
+import crypto from 'node:crypto';
 import { analyzeGbpSuspensionRisks } from '@/lib/gbp/suspension-shield';
 import { getUpcomingOccasions } from '@/lib/marketing/occasions';
 import { processWhatsAppInactivityFollowups } from '@/lib/whatsapp/inactivity-followup';
@@ -1177,6 +1181,252 @@ describe('Grexa vs BGOS Feature Parity Verification', () => {
       expect(inboxSrc).toContain('links?.brochure');
       expect(automationsSrc).toContain('bookingReminderHours');
       expect(automationsSrc).not.toContain('?? true');
+    });
+
+    it('returns live WhatsApp metadata, Coexistence flag, and QR standee data URL in GET /api/whatsapp/config', async () => {
+      mockDb.communicationProvider = {
+        findFirst: vi.fn(async () => ({
+          id: 'prov-wa-1',
+          configJson: JSON.stringify({
+            accessToken: 'EAA_TEST_TOKEN',
+            phoneNumberId: '106540352242922',
+            wabaId: 'waba-coex-1',
+            displayPhoneNumber: '+91 98765 43210',
+            verifiedName: 'Smile Dental Clinic',
+            messagingLimitTier: 'TIER_1K',
+            coexistenceMode: true,
+          }),
+          credential: null,
+        })),
+      };
+
+      const req = new NextRequest('http://localhost/api/whatsapp/config');
+      const res = await waConfigGet(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.isConfigured).toBe(true);
+      expect(json.source).toBe('tenant-own');
+      expect(json.displayPhoneNumber).toBe('+91 98765 43210');
+      expect(json.verifiedName).toBe('Smile Dental Clinic');
+      expect(json.messagingLimitTier).toBe('TIER_1K');
+      expect(json.coexistenceMode).toBe(true);
+      expect(json.waMeUrl).toBe('https://wa.me/919876543210');
+      expect(json.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('handles Tech Provider Embedded Signup with Coexistence without calling /register', async () => {
+      const prevAppId = process.env.META_APP_ID;
+      const prevSecret = process.env.META_APP_SECRET;
+      process.env.META_APP_ID = '2180370786060435';
+      process.env.META_APP_SECRET = 'test-meta-secret';
+
+      const createdProviders: any[] = [];
+      mockDb.communicationProvider = {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: any) => {
+          createdProviders.push(data);
+          return { id: 'prov-new-1', ...data };
+        }),
+        update: vi.fn(async ({ data }: any) => ({ id: 'prov-new-1', ...data })),
+      };
+      mockDb.tenant.update = vi.fn(async ({ data }: any) => {
+        Object.assign(mockTenant, data);
+        return mockTenant;
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/oauth/access_token')) {
+          return new Response(JSON.stringify({ access_token: 'long-lived-wa-token' }), { status: 200 });
+        }
+        if (urlStr.includes('/phone_numbers')) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: 'pn-coex-99',
+                  display_phone_number: '+91 98000 11122',
+                  verified_name: 'Smile Dental Clinic',
+                  name_status: 'APPROVED',
+                  messaging_limit_tier: 'TIER_250',
+                  quality_rating: 'GREEN',
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        if (urlStr.includes('/subscribed_apps')) {
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ unexpected: urlStr }), { status: 500 });
+      });
+
+      try {
+        const req = new NextRequest('http://localhost/api/whatsapp/embedded-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: 'oauth-code-123',
+            wabaId: 'waba-coex-1',
+            phoneNumberId: 'pn-coex-99',
+            isCoexistence: true,
+            featureType: 'whatsapp_business_app_onboarding',
+          }),
+        });
+
+        const res = await waEmbeddedSignupPost(req);
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.success).toBe(true);
+        expect(json.coexistenceMode).toBe(true);
+        expect(json.displayPhoneNumber).toBe('+91 98000 11122');
+
+        const calledUrls = fetchSpy.mock.calls.map((c) => String(c[0]));
+        expect(calledUrls.some((u) => u.includes('/subscribed_apps'))).toBe(true);
+        expect(calledUrls.some((u) => u.includes('/register'))).toBe(false);
+
+        const savedCfg = JSON.parse(createdProviders[0].configJson);
+        expect(savedCfg.source).toBe('embedded_signup_coexistence');
+        expect(savedCfg.coexistenceMode).toBe(true);
+        expect(mockTenant.whatsappPhone).toBe('+91 98000 11122');
+      } finally {
+        fetchSpy.mockRestore();
+        if (prevAppId === undefined) delete process.env.META_APP_ID;
+        else process.env.META_APP_ID = prevAppId;
+        if (prevSecret === undefined) delete process.env.META_APP_SECRET;
+        else process.env.META_APP_SECRET = prevSecret;
+      }
+    });
+
+    it('syncs Coexistence smb_message_echoes from WhatsApp Business app and auto-pauses AI', async () => {
+      const prevSecret = process.env.WHATSAPP_APP_SECRET;
+      const prevMetaSecret = process.env.META_APP_SECRET;
+      process.env.WHATSAPP_APP_SECRET = 'coex-webhook-secret';
+      process.env.META_APP_SECRET = 'coex-webhook-secret';
+
+      const convUpdates: any[] = [];
+      const createdMessages: any[] = [];
+      mockDb.communicationProvider = {
+        findFirst: vi.fn(async () => ({ id: 'prov-coex', tenantId: 'tenant-dental-1' })),
+      };
+      mockDb.inboxMessage = {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async ({ data }: any) => {
+          createdMessages.push(data);
+          return { id: 'msg-echo-1', ...data };
+        }),
+      };
+      mockDb.conversation = {
+        findFirst: vi.fn(async () => ({ id: 'conv-db-echo', conversationId: 'conv-wa-echo' })),
+        update: vi.fn(async ({ data }: any) => {
+          convUpdates.push(data);
+          return { id: 'conv-db-echo', ...data };
+        }),
+      };
+
+      const rawPayload = JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            id: 'waba-coex-1',
+            changes: [
+              {
+                field: 'smb_message_echoes',
+                value: {
+                  messaging_product: 'whatsapp',
+                  metadata: {
+                    display_phone_number: '919800011122',
+                    phone_number_id: 'pn-coex-99',
+                  },
+                  message_echoes: [
+                    {
+                      from: '919800011122',
+                      to: '919876543210',
+                      id: 'wamid.echo.999',
+                      timestamp: '1764280000',
+                      type: 'text',
+                      text: { body: 'Hi Aarav, Dr. Sharma here — see you at 11 AM!' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      const sig = 'sha256=' + crypto.createHmac('sha256', 'coex-webhook-secret').update(rawPayload).digest('hex');
+
+      try {
+        const req = new NextRequest('http://localhost/api/whatsapp/callback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-hub-signature-256': sig,
+          },
+          body: rawPayload,
+        });
+        const res = await waCallbackPost(req);
+        expect(res.status).toBe(200);
+        expect(convUpdates[0]).toEqual(
+          expect.objectContaining({
+            aiPaused: true,
+            lastDirection: 'outbound',
+          }),
+        );
+        expect(createdMessages[0]).toEqual(
+          expect.objectContaining({
+            tenantId: 'tenant-dental-1',
+            senderType: 'human',
+            direction: 'outbound',
+            content: 'Hi Aarav, Dr. Sharma here — see you at 11 AM!',
+          }),
+        );
+      } finally {
+        if (prevSecret === undefined) delete process.env.WHATSAPP_APP_SECRET;
+        else process.env.WHATSAPP_APP_SECRET = prevSecret;
+        if (prevMetaSecret === undefined) delete process.env.META_APP_SECRET;
+        else process.env.META_APP_SECRET = prevMetaSecret;
+      }
+    });
+
+    it('wires mobile WhatsApp Embedded Signup bridge, deep-link routing, and QR standee screen', () => {
+      const buttonSrc = fs.readFileSync(
+        path.join(process.cwd(), 'src/components/whatsapp/whatsapp-embedded-signup-button.tsx'),
+        'utf8',
+      );
+      const bridgeSrc = fs.readFileSync(
+        path.join(process.cwd(), 'src/app/whatsapp-connect/page.tsx'),
+        'utf8',
+      );
+      const proxySrc = fs.readFileSync(
+        path.join(process.cwd(), 'src/proxy.ts'),
+        'utf8',
+      );
+      const socialConnectSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/src/lib/social-connect.ts'),
+        'utf8',
+      );
+      const callbackScreenSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/gbp-callback.tsx'),
+        'utf8',
+      );
+      const integrationsSrc = fs.readFileSync(
+        path.join(process.cwd(), 'bgosmobile/app/integrations.tsx'),
+        'utf8',
+      );
+
+      expect(buttonSrc).toContain('WA_EMBEDDED_SIGNUP');
+      expect(buttonSrc).toContain('whatsapp_business_app_onboarding');
+      expect(buttonSrc).toContain('1822859788621036');
+      expect(bridgeSrc).toContain('WhatsAppEmbeddedSignupButton');
+      expect(bridgeSrc).toContain('bgos://gbp-callback');
+      expect(proxySrc).toContain("'whatsapp-connect'");
+      expect(socialConnectSrc).toContain('/whatsapp-connect');
+      expect(callbackScreenSrc).toContain('whatsapp');
+      expect(callbackScreenSrc).toContain('/integrations');
+      expect(integrationsSrc).toContain('handleEmbeddedWhatsAppConnect');
+      expect(integrationsSrc).toContain('qrCodeDataUrl');
     });
   });
 });

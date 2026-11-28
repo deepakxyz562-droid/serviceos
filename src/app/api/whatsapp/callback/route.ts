@@ -5,6 +5,8 @@ import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 import { maybeAutoReply } from '@/lib/auto-reply';
 import { createInboundMessage } from '@/lib/inbox-message-service';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { recordWhatsAppOutboundInboxMessage } from '@/lib/whatsapp/inbox-sync';
+import { sanitizePublicImageUrl } from '@/lib/bgos-business-sanitizers';
 import { getAppUrl } from '@/lib/brand';
 import { callAI, type ChatMessage } from '@/lib/ai-client';
 import {
@@ -150,14 +152,25 @@ export async function POST(request: NextRequest) {
         const value = change.value;
 
         // Handle message status updates
-        if (value.statuses) {
+        if (value?.statuses) {
           for (const status of value.statuses) {
             await handleMessageStatus(status);
           }
         }
 
+        // Handle Coexistence manual replies sent from owner's WhatsApp Business mobile app
+        if (value?.message_echoes) {
+          for (const echo of value.message_echoes) {
+            await handleCoexistenceMessageEcho(echo, value);
+          }
+        }
+
+        if (change.field === 'account_update' && value) {
+          console.log('[WhatsApp Callback] account_update event received:', JSON.stringify(value));
+        }
+
         // Handle incoming messages (interactive responses + plain-text inbound)
-        if (value.messages) {
+        if (value?.messages) {
           for (const message of value.messages) {
             await handleIncomingMessage(message, value);
           }
@@ -319,9 +332,14 @@ async function handleIncomingMessage(
 
       console.log(`[WhatsApp Callback] Button reply: id=${buttonId}, title=${buttonTitle}, from=${senderPhone}`);
 
-      // Check for on-select action
+      // Check for on-select workflow action
       const originalMessageId = messageContext?.id;
+      let hasWorkflowAction = false;
       if (originalMessageId) {
+        hasWorkflowAction = await db.whatsAppMessageAction
+          .findUnique({ where: { whatsappMessageId: originalMessageId }, select: { id: true } })
+          .then((row) => Boolean(row))
+          .catch(() => false);
         await handleOnSelectAction(originalMessageId, {
           selectedId: buttonId,
           selectedTitle: buttonTitle,
@@ -331,12 +349,82 @@ async function handleIncomingMessage(
         });
       }
 
-      // Handle accept/decline action
-      await handleJobAcceptanceOrDecline({
+      // Handle accept/decline action for field technicians
+      const handledJobAction = await handleJobAcceptanceOrDecline({
         buttonId,
         buttonText: buttonTitle,
         senderPhone,
       });
+
+      // Route customer interactive button taps (e.g., View Brochure / Book a Slot / Offer CTAs)
+      // straight to brochure delivery or the Multilingual Chat AI Agent.
+      if (!hasWorkflowAction && !handledJobAction && (buttonTitle || buttonId)) {
+        const phoneNumberId =
+          (value as { metadata?: { phone_number_id?: string } })?.metadata?.phone_number_id || '';
+        const tenantId = await resolveTenantIdByPhoneNumberId(phoneNumberId, true);
+
+        if (buttonId === 'bgos_view_brochure' && tenantId) {
+          const tenantRow = await db.tenant
+            .findUnique({
+              where: { id: tenantId },
+              select: { name: true, settingsJson: true },
+            })
+            .catch(() => null);
+          let brochureUrl: string | null = null;
+          let bizName = tenantRow?.name || 'Our Team';
+          if (tenantRow?.settingsJson) {
+            try {
+              const s = JSON.parse(tenantRow.settingsJson) as Record<string, any>;
+              brochureUrl = sanitizePublicImageUrl(s?.brochureUrl) || null;
+              if (typeof s?.bookingPageConfig?.businessName === 'string' && s.bookingPageConfig.businessName.trim()) {
+                bizName = s.bookingPageConfig.businessName.trim();
+              }
+            } catch {}
+          }
+
+          if (brochureUrl) {
+            const safeFilename = `${bizName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'Business'}-Brochure.pdf`;
+            const caption = `Here is our updated brochure & rates for ${bizName} 📄 Reply with any question or let me know when you'd like to book a slot!`;
+            const docRes = await sendWhatsAppMessage({
+              tenantId,
+              to: senderPhone,
+              message: caption,
+              type: 'document',
+              mediaUrl: brochureUrl,
+              mediaFilename: safeFilename,
+            });
+            if (docRes.success) {
+              await recordWhatsAppOutboundInboxMessage({
+                tenantId,
+                phone: senderPhone,
+                content: caption,
+                messageType: 'document',
+                mediaUrl: brochureUrl,
+                externalId: docRes.messageId || null,
+                senderName: `${bizName} AI`,
+                metadataJson: { reason: 'interactive_view_brochure', brochureUrl },
+              });
+              return;
+            }
+          }
+        }
+
+        const mappedPrompt =
+          buttonId === 'bgos_book_slot'
+            ? 'I would like to book a slot. Which days and times are available?'
+            : buttonId === 'bgos_view_brochure'
+              ? 'Could you share your brochure, services, and rates?'
+              : buttonTitle || buttonId;
+
+        await handlePlainTextInbound(
+          {
+            ...message,
+            type: 'text',
+            text: { body: mappedPrompt },
+          },
+          value,
+        );
+      }
     }
   } catch (error) {
     console.error('Error handling incoming message:', error);
@@ -374,6 +462,172 @@ async function handleIncomingMessage(
  *      sendWhatsAppMessage() internally. If the tenant is online, no
  *      auto-reply fires.
  */
+async function resolveTenantIdByPhoneNumberId(
+  phoneNumberId: string,
+  allowPlatformFallback = true,
+): Promise<string | null> {
+  if (phoneNumberId) {
+    try {
+      const provider = await db.communicationProvider.findFirst({
+        where: {
+          type: 'whatsapp',
+          status: 'active',
+          configJson: { contains: phoneNumberId },
+        },
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+        select: { id: true, tenantId: true },
+      });
+      if (provider?.tenantId) {
+        return provider.tenantId;
+      }
+    } catch (err) {
+      console.warn('[WhatsApp Callback] tenant lookup failed:', err);
+    }
+  }
+
+  if (!allowPlatformFallback) {
+    return null;
+  }
+
+  // Dynamic platform fallback: resolve active default platform provider for shared-number trial mode
+  try {
+    const defaultProvider = await db.communicationProvider.findFirst({
+      where: {
+        type: 'whatsapp',
+        status: 'active',
+        isDefault: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { tenantId: true },
+    });
+    if (defaultProvider?.tenantId) {
+      return defaultProvider.tenantId;
+    }
+    const anyActiveProvider = await db.communicationProvider.findFirst({
+      where: {
+        type: 'whatsapp',
+        status: 'active',
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { tenantId: true },
+    });
+    return anyActiveProvider?.tenantId || null;
+  } catch (fallbackErr) {
+    console.warn('[WhatsApp Callback] dynamic provider fallback lookup failed:', fallbackErr);
+    return null;
+  }
+}
+
+/**
+ * Sync manual replies sent from the owner's WhatsApp Business phone app (Coexistence)
+ * into BGOS Inbox and auto-pause the AI agent on that conversation so AI never talks over the owner.
+ */
+async function handleCoexistenceMessageEcho(
+  echo: Record<string, unknown>,
+  value?: Record<string, unknown>,
+) {
+  try {
+    const customerPhone = ((echo as { to?: string }).to || '').trim();
+    const businessFrom = ((echo as { from?: string }).from || '').trim();
+    const messageId = ((echo as { id?: string }).id || '').trim();
+    const msgType = ((echo as { type?: string }).type || 'text').trim();
+    const textBody = (
+      (echo as { text?: { body?: string } }).text?.body ||
+      (echo as { caption?: string }).caption ||
+      (echo as { image?: { caption?: string } }).image?.caption ||
+      (echo as { document?: { caption?: string } }).document?.caption ||
+      `[Sent ${msgType} via WhatsApp Business App]`
+    ).toString();
+
+    if (!customerPhone || !textBody) return;
+
+    const phoneNumberId =
+      (value as { metadata?: { phone_number_id?: string } })?.metadata?.phone_number_id || '';
+    const tenantId = await resolveTenantIdByPhoneNumberId(phoneNumberId, false);
+    if (!tenantId) {
+      console.warn('[WhatsApp Callback] Coexistence echo skipped — no tenant matched phone_number_id:', phoneNumberId);
+      return;
+    }
+
+    if (messageId) {
+      const dup = await db.inboxMessage.findFirst({
+        where: { tenantId, channel: 'whatsapp', externalId: messageId },
+        select: { id: true },
+      }).catch(() => null);
+      if (dup) return;
+    }
+
+    const digits = customerPhone.replace(/\D/g, '');
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+    const conv = await db.conversation.findFirst({
+      where: {
+        tenantId,
+        channel: 'whatsapp',
+        status: 'active',
+        OR: [
+          { customerPhone },
+          ...(digits ? [{ customerPhone: `+${digits}` }, { customerPhone: digits }] : []),
+          ...(last10.length >= 10 ? [{ customerPhone: { endsWith: last10 } }] : []),
+        ],
+      },
+      orderBy: { lastMessageAt: 'desc' },
+    }).catch(() => null);
+
+    let conversationId = conv?.conversationId || '';
+    if (conv) {
+      await db.conversation.update({
+        where: { id: conv.id },
+        data: {
+          lastMessageAt: new Date(),
+          lastMessageBody: textBody,
+          lastDirection: 'outbound',
+          aiPaused: true,
+        },
+      });
+    } else {
+      conversationId = `conv_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await db.conversation.create({
+        data: {
+          conversationId,
+          customerPhone,
+          channel: 'whatsapp',
+          status: 'active',
+          aiPaused: true,
+          currentStage: 'human_takeover',
+          lastMessageAt: new Date(),
+          lastMessageBody: textBody,
+          lastDirection: 'outbound',
+          tenantId,
+          messagesJson: '[]',
+        },
+      });
+    }
+
+    await db.inboxMessage.create({
+      data: {
+        tenantId,
+        conversationId,
+        channel: 'whatsapp',
+        senderId: businessFrom || 'owner',
+        senderName: 'Owner (WhatsApp App)',
+        senderType: 'human',
+        direction: 'outbound',
+        content: textBody,
+        messageType: msgType === 'image' || msgType === 'document' ? msgType : 'text',
+        externalId: messageId || null,
+        status: 'delivered',
+        metadataJson: JSON.stringify({
+          coexistenceEcho: true,
+          whatsappMessageId: messageId || undefined,
+          phoneNumberId: phoneNumberId || undefined,
+        }),
+      },
+    });
+  } catch (err) {
+    console.warn('[WhatsApp Callback] Coexistence echo handling error:', err);
+  }
+}
+
 async function handlePlainTextInbound(
   message: Record<string, unknown>,
   value?: Record<string, unknown>,
@@ -396,62 +650,8 @@ async function handlePlainTextInbound(
     // ── 1. Resolve tenant from phone_number_id ────────────────────────────
     const phoneNumberId =
       (value as { metadata?: { phone_number_id?: string } })?.metadata?.phone_number_id || '';
+    const tenantId = await resolveTenantIdByPhoneNumberId(phoneNumberId, true);
 
-    let tenantId: string | null = null;
-    if (phoneNumberId) {
-      try {
-        // Look for any WhatsApp CommunicationProvider whose configJson or
-        // linked credential contains this phoneNumberId. Use a contains
-        // filter on configJson (the JSON is stored as a string).
-        const provider = await db.communicationProvider.findFirst({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            configJson: { contains: phoneNumberId },
-          },
-          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-          select: { id: true, tenantId: true, name: true },
-        });
-        if (provider?.tenantId) {
-          tenantId = provider.tenantId;
-        }
-      } catch (err) {
-        console.warn('[WhatsApp Callback] tenant lookup failed:', err);
-      }
-    }
-
-    // Dynamic platform fallback: if phoneNumberId didn't match a specific tenant provider
-    // (e.g. Meta platform number), resolve the active default platform provider dynamically
-    if (!tenantId) {
-      try {
-        const defaultProvider = await db.communicationProvider.findFirst({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            isDefault: true,
-          },
-          orderBy: { updatedAt: 'desc' },
-          select: { tenantId: true },
-        });
-        if (defaultProvider?.tenantId) {
-          tenantId = defaultProvider.tenantId;
-        } else {
-          const anyActiveProvider = await db.communicationProvider.findFirst({
-            where: {
-              type: 'whatsapp',
-              status: 'active',
-            },
-            orderBy: { updatedAt: 'desc' },
-            select: { tenantId: true },
-          });
-          if (anyActiveProvider?.tenantId) {
-            tenantId = anyActiveProvider.tenantId;
-          }
-        }
-      } catch (fallbackErr) {
-        console.warn('[WhatsApp Callback] dynamic provider fallback lookup failed:', fallbackErr);
-      }
-    }
 
     if (!tenantId) {
       console.warn(
@@ -1316,7 +1516,7 @@ async function handleJobAcceptanceOrDecline({
   buttonId?: string;
   buttonText?: string;
   senderPhone: string;
-}) {
+}): Promise<boolean> {
   try {
     const cleanPhone = senderPhone.replace(/[^0-9]/g, '');
     const last10 = cleanPhone.slice(-10);
@@ -1337,7 +1537,7 @@ async function handleJobAcceptanceOrDecline({
       textLower.includes('decline') ||
       textLower.includes('reject');
 
-    if (!isAccept && !isDecline) return;
+    if (!isAccept && !isDecline) return false;
 
     // Find the employee by matching phone number
     const employee = await db.employee.findFirst({
@@ -1379,7 +1579,7 @@ async function handleJobAcceptanceOrDecline({
 
     if (!job) {
       console.warn(`[WhatsApp Callback] No job found to ${isAccept ? 'accept' : 'decline'} for phone: ${senderPhone}`);
-      return;
+      return false;
     }
 
     const appUrl = getAppUrl();
@@ -1442,8 +1642,10 @@ async function handleJobAcceptanceOrDecline({
         tenantId: job.tenantId || employee?.tenantId || undefined,
       });
     }
+    return Boolean(isAccept || isDecline);
   } catch (error) {
     console.error('[WhatsApp Callback] Error in handleJobAcceptanceOrDecline:', error);
+    return false;
   }
 }
 

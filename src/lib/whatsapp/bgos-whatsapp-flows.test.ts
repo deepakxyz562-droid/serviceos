@@ -1,0 +1,422 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  mockDb,
+  mockSendWhatsAppMessage,
+  mockCheckWhatsAppCredits,
+  mockResolvePlanState,
+  mockIsFeatureEnabled,
+  mockCreateOutboundMessage,
+  mockProcessFollowups,
+  mockScheduleReminders,
+  mockProcessScheduled,
+  mockPublishDuePosts,
+  mockRunDailyPushBatch,
+  mockGetAuthUser,
+  mockEnsureChatbot,
+  mockPrepareGoogleAccount,
+  mockUpdateGbpProfile,
+  mockSetPendingUpdate,
+} = vi.hoisted(() => ({
+  mockDb: {
+    tenant: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn().mockResolvedValue({}) },
+    customer: { findFirst: vi.fn(), findMany: vi.fn() },
+    lead: { findMany: vi.fn() },
+    conversation: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    inboxMessage: { findFirst: vi.fn(), create: vi.fn() },
+    campaignTemplate: { findFirst: vi.fn(), findMany: vi.fn() },
+    campaign: { create: vi.fn(), updateMany: vi.fn() },
+    communicationProvider: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    credential: { findMany: vi.fn() },
+  },
+  mockSendWhatsAppMessage: vi.fn(),
+  mockCheckWhatsAppCredits: vi.fn(),
+  mockResolvePlanState: vi.fn(),
+  mockIsFeatureEnabled: vi.fn(),
+  mockCreateOutboundMessage: vi.fn(),
+  mockProcessFollowups: vi.fn().mockResolvedValue({ checkedCount: 1, nudgedCount: 1, conversations: [] }),
+  mockScheduleReminders: vi.fn().mockResolvedValue({ scheduled: 2 }),
+  mockProcessScheduled: vi.fn().mockResolvedValue({ processed: 1, sent: 1, failed: 0 }),
+  mockPublishDuePosts: vi.fn().mockResolvedValue({ processed: 0, succeeded: 0, failed: 0 }),
+  mockRunDailyPushBatch: vi.fn().mockResolvedValue(undefined),
+  mockGetAuthUser: vi.fn(),
+  mockEnsureChatbot: vi.fn().mockResolvedValue({ agent: { id: 'agent_1' } }),
+  mockPrepareGoogleAccount: vi.fn().mockResolvedValue(null),
+  mockUpdateGbpProfile: vi.fn().mockResolvedValue({ descriptionApplied: false, appliedMasks: [], warnings: [] }),
+  mockSetPendingUpdate: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/db', () => ({ db: mockDb }));
+vi.mock('@/lib/inbox-message-service', () => ({
+  createOutboundMessage: mockCreateOutboundMessage,
+}));
+vi.mock('@/lib/whatsapp/inactivity-followup', () => ({
+  processWhatsAppInactivityFollowups: mockProcessFollowups,
+}));
+vi.mock('@/lib/appointment-reminders', () => ({
+  scheduleAppointmentReminders: mockScheduleReminders,
+}));
+vi.mock('@/lib/scheduled-messages', () => ({
+  processDueScheduledMessages: mockProcessScheduled,
+}));
+vi.mock('@/lib/social/due-publisher', () => ({
+  publishDueSocialPosts: mockPublishDuePosts,
+}));
+vi.mock('@/lib/social/autopilot', () => ({
+  getTenantAutopilotConfig: vi.fn(),
+  generateDailyAutopilotPost: vi.fn(),
+}));
+vi.mock('@/lib/social/autopilot-schedule', () => ({
+  autopilotDue: vi.fn().mockReturnValue(false),
+}));
+vi.mock('@/lib/bgos-daily-push', () => ({
+  runBgosDailyPushBatch: mockRunDailyPushBatch,
+}));
+vi.mock('@/lib/credit-management', () => ({
+  checkWhatsAppCredits: mockCheckWhatsAppCredits,
+  deductWhatsAppCredit: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/bgos-plan-access', () => ({
+  resolveAuthoritativeBgosPlanState: mockResolvePlanState,
+  requireBgosRepeatCampaignsAccess: vi.fn().mockResolvedValue({ ok: true }),
+}));
+vi.mock('@/lib/plan-features', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/plan-features')>();
+  return {
+    ...actual,
+    isFeatureEnabledForPlan: mockIsFeatureEnabled,
+  };
+});
+vi.mock('@/lib/auth', () => ({
+  getAuthUser: mockGetAuthUser,
+}));
+vi.mock('@/lib/bgos/bootstrap-cache', () => ({
+  invalidateBootstrapCache: vi.fn(),
+}));
+vi.mock('@/lib/bgos-business-chatbot', () => ({
+  ensureAndSyncBusinessChatbot: mockEnsureChatbot,
+}));
+vi.mock('@/lib/social/google-account-helper', () => ({
+  prepareGoogleAccount: mockPrepareGoogleAccount,
+}));
+vi.mock('@/lib/social/adapters/googlebusiness', () => ({
+  updateGoogleBusinessProfile: mockUpdateGbpProfile,
+}));
+vi.mock('@/lib/gbp/pending-update', () => ({
+  checkAndEnforcePendingLock: vi.fn().mockReturnValue({ locked: false }),
+  setPendingGoogleUpdate: mockSetPendingUpdate,
+}));
+vi.mock('@/lib/emails/bgos/sender', () => ({
+  sendBgosGbpUpdatePendingEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
+describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb.tenant.findMany.mockResolvedValue([]);
+    mockDb.conversation.findFirst.mockResolvedValue(null);
+    mockDb.customer.findFirst.mockResolvedValue(null);
+    mockDb.inboxMessage.findFirst.mockResolvedValue(null);
+    mockDb.communicationProvider.findFirst.mockResolvedValue({
+      id: 'prov_1',
+      isDefault: true,
+      configJson: JSON.stringify({ accessToken: 'tok_live', phoneNumberId: 'pn_123' }),
+      credential: null,
+    });
+    mockCheckWhatsAppCredits.mockResolvedValue({ allowed: true });
+    mockResolvePlanState.mockResolvedValue({
+      plan: 'business',
+      status: 'active',
+      features: { whatsappRepeatCampaigns: true },
+    });
+    mockIsFeatureEnabled.mockResolvedValue(true);
+    mockCreateOutboundMessage.mockResolvedValue({ created: true, message: { id: 'msg_out_1' } });
+  });
+
+  it('sendWhatsAppMessage dispatches interactive quick-reply buttons and image captions via Cloud API', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ messages: [{ id: 'wamid_btn_1' }] }), { status: 200 }),
+    );
+    const { sendWhatsAppMessage } = await import('@/lib/whatsapp-send');
+
+    const interactiveRes = await sendWhatsAppMessage({
+      tenantId: 'ten_1',
+      to: '9876543210',
+      message: 'Welcome to Apex Dental! Choose an option:',
+      type: 'interactive',
+      interactiveButtons: [
+        { id: 'bgos_view_brochure', title: 'View Brochure' },
+        { id: 'bgos_book_slot', title: 'Book a Slot' },
+      ],
+      interactiveFooter: 'Apex Dental',
+    });
+
+    expect(interactiveRes.success).toBe(true);
+    expect(interactiveRes.messageId).toBe('wamid_btn_1');
+    const firstBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(firstBody.type).toBe('interactive');
+    expect(firstBody.interactive.action.buttons).toHaveLength(2);
+    expect(firstBody.interactive.action.buttons[0].reply.title).toBe('View Brochure');
+
+    const imgRes = await sendWhatsAppMessage({
+      tenantId: 'ten_1',
+      to: '9876543210',
+      message: 'Diwali Offer',
+      type: 'image',
+      mediaUrl: 'https://cdn.example.com/offer.png',
+    });
+
+    expect(imgRes.success).toBe(true);
+    const secondBody = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body));
+    expect(secondBody.type).toBe('image');
+    expect(secondBody.image.link).toBe('https://cdn.example.com/offer.png');
+    fetchSpy.mockRestore();
+  });
+
+  it('maybeSendNewLeadWhatsAppWelcome creates Inbox context + interactive buttons on Business opt-in and skips Starter / duplicates', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ messages: [{ id: 'wamid_welcome_1' }] }), { status: 200 }),
+    );
+    const { maybeSendNewLeadWhatsAppWelcome } = await import('@/lib/whatsapp/lead-welcome');
+
+    mockDb.tenant.findUnique.mockResolvedValue({
+      id: 'ten_biz',
+      name: 'Apex Fitness Studio',
+      plan: 'business',
+      planStatus: 'active',
+      brandProfile: { businessName: 'Apex Fitness' },
+      settingsJson: JSON.stringify({
+        brochureUrl: 'https://cdn.example.com/timetable.pdf',
+        leadAutoWelcome: { enabled: true, sendBrochure: true },
+      }),
+    });
+    mockDb.conversation.create.mockResolvedValue({
+      id: 'c_db_1',
+      conversationId: 'conv_wa_lead_1',
+    });
+
+    const sent = await maybeSendNewLeadWhatsAppWelcome({
+      tenantId: 'ten_biz',
+      leadId: 'lead_1',
+      leadName: 'Aarav Sharma',
+      leadPhone: '+91 98765 43210',
+      serviceType: 'Strength Training',
+    });
+
+    expect(sent.sent).toBe(true);
+    expect(mockIsFeatureEnabled).toHaveBeenCalledWith('whatsapp', 'business');
+    expect(sent.messageId).toBe('wamid_welcome_1');
+    expect(mockCreateOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'ten_biz',
+        conversationId: 'conv_wa_lead_1',
+        messageType: 'interactive',
+      }),
+    );
+
+    // Duplicate within 12h must skip cleanly
+    mockDb.conversation.findFirst.mockResolvedValue({ id: 'c_db_1', conversationId: 'conv_wa_lead_1' });
+    mockDb.inboxMessage.findFirst.mockResolvedValue({ id: 'existing_welcome' });
+    const dup = await maybeSendNewLeadWhatsAppWelcome({
+      tenantId: 'ten_biz',
+      leadId: 'lead_2',
+      leadName: 'Aarav Sharma',
+      leadPhone: '9876543210',
+    });
+    expect(dup.sent).toBe(false);
+    expect(dup.reason).toBe('recently_welcomed');
+
+    // Starter tier lacking whatsapp feature must skip
+    mockDb.inboxMessage.findFirst.mockResolvedValue(null);
+    mockIsFeatureEnabled.mockResolvedValueOnce(false);
+    const blocked = await maybeSendNewLeadWhatsAppWelcome({
+      tenantId: 'ten_biz',
+      leadId: 'lead_3',
+      leadName: 'Priya',
+      leadPhone: '9988776655',
+    });
+    expect(blocked.sent).toBe(false);
+    expect(blocked.reason).toBe('plan_ineligible');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('runAutopilotTick executes follow-ups and booking reminders in-process without external cron', async () => {
+    const { runAutopilotTick, stopBgosAutopilotWorker } = await import('@/lib/social/autopilot-worker-daemon');
+    stopBgosAutopilotWorker();
+
+    const summary = await runAutopilotTick(new Date('2026-11-28T10:30:00Z'));
+
+    expect(mockScheduleReminders).toHaveBeenCalledTimes(1);
+    expect(mockProcessScheduled).toHaveBeenCalledTimes(1);
+    expect(mockProcessFollowups).toHaveBeenCalledTimes(1);
+    expect(summary.whatsappNudges).toBe(1);
+  });
+
+  it('POST /api/marketing/occasions/send delivers Meta template params, attaches PDF brochure, and syncs Inbox', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ messages: [{ id: `wamid_camp_${Math.random()}` }] }), { status: 200 });
+    });
+
+    mockGetAuthUser.mockResolvedValue({
+      id: 'user_1',
+      tenantId: 'ten_biz',
+      workspaceId: 'ws_1',
+      role: 'owner',
+    });
+    mockDb.tenant.findUnique.mockResolvedValue({
+      id: 'ten_biz',
+      name: 'Glow Salon',
+      settingsJson: JSON.stringify({ bookingPageConfig: { businessName: 'Glow Salon' } }),
+    });
+    mockDb.customer.findMany.mockResolvedValue([
+      {
+        id: 'cust_1',
+        name: 'Riya Kapoor',
+        firstName: 'Riya',
+        phone: '+919811112222',
+        email: null,
+        updatedAt: new Date(Date.now() - 75 * 24 * 60 * 60 * 1000),
+      },
+    ]);
+    mockDb.lead.findMany.mockResolvedValue([]);
+    mockDb.campaignTemplate.findFirst.mockResolvedValue({
+      name: 'diwali_comeback',
+      bodyText: 'Hi {{1}}! Special festive package from {{2}}.',
+      content: 'Hi {{1}}! Special festive package from {{2}}.',
+      language: 'en_US',
+    });
+    mockDb.conversation.findFirst.mockResolvedValue({
+      id: 'conv_db_9',
+      conversationId: 'conv_wa_riya',
+    });
+    mockDb.campaign.create.mockResolvedValue({ id: 'camp_1' });
+
+    const { POST } = await import('@/app/api/marketing/occasions/send/route');
+    const req = new Request('http://localhost/api/marketing/occasions/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audience: 'inactive_60_days',
+        title: 'Festive Comeback',
+        message: 'Hi {FirstName}, book your festive package!',
+        templateName: 'diwali_comeback',
+        brochureUrl: 'https://cdn.example.com/salon-menu.pdf',
+        sendVia: 'whatsapp_api',
+      }),
+    });
+
+    const res = await POST(req as any);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.sentCount).toBe(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2); // 1 template + 1 PDF brochure document
+
+    const tplPayload = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(tplPayload.type).toBe('template');
+    expect(tplPayload.template.components[0].parameters[0].text).toBe('Riya');
+    expect(tplPayload.template.components[0].parameters[1].text).toBe('Glow Salon');
+
+    const docPayload = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body));
+    expect(docPayload.type).toBe('document');
+    expect(docPayload.document.link).toBe('https://cdn.example.com/salon-menu.pdf');
+
+    expect(mockCreateOutboundMessage).toHaveBeenCalledTimes(2);
+    fetchSpy.mockRestore();
+  });
+
+  it('syncTenantWhatsAppIdentity normalizes WhatsApp number, ensures active AI chatbot, and pushes Google Business attribute', async () => {
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: JSON.stringify({}),
+      phone: null,
+      whatsappPhone: null,
+    });
+    mockPrepareGoogleAccount.mockResolvedValue({ accessToken: 'gbp_tok', accountId: 'loc_1' });
+    mockUpdateGbpProfile.mockResolvedValue({
+      descriptionApplied: false,
+      appliedMasks: ['attributes/url_whatsapp'],
+      warnings: [],
+    });
+
+    const { syncTenantWhatsAppIdentity } = await import('@/lib/whatsapp/identity-sync');
+    const result = await syncTenantWhatsAppIdentity({
+      tenantId: 'ten_gbp_1',
+      phone: '9876543210',
+      syncChatbot: true,
+      syncGoogleBusiness: true,
+    });
+
+    expect(result.phone).toBe('+919876543210');
+    expect(result.whatsappUrl).toBe('https://wa.me/919876543210');
+    expect(result.chatbotEnsured).toBe(true);
+    expect(result.syncedToGoogle).toBe(true);
+    expect(mockEnsureChatbot).toHaveBeenCalledWith('ten_gbp_1', { triggerSource: 'whatsapp_connect' });
+    expect(mockUpdateGbpProfile).toHaveBeenCalledWith(
+      { accessToken: 'gbp_tok', accountId: 'loc_1' },
+      { whatsappUrl: 'https://wa.me/919876543210' },
+    );
+    expect(mockSetPendingUpdate).toHaveBeenCalledTimes(1);
+    expect(mockDb.tenant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'ten_gbp_1' },
+        data: expect.objectContaining({
+          whatsappPhone: '+919876543210',
+        }),
+      }),
+    );
+  });
+
+  it('POST /api/whatsapp/manual-config and GET /api/whatsapp/config surface Google Maps sync status and warnings', async () => {
+    mockGetAuthUser.mockResolvedValue({ id: 'u1', tenantId: 'ten_manual_1', role: 'owner' });
+    mockDb.communicationProvider.findFirst.mockResolvedValue(null);
+    mockDb.communicationProvider.create.mockResolvedValue({ id: 'prov_new' });
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: JSON.stringify({}),
+      phone: null,
+      whatsappPhone: null,
+    });
+    mockPrepareGoogleAccount.mockResolvedValue({ accessToken: 'gbp_tok_2', accountId: 'loc_2' });
+    mockUpdateGbpProfile.mockResolvedValue({
+      descriptionApplied: false,
+      appliedMasks: [],
+      warnings: ['WhatsApp attribute notice: Category not eligible for url_whatsapp'],
+    });
+
+    const { POST: manualPost } = await import('@/app/api/whatsapp/manual-config/route');
+    const postRes = await manualPost(
+      new Request('http://localhost/api/whatsapp/manual-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: '+919800012345',
+          phoneNumberId: 'pn_manual_1',
+          wabaId: 'waba_1',
+          accessToken: 'EAAG_live_token',
+        }),
+      }) as any,
+    );
+    const postJson = await postRes.json();
+
+    expect(postRes.status).toBe(200);
+    expect(postJson.chatbotEnsured).toBe(true);
+    expect(postJson.googleMapsSynced).toBe(false);
+    expect(postJson.whatsappUrl).toBe('https://wa.me/919800012345');
+
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: JSON.stringify({
+        googlePlaceActions: {
+          whatsappUri: 'https://wa.me/919800012345',
+          whatsappSyncedToGoogle: true,
+          whatsappWarnings: [],
+        },
+      }),
+    });
+    const { GET: getWaConfig } = await import('@/app/api/whatsapp/config/route');
+    const cfgRes = await getWaConfig(new Request('http://localhost/api/whatsapp/config') as any);
+    const cfgJson = await cfgRes.json();
+    expect(cfgRes.status).toBe(200);
+    expect(cfgJson.googleMapsWhatsappUrl).toBe('https://wa.me/919800012345');
+    expect(cfgJson.googleMapsWhatsappSynced).toBe(true);
+  });
+});

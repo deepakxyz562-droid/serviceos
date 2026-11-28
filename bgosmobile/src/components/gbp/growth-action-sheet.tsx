@@ -420,11 +420,26 @@ export function GrowthActionSheet({
     if (!whatsappPhone.trim()) return;
     setSavingWhatsapp(true);
     try {
-      const res = await apiRequest<{ success: boolean; whatsappUrl: string; message: string }>('/api/gbp/growth-actions', {
+      const res = await apiRequest<{
+        success: boolean;
+        whatsappUrl: string;
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+        message: string;
+      }>('/api/gbp/growth-actions', {
         method: 'POST',
         body: { action: 'update_whatsapp_chat', phone: whatsappPhone.trim() },
       });
-      showNotice('✓ WhatsApp Connected', res.message || 'WhatsApp chat link configured for Google Maps.', 'success');
+      if (res.syncedToGoogle) {
+        showNotice('✓ WhatsApp Added to Google Maps', res.message || 'WhatsApp chat button synced to Google Business Profile.', 'success');
+      } else {
+        const warnText = res.googleWarnings?.length ? ` (${res.googleWarnings[0]})` : '';
+        showNotice(
+          'Saved in BGOS',
+          `${res.message || 'WhatsApp link saved to BGOS & Booking Page.'}${warnText}`,
+          res.googleWarnings?.length ? 'error' : 'success',
+        );
+      }
       setWhatsappModalOpen(false);
       await onRefresh();
     } catch (e: any) {

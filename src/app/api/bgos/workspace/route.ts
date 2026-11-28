@@ -13,6 +13,7 @@ import {
 import { checkBgosSlugAvailability, normalizeBgosSlug } from '@/lib/bgos-slug-service';
 import { invalidateBootstrapCache } from '@/lib/bgos/bootstrap-cache';
 import { resolveAuthoritativeBgosPlanState } from '@/lib/bgos-plan-access';
+import { buildWhatsAppChatLink } from '@/lib/whatsapp/identity-sync';
 import type { BgosPageVisibility, BgosWorkspace } from '../../../../../shared/bgos-contracts';
 
 const pageVisibilityPatchSchema = z.object({
@@ -63,6 +64,11 @@ const patch = z.object({
     enabled: z.boolean().optional(),
     delayMinutes: z.number().int().min(1).max(1440).optional(),
     languageMode: z.enum(['auto', 'english', 'hinglish']).optional(),
+  }).optional(),
+  leadAutoWelcome: z.object({
+    enabled: z.boolean().optional(),
+    message: z.string().max(600).optional(),
+    sendBrochure: z.boolean().optional(),
   }).optional(),
   clearSeededDummyServices: z.boolean().optional(),
   importGbpServices: z.boolean().optional(),
@@ -253,6 +259,15 @@ export async function resolveWorkspaceData(
     const bookingReminderHours = (['none', '1h', '24h', '2d'].includes(settings.bookingReminderHours)
       ? settings.bookingReminderHours
       : '24h') as 'none' | '1h' | '24h' | '2d';
+    const waProviderRow = db.communicationProvider?.findFirst
+      ? await db.communicationProvider
+          .findFirst({
+            where: { tenantId: user.tenantId, type: 'whatsapp', status: 'active' },
+            select: { id: true },
+          })
+          .catch(() => null)
+      : null;
+    const whatsappConnected = Boolean(waProviderRow);
 
     const data: BgosWorkspace = {
       name: effectiveBusinessName,
@@ -301,8 +316,14 @@ export async function resolveWorkspaceData(
       automations: {
         profileAssistant: profile?.aiAgentEnabled === true,
         offlineReply: settings.autoReplyOffline?.enabled === true,
+        whatsappConnected,
         bookingReminderHours,
         followUp: followUpState,
+        leadAutoWelcome: {
+          enabled: settings.leadAutoWelcome?.enabled === true,
+          message: typeof settings.leadAutoWelcome?.message === 'string' ? settings.leadAutoWelcome.message : '',
+          sendBrochure: settings.leadAutoWelcome?.sendBrochure !== false,
+        },
         gbp: settings.gbpAutomations || {
           replyToReviews: false,
           generatePosts: false,
@@ -373,6 +394,12 @@ export async function PATCH(request: NextRequest) {
     if (input.data.gbpAutomations) settings.gbpAutomations = { ...(settings.gbpAutomations || {}), ...input.data.gbpAutomations };
     if (input.data.bookingReminderHours !== undefined) {
       settings.bookingReminderHours = input.data.bookingReminderHours;
+    }
+    if (input.data.leadAutoWelcome) {
+      settings.leadAutoWelcome = {
+        ...(settings.leadAutoWelcome || {}),
+        ...input.data.leadAutoWelcome,
+      };
     }
     if (input.data.brochureUrl !== undefined) {
       if (input.data.brochureUrl && input.data.brochureUrl.trim()) {
@@ -518,7 +545,21 @@ export async function PATCH(request: NextRequest) {
         }
       }
       if (cfg.phone !== undefined) updateData.phone = cfg.phone.trim() || null;
-      if (cfg.whatsapp !== undefined) updateData.whatsappPhone = cfg.whatsapp.trim() || null;
+      if (cfg.whatsapp !== undefined) {
+        const waNormalized = buildWhatsAppChatLink(cfg.whatsapp);
+        updateData.whatsappPhone = cfg.whatsapp.trim() || null;
+        if (waNormalized.phone) {
+          settings.whatsappNumber = waNormalized.phone;
+          settings.communicationPhone = waNormalized.phone;
+        }
+        if (waNormalized.whatsappUrl) {
+          settings.whatsappChatLink = waNormalized.whatsappUrl;
+          settings.googlePlaceActions = {
+            ...(settings.googlePlaceActions || {}),
+            whatsappUri: waNormalized.whatsappUrl,
+          };
+        }
+      }
       if (cfg.email !== undefined) updateData.email = cfg.email.trim() || null;
       if (cfg.website !== undefined) updateData.website = cfg.website.trim() || null;
       if (cfg.address !== undefined) updateData.address = cfg.address.trim() || null;

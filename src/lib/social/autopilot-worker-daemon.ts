@@ -18,6 +18,8 @@ let workerInterval: ReturnType<typeof setInterval> | null = null;
 let isTicking = false;
 let bootTimer: ReturnType<typeof setTimeout> | null = null;
 let lastDailyPushRunAtMs = 0;
+let lastAppointmentReminderRunAtMs = 0;
+let lastScheduledMessagesRunAtMs = 0;
 
 /**
  * Execute a single autopilot worker tick.
@@ -101,8 +103,11 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
         processQuietChatFollowups?: () => Promise<{ nudgedCount?: number }>;
         processWhatsAppInactivityFollowups?: () => Promise<{ nudgedCount?: number }>;
       };
-      const runFollowups =
-        inactivityMod.processQuietChatFollowups ?? inactivityMod.processWhatsAppInactivityFollowups;
+      const runFollowups = Object.hasOwn(inactivityMod, 'processQuietChatFollowups')
+        ? inactivityMod.processQuietChatFollowups
+        : Object.hasOwn(inactivityMod, 'processWhatsAppInactivityFollowups')
+          ? inactivityMod.processWhatsAppInactivityFollowups
+          : undefined;
       if (runFollowups) {
         const nudgeResult = await runFollowups();
         whatsappNudges = nudgeResult.nudgedCount || 0;
@@ -123,6 +128,28 @@ export async function runAutopilotTick(now: Date = new Date()): Promise<{
       }
     } catch {
       // Daily checklist batch is non-blocking
+    }
+
+    // 4. Schedule upcoming booking/visit WhatsApp reminders & flush due ScheduledMessages in-process
+    //    so reminders work reliably even when no external cron service is configured.
+    try {
+      const nowMs = now.getTime();
+      if (nowMs - lastAppointmentReminderRunAtMs >= 15 * 60 * 1000) {
+        lastAppointmentReminderRunAtMs = nowMs;
+        const { scheduleAppointmentReminders } = await import('@/lib/appointment-reminders');
+        await scheduleAppointmentReminders().catch((e) => {
+          console.warn('[Autopilot Daemon] Appointment reminder scheduling error:', e);
+        });
+      }
+      if (nowMs - lastScheduledMessagesRunAtMs >= 2 * 60 * 1000) {
+        lastScheduledMessagesRunAtMs = nowMs;
+        const { processDueScheduledMessages } = await import('@/lib/scheduled-messages');
+        await processDueScheduledMessages().catch((e) => {
+          console.warn('[Autopilot Daemon] Scheduled message dispatch error:', e);
+        });
+      }
+    } catch {
+      // Reminder runner is non-blocking
     }
 
     return {
@@ -212,4 +239,6 @@ export function stopBgosAutopilotWorker() {
   }
   isTicking = false;
   lastDailyPushRunAtMs = 0;
+  lastAppointmentReminderRunAtMs = 0;
+  lastScheduledMessagesRunAtMs = 0;
 }

@@ -5,11 +5,30 @@ import { colors } from '../src/components/ui';
 
 export default function GbpCallbackScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ error?: string; google?: string }>();
+  const params = useLocalSearchParams<{
+    error?: string;
+    google?: string;
+    whatsapp?: string;
+    next?: string;
+  }>();
 
   useEffect(() => {
     const errorParam = params.error;
     const googleParam = params.google;
+    const whatsappParam = params.whatsapp;
+    const requestedNext =
+      typeof params.next === 'string' && params.next.startsWith('/') ? params.next : null;
+
+    if (whatsappParam || requestedNext === '/integrations') {
+      const query = new URLSearchParams();
+      if (whatsappParam) query.set('whatsapp', whatsappParam);
+      if (errorParam) query.set('error', errorParam);
+      const qs = query.toString();
+      const target = requestedNext || '/integrations';
+      router.replace((qs ? `${target}?${qs}` : target) as any);
+      return;
+    }
+
     const query = new URLSearchParams();
     if (errorParam) query.set('error', errorParam);
     if (googleParam) query.set('google', googleParam);

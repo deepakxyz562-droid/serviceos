@@ -295,7 +295,7 @@ export async function proxy(request: NextRequest) {
       const BGOS_RESERVED = new Set([
         'api', '_next', 'b', 'app', 'login', 'recover', 'setup', 'terms', 'privacy',
         'terms-of-service', 'privacy-policy', 'data-deletion', 'auth', 'auth-callback',
-        'gbp-callback', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
+        'gbp-callback', 'whatsapp-connect', 'inbox', 'bgos-home', 'bos-home', 'quote-flow', 'marketplace',
         'favicon.ico', 'robots.txt', 'sitemap.xml', 'images', 'uploads', 'assets', 'static',
         'admin', 'dashboard', 'settings', 'help', 'pricing', 'manifest.json', 'report',
         'bgos', 'bos', 'brand', 'icons', 'fonts', 'intake', 'agent', 'chatbot', 'form',

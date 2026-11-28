@@ -22,8 +22,11 @@ function AutomationsScreen() {
 
   const gbpAuto = workspaceRes.data?.automations?.gbp || {};
   const canUseRepeatCampaigns = Boolean(workspaceRes.data?.features?.whatsappRepeatCampaigns);
+  const whatsappConnected = Boolean(workspaceRes.data?.automations?.whatsappConnected);
+  const hasBrochure = Boolean(workspaceRes.data?.links?.brochure);
   const offlineReplyEnabled = Boolean(workspaceRes.data?.automations?.offlineReply);
   const followUpEnabled = Boolean(workspaceRes.data?.automations?.followUp?.enabled);
+  const leadWelcomeEnabled = Boolean(workspaceRes.data?.automations?.leadAutoWelcome?.enabled);
   const reminderWindow = workspaceRes.data?.automations?.bookingReminderHours || '24h';
 
   async function patchAutomation(key: string, body: Record<string, unknown>) {
@@ -94,6 +97,71 @@ function AutomationsScreen() {
     >
       <ErrorNotice message={workspaceRes.error} retry={workspaceRes.refresh} />
 
+      {/* Guided WhatsApp AI Launch Checklist */}
+      <Card style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
+            WhatsApp AI Setup Checklist
+          </Text>
+          <Badge
+            success={whatsappConnected && (offlineReplyEnabled || followUpEnabled)}
+            label={whatsappConnected ? 'Live Ready' : 'Action Needed'}
+          />
+        </View>
+        {[
+          {
+            title: '1. WhatsApp Business Number',
+            sub: whatsappConnected ? 'Connected & ready to answer customers 24/7' : 'Connect in 2 min to enable AI Chat & Campaigns',
+            done: whatsappConnected,
+            route: '/integrations',
+            cta: whatsappConnected ? 'Manage' : 'Connect →',
+          },
+          {
+            title: '2. AI Chat, Follow-Ups & Reminders',
+            sub: offlineReplyEnabled || followUpEnabled ? 'AI reply, quiet nudges & booking reminders active' : 'Enable offline AI reply & quiet-chat follow-up below',
+            done: offlineReplyEnabled || followUpEnabled,
+            route: '/agents',
+            cta: 'Train AI →',
+          },
+          {
+            title: '3. Brochure PDF & Repeat Campaigns',
+            sub: hasBrochure ? 'Brochure PDF attached for WhatsApp sharing' : 'Upload PDF brochure & send comeback offers',
+            done: hasBrochure && canUseRepeatCampaigns,
+            route: '/whatsapp-campaigns',
+            cta: hasBrochure ? 'Campaigns →' : 'Upload PDF →',
+          },
+        ].map((step) => (
+          <Pressable
+            key={step.title}
+            onPress={() => router.push(step.route as any)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: 10,
+              borderRadius: 12,
+              backgroundColor: step.done ? '#F0FDF4' : '#F8FAFC',
+              borderWidth: 1,
+              borderColor: step.done ? '#BBF7D0' : colors.line,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <MaterialIcons
+                name={step.done ? 'check-circle' : 'radio-button-unchecked'}
+                size={18}
+                color={step.done ? '#15803D' : colors.muted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.ink }}>{step.title}</Text>
+                <Text style={{ fontSize: 11, color: colors.muted }}>{step.sub}</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.brand }}>{step.cta}</Text>
+          </Pressable>
+        ))}
+      </Card>
+
       {/* Direct Business Automation Controls */}
       <Card style={{ gap: 12 }}>
         <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }}>
@@ -129,6 +197,22 @@ function AutomationsScreen() {
             value={followUpEnabled}
             disabled={savingKey === 'followUp'}
             onValueChange={(val) => patchAutomation('followUp', { followUp: { enabled: val } })}
+          />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink }}>
+              New-Lead Instant WhatsApp Welcome
+            </Text>
+            <Text style={{ fontSize: 11.5, color: colors.muted }}>
+              Greets new leads with Brochure &amp; Book buttons; AI takes over on reply
+            </Text>
+          </View>
+          <Switch
+            value={leadWelcomeEnabled}
+            disabled={savingKey === 'leadAutoWelcome'}
+            onValueChange={(val) => patchAutomation('leadAutoWelcome', { leadAutoWelcome: { enabled: val } })}
           />
         </View>
 

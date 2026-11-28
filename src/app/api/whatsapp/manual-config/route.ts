@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { normalizeWhatsAppAccessToken } from '@/lib/whatsapp-config';
+import { syncTenantWhatsAppIdentity } from '@/lib/whatsapp/identity-sync';
 
 /**
  * POST /api/whatsapp/manual-config
@@ -86,11 +87,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Also update Tenant.whatsappConfigJson for backward compatibility
+    // Also update Tenant.whatsappConfigJson and Tenant.whatsappPhone for backward compatibility
     await db.tenant.update({
       where: { id: user.tenantId },
-      data: { whatsappConfigJson: configJson },
+      data: {
+        whatsappConfigJson: configJson,
+        whatsappPhone: phoneNumber.trim(),
+      },
     }).catch(() => {});
+
+    const identitySync = await syncTenantWhatsAppIdentity({
+      tenantId: user.tenantId,
+      phone: phoneNumber.trim(),
+      syncChatbot: true,
+      syncGoogleBusiness: true,
+    }).catch(() => null);
 
     console.log('[whatsapp/manual-config] WhatsApp configured manually:', {
       wabaId,
@@ -104,6 +115,9 @@ export async function POST(request: NextRequest) {
       wabaId,
       phoneNumberId,
       displayPhoneNumber: phoneNumber,
+      chatbotEnsured: Boolean(identitySync?.chatbotEnsured),
+      googleMapsSynced: Boolean(identitySync?.syncedToGoogle),
+      whatsappUrl: identitySync?.whatsappUrl || '',
     });
   } catch (error) {
     console.error('[POST /api/whatsapp/manual-config] error:', error);

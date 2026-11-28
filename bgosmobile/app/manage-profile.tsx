@@ -190,6 +190,11 @@ export default function ManageGoogleProfileScreen() {
   // 6-Tab Business Information Hub State
   const [infoTab, setInfoTab] = useState<'about' | 'services' | 'contact' | 'location' | 'hours' | 'more'>('about');
   const workspaceRes = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const waConfigRes = useResource<{
+    displayPhoneNumber?: string | null;
+    googleMapsWhatsappUrl?: string | null;
+    googleMapsWhatsappSynced?: boolean;
+  }>('/api/whatsapp/config');
   const servicesRes = useResource<{ services: ProfileServiceItem[] }>(
     '/api/services?limit=50',
     0,
@@ -554,15 +559,30 @@ export default function ManageGoogleProfileScreen() {
   async function handleSaveCommunicationPhone() {
     setSavingCommPhone(true);
     try {
-      await apiRequest('/api/gbp/place', {
-        method: 'PATCH',
-        body: { communicationPhone: editCommPhone },
+      const cleanPhone = editCommPhone.trim();
+      const gbpSyncRes = await apiRequest<{
+        success?: boolean;
+        syncedToGoogle?: boolean;
+        googleWarnings?: string[];
+      }>('/api/gbp/growth-actions', {
+        method: 'POST',
+        body: { action: 'update_whatsapp_chat', phone: cleanPhone },
       });
-      await placeRes.refresh();
+      await Promise.all([placeRes.refresh(), waConfigRes.refresh(), workspaceRes.refresh()]).catch(() => {});
       setCommPhoneModalOpen(false);
-      Alert.alert('Success', 'WhatsApp communication phone updated.');
+      if (gbpSyncRes?.syncedToGoogle) {
+        Alert.alert('Synced to Google Maps', 'WhatsApp number saved and added to your Google Business Profile.');
+      } else {
+        const warnNote = gbpSyncRes?.googleWarnings?.length
+          ? `\n\nGoogle notice: ${gbpSyncRes.googleWarnings[0]}`
+          : '';
+        Alert.alert(
+          'WhatsApp Saved in BGOS',
+          `Saved to your BGOS profile and Booking Page.${warnNote}`,
+        );
+      }
     } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update communication phone');
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update WhatsApp phone');
     } finally {
       setSavingCommPhone(false);
     }
@@ -1228,6 +1248,46 @@ export default function ManageGoogleProfileScreen() {
                   ) : null}
                 </View>
                 <Pressable onPress={() => setBookingModalOpen(true)} hitSlop={8}>
+                  <MaterialIcons name="edit" size={18} color="#2563EB" />
+                </Pressable>
+              </View>
+
+              {/* Google Maps WhatsApp Chat Button */}
+              <View style={styles.rowItem}>
+                <MaterialIcons name="chat" size={20} color="#15803D" style={styles.rowIcon} />
+                <View style={{ flex: 1, gap: 2, paddingRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={styles.rowLabel}>Google Maps WhatsApp Button</Text>
+                    {waConfigRes.data?.googleMapsWhatsappSynced ? (
+                      <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#15803D' }}>Live on Google</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {waConfigRes.data?.googleMapsWhatsappUrl ? (
+                    <Pressable onPress={() => Linking.openURL(waConfigRes.data!.googleMapsWhatsappUrl!).catch(() => {})}>
+                      <Text selectable style={[styles.rowValue, { color: '#2563EB' }]}>
+                        {waConfigRes.data.googleMapsWhatsappUrl}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.rowValue, { color: '#94A3B8' }]}>
+                      Add your WhatsApp number to show click-to-chat on Google Maps &amp; Booking Page
+                    </Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setEditCommPhone(
+                      communicationPhone ||
+                        waConfigRes.data?.displayPhoneNumber ||
+                        workspaceRes.data?.bookingPageConfig?.whatsapp ||
+                        phone,
+                    );
+                    setCommPhoneModalOpen(true);
+                  }}
+                  hitSlop={8}
+                >
                   <MaterialIcons name="edit" size={18} color="#2563EB" />
                 </Pressable>
               </View>
@@ -2208,7 +2268,7 @@ export default function ManageGoogleProfileScreen() {
           <View style={styles.modalCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                WhatsApp Communication Phone
+                WhatsApp &amp; Google Maps Chat Number
               </Text>
               <Pressable onPress={() => setCommPhoneModalOpen(false)}>
                 <MaterialIcons name="close" size={22} color={colors.muted} />
@@ -2216,7 +2276,7 @@ export default function ManageGoogleProfileScreen() {
             </View>
 
             <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18, marginBottom: 12 }}>
-              All automated WhatsApp notifications (new reviews, weekly performance reports, post publishing alerts) will be sent to this verified number.
+              Syncs your WhatsApp Business number to Google Business Profile (where supported by Google), your BGOS Booking Page, and automated alerts.
             </Text>
 
             <TextInput
