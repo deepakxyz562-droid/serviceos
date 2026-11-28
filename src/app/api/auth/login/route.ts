@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Set auth cookie
-    setAuthCookies(response.cookies, tokens);
+    setAuthCookies(response.cookies, tokens, request);
 
     return response;
   } catch (error) {

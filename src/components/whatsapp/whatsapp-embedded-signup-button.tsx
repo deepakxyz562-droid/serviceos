@@ -25,6 +25,8 @@ interface WhatsAppEmbeddedSignupButtonProps {
   metaAppId?: string;
   /** Mobile handoff ticket when launched from bgosmobile WebBrowser */
   handoffTicket?: string;
+  /** Optional in-memory bearer token from mobile handoff exchange when cookies are restricted */
+  authToken?: string;
   /** 'coexistence' links existing WA Business app without losing chats; 'cloud_api' creates/binds API number */
   mode?: 'coexistence' | 'cloud_api';
 }
@@ -42,6 +44,7 @@ export function WhatsAppEmbeddedSignupButton({
   configId: configIdProp,
   metaAppId: metaAppIdProp,
   handoffTicket,
+  authToken,
   mode = 'coexistence',
 }: WhatsAppEmbeddedSignupButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -62,6 +65,15 @@ export function WhatsAppEmbeddedSignupButton({
     isCoexistence?: boolean;
   }>({});
 
+  const buildRequestHeaders = useCallback(
+    (extra?: Record<string, string>) =>
+      authHeaders({
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...extra,
+      }),
+    [authToken],
+  );
+
   // Preload & initialize Facebook JS SDK on mount so FB.login runs synchronously inside
   // the user's tap gesture (prevents popup blockers in iOS Safari / ASWebAuthenticationSession).
   useEffect(() => {
@@ -78,7 +90,7 @@ export function WhatsAppEmbeddedSignupButton({
 
       if (!appId || !cfgId) {
         const cfgRes = await fetch('/api/whatsapp/config', {
-          headers: authHeaders(),
+          headers: buildRequestHeaders(),
           credentials: 'include',
         }).catch(() => null);
         if (cfgRes?.ok) {
@@ -93,7 +105,7 @@ export function WhatsAppEmbeddedSignupButton({
       }
     }
     void warmSdk();
-  }, [metaAppIdProp, configIdProp]);
+  }, [metaAppIdProp, configIdProp, buildRequestHeaders]);
 
   useEffect(() => {
     const onWindowMessage = (event: MessageEvent) => {
@@ -131,7 +143,7 @@ export function WhatsAppEmbeddedSignupButton({
         if (response.authResponse?.code) {
           const res = await fetch('/api/whatsapp/embedded-signup', {
             method: 'POST',
-            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            headers: buildRequestHeaders({ 'Content-Type': 'application/json' }),
             credentials: 'include',
             body: JSON.stringify({
               code: response.authResponse.code,
@@ -176,7 +188,7 @@ export function WhatsAppEmbeddedSignupButton({
         setLoading(false);
       }
     },
-    [handoffTicket, mode, onError, onSuccess],
+    [buildRequestHeaders, handoffTicket, mode, onError, onSuccess],
   );
 
   const launchSignupWithLoadedSdk = useCallback(
@@ -242,7 +254,7 @@ export function WhatsAppEmbeddedSignupButton({
 
         if (!resolvedAppId || !resolvedConfigId) {
           const cfgRes = await fetch('/api/whatsapp/config', {
-            headers: authHeaders(),
+            headers: buildRequestHeaders(),
             credentials: 'include',
           }).catch(() => null);
           if (cfgRes?.ok) {
@@ -269,7 +281,7 @@ export function WhatsAppEmbeddedSignupButton({
         setLoading(false);
       }
     })();
-  }, [configIdProp, metaAppIdProp, launchSignupWithLoadedSdk, onError]);
+  }, [buildRequestHeaders, configIdProp, metaAppIdProp, launchSignupWithLoadedSdk, onError]);
 
   return (
     <Button

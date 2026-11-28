@@ -39,6 +39,9 @@ export async function PUT(request: NextRequest) {
   if (!verified) {
     return NextResponse.json({ error: 'Expired or invalid handoff ticket' }, { status: 401 });
   }
+  if (verified.role === 'customer') {
+    return NextResponse.json({ error: 'Business account required' }, { status: 403 });
+  }
 
   const tokens = await issueAuthTokens(
     {
@@ -52,7 +55,19 @@ export async function PUT(request: NextRequest) {
     },
     getRefreshSessionMetadata(request),
   );
-  const res = NextResponse.json({ ok: true });
-  setAuthCookies(res.cookies, tokens);
+  const res = NextResponse.json(
+    {
+      ok: true,
+      token: tokens.accessToken,
+      user: {
+        id: verified.userId,
+        tenantId: verified.tenantId,
+        role: verified.role,
+        email: verified.email,
+      },
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
+  setAuthCookies(res.cookies, tokens, request);
   return res;
 }

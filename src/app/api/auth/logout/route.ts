@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { COOKIE_OPTIONS, REFRESH_COOKIE_OPTIONS } from '@/lib/auth';
+import { getAuthCookieOptions, REFRESH_COOKIE_OPTIONS } from '@/lib/auth';
 import { revokeRefreshSession } from '@/lib/auth-refresh-session';
 
 export async function POST(request: NextRequest) {
@@ -19,14 +19,15 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
+    const cookieOpts = getAuthCookieOptions(request);
     // Clear the auth cookie by setting maxAge to 0
     response.cookies.set({
-      ...COOKIE_OPTIONS,
+      ...cookieOpts.access,
       value: '',
       maxAge: 0,
     });
     response.cookies.set({
-      ...REFRESH_COOKIE_OPTIONS,
+      ...cookieOpts.refresh,
       value: '',
       maxAge: 0,
     });

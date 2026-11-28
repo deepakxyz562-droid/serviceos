@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  COOKIE_OPTIONS,
   getAuthUser,
   getRefreshSessionMetadata,
-  REFRESH_COOKIE_OPTIONS,
+  setAuthCookies,
 } from '@/lib/auth';
 import {
   issueSessionForSwitchedWorkspace,
@@ -52,8 +51,7 @@ export async function POST(request: NextRequest) {
       { headers: { 'Cache-Control': 'no-store' } },
     );
 
-    response.cookies.set({ ...COOKIE_OPTIONS, value: session.accessToken });
-    response.cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: session.refreshToken });
+    setAuthCookies(response.cookies, session, request);
     return response;
   } catch (err) {
     console.error('[api/bgos/workspaces/switch POST]', err);

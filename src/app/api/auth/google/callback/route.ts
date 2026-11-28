@@ -693,7 +693,7 @@ export async function GET(request: NextRequest) {
       }
 
       const response = NextResponse.redirect(buildSuccessUrl(baseUrl, false, false));
-      setAuthCookies(response.cookies, tokens);
+      setAuthCookies(response.cookies, tokens, request);
       response.cookies.set('mc_session', mpCustomer.id, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -782,7 +782,7 @@ export async function GET(request: NextRequest) {
 
         const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
         const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
-        setAuthCookies(response.cookies, tokens);
+        setAuthCookies(response.cookies, tokens, request);
         return response;
       }
 
@@ -812,7 +812,7 @@ export async function GET(request: NextRequest) {
       const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
       const needsOnboarding = !existingUser.tenant?.onboardingCompleted;
       const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone, needsOnboarding));
-      setAuthCookies(response.cookies, tokens);
+      setAuthCookies(response.cookies, tokens, request);
       return response;
     }
 
@@ -878,7 +878,7 @@ export async function GET(request: NextRequest) {
 
     const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
     const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
-    setAuthCookies(response.cookies, tokens);
+    setAuthCookies(response.cookies, tokens, request);
     return response;
   } catch (error) {
     console.error('Google OAuth callback error:', error);

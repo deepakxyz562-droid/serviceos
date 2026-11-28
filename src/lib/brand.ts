@@ -197,28 +197,67 @@ export function buildAdminUrl(): string {
   return `${url.protocol}//${BRAND.adminSubdomain}.${url.host}`;
 }
 
+function resolveCookieDomainForHost(rawHost: string): string | undefined {
+  const host = rawHost.trim().toLowerCase().split(':')[0];
+  if (!host || host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    return undefined;
+  }
+  // Product and www deployments on the canonical root domain share its apex cookie scope.
+  if (host === BRAND.domain || host.endsWith(`.${BRAND.domain}`)) return `.${BRAND.domain}`;
+  // Preview/standalone domains (including bgos.site) remain host-only unless explicitly configured.
+  const configured = process.env.AUTH_COOKIE_DOMAIN?.replace(/^\./, '').toLowerCase();
+  if (configured && (host === configured || host.endsWith(`.${configured}`))) return `.${configured}`;
+  return undefined;
+}
+
 /**
- * Get the cookie domain that works across all subdomains.
- * @example → '.fieseros.com' (production) | undefined (localhost)
+ * Get the cookie domain that works across subdomains of the active host.
+ * Accepts an incoming request (or host/URL) so deployments served from
+ * standalone domains such as `bgos.site` emit host-only cookies instead
+ * of `.fieseros.com` (which browsers on `bgos.site` reject).
  */
-export function getCookieDomain(): string | undefined {
+export function getCookieDomain(
+  requestOrHost?:
+    | { headers?: { get(name: string): string | null }; url?: string }
+    | string
+    | null,
+): string | undefined {
   // DEV OVERRIDE: always return undefined in development so cookies work on
   // 127.0.0.1 / localhost without the .fieseros.com domain mismatch.
   if (process.env.NODE_ENV !== 'production') return undefined;
+
+  if (typeof requestOrHost === 'string' && requestOrHost.trim()) {
+    try {
+      const host = requestOrHost.includes('://')
+        ? new URL(requestOrHost).hostname
+        : requestOrHost;
+      return resolveCookieDomainForHost(host);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (requestOrHost && typeof requestOrHost === 'object') {
+    const forwardedHost =
+      requestOrHost.headers?.get('x-forwarded-host') ||
+      requestOrHost.headers?.get('host');
+    if (forwardedHost) {
+      const primaryHost = forwardedHost.split(',')[0].trim();
+      if (primaryHost) return resolveCookieDomainForHost(primaryHost);
+    }
+    if (requestOrHost.url) {
+      try {
+        return resolveCookieDomainForHost(new URL(requestOrHost.url).hostname);
+      } catch {
+        return undefined;
+      }
+    }
+  }
+
   const appUrl = getAppUrl();
   if (!appUrl) return undefined;
   try {
-    const url = new URL(appUrl);
-    const host = url.hostname;
-    if (host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-      return undefined;
-    }
-    // Product and www deployments must share the apex cookie scope.
-    if (host === BRAND.domain || host.endsWith(`.${BRAND.domain}`)) return `.${BRAND.domain}`;
-    // Preview/custom domains remain host-only unless explicitly configured.
-    const configured = process.env.AUTH_COOKIE_DOMAIN?.replace(/^\./, '').toLowerCase();
-    if (configured && (host === configured || host.endsWith(`.${configured}`))) return `.${configured}`;
-    return undefined;
+    return resolveCookieDomainForHost(new URL(appUrl).hostname);
   } catch {
     return undefined;
   }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import WhatsAppConnectPage from '@/app/whatsapp-connect/page';
 
 let mockQueryString = '';
@@ -66,18 +66,29 @@ describe('/whatsapp-connect page auth gate & Meta onboarding guidance', () => {
     expect(screen.queryByRole('button', { name: /continue with facebook & whatsapp/i })).toBeNull();
   });
 
-  it('exchanges mobile ?ticket= via PUT /api/bgos/mobile-auth/handoff before loading config and Meta signup button', async () => {
+  it('exchanges mobile ?ticket= via PUT /api/bgos/mobile-auth/handoff and passes exchanged bearer token to auth/me, config, and signup', async () => {
     mockQueryString = 'product=bgos&client=mobile&returnUrl=bgos%3A%2F%2Fgbp-callback&ticket=tkt_fresh_1';
     window.history.replaceState(null, '', `/whatsapp-connect?${mockQueryString}`);
 
-    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    (window as any).FB = {
+      init: vi.fn(),
+      login: vi.fn((cb: any) => cb({ authResponse: { code: 'wa_code_mobile_1', state: 'st_m1' } })),
+    };
+
+    const calls: Array<{ url: string; method: string; body?: string; authHeader?: string }> = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
       const method = init?.method || 'GET';
-      calls.push({ url, method, body: typeof init?.body === 'string' ? init.body : undefined });
+      const hdrs = new Headers(init?.headers);
+      calls.push({
+        url,
+        method,
+        body: typeof init?.body === 'string' ? init.body : undefined,
+        authHeader: hdrs.get('authorization') || hdrs.get('Authorization') || undefined,
+      });
 
       if (url.includes('/api/bgos/mobile-auth/handoff')) {
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        return new Response(JSON.stringify({ ok: true, token: 'mobile_jwt_fallback_1' }), { status: 200 });
       }
       if (url.includes('/api/auth/me')) {
         return new Response(
@@ -91,23 +102,38 @@ describe('/whatsapp-connect page auth gate & Meta onboarding guidance', () => {
           { status: 200 },
         );
       }
+      if (url.includes('/api/whatsapp/embedded-signup')) {
+        return new Response(
+          JSON.stringify({ success: true, phoneNumberId: 'pn_1', wabaId: 'waba_1', coexistenceMode: true }),
+          { status: 200 },
+        );
+      }
       return new Response('{}', { status: 200 });
     });
 
     render(<WhatsAppConnectPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /continue with facebook & whatsapp/i }),
-      ).toBeTruthy();
-    });
+    const connectBtn = await waitFor(() =>
+      screen.getByRole('button', { name: /continue with facebook & whatsapp/i }),
+    );
+    expect(screen.getByText(/Just 1 popup step:/i)).toBeTruthy();
 
     expect(calls[0]).toEqual({
       url: '/api/bgos/mobile-auth/handoff',
       method: 'PUT',
       body: JSON.stringify({ ticket: 'tkt_fresh_1' }),
+      authHeader: undefined,
     });
-    expect(calls.some((c) => c.url.includes('/api/auth/me'))).toBe(true);
-    expect(screen.getByText(/Just 1 popup step:/i)).toBeTruthy();
+    const meCall = calls.find((c) => c.url.includes('/api/auth/me'));
+    const cfgCall = calls.find((c) => c.url.includes('/api/whatsapp/config'));
+    expect(meCall?.authHeader).toBe('Bearer mobile_jwt_fallback_1');
+    expect(cfgCall?.authHeader).toBe('Bearer mobile_jwt_fallback_1');
+
+    fireEvent.click(connectBtn);
+
+    await waitFor(() => {
+      const signupCall = calls.find((c) => c.url.includes('/api/whatsapp/embedded-signup'));
+      expect(signupCall?.authHeader).toBe('Bearer mobile_jwt_fallback_1');
+    });
   });
 });

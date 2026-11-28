@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         token,
         refreshToken: tokens.refreshToken,
       });
-      setAuthCookies(response.cookies, tokens);
+      setAuthCookies(response.cookies, tokens, request);
       return response;
     }
 
@@ -384,7 +384,7 @@ export async function POST(request: NextRequest) {
       token,
       refreshToken: tokens.refreshToken,
     });
-    setAuthCookies(response.cookies, tokens);
+    setAuthCookies(response.cookies, tokens, request);
     return response;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);

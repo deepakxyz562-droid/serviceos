@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
-    setAuthCookies(response.cookies, tokens);
+    setAuthCookies(response.cookies, tokens, request);
     return response;
   } catch (error) {
     if (error instanceof ProductAccessError) {

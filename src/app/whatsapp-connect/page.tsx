@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
@@ -17,10 +17,16 @@ import {
 import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
 import { authHeaders } from '@/lib/client-auth';
 
-// Deduplicate ticket-to-cookie exchange across React StrictMode remounts
-const handoffExchangePromises = new Map<string, Promise<boolean>>();
+type HandoffExchangeResult = {
+  ok: boolean;
+  status?: number;
+  token?: string | null;
+};
 
-function exchangeMobileHandoffTicket(ticket: string): Promise<boolean> {
+// Deduplicate ticket-to-session exchange across React StrictMode remounts
+const handoffExchangePromises = new Map<string, Promise<HandoffExchangeResult>>();
+
+function exchangeMobileHandoffTicket(ticket: string): Promise<HandoffExchangeResult> {
   const existing = handoffExchangePromises.get(ticket);
   if (existing) return existing;
 
@@ -30,8 +36,15 @@ function exchangeMobileHandoffTicket(ticket: string): Promise<boolean> {
     credentials: 'include',
     body: JSON.stringify({ ticket }),
   })
-    .then((res) => res.ok)
-    .catch(() => false);
+    .then(async (res) => {
+      const data = await res.json().catch(() => null);
+      return {
+        ok: res.ok,
+        status: res.status,
+        token: typeof data?.token === 'string' && data.token ? data.token : null,
+      };
+    })
+    .catch(() => ({ ok: false }));
 
   handoffExchangePromises.set(ticket, promise);
   return promise;
@@ -48,6 +61,8 @@ function WhatsAppConnectContent() {
   const returnUrl = rawReturnUrl || (isMobileClient ? 'bgos://gbp-callback' : '');
   const nextPath = searchParams.get('next') || '/integrations';
 
+  const handoffTokenRef = useRef<string | null>(null);
+  const [handoffToken, setHandoffToken] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthGateState>('checking');
   const [ticketExpired, setTicketExpired] = useState(false);
   const [mode, setMode] = useState<'coexistence' | 'cloud_api'>('coexistence');
@@ -83,19 +98,35 @@ function WhatsAppConnectContent() {
       setTicketExpired(false);
 
       if (ticket) {
-        const exchanged = await exchangeMobileHandoffTicket(ticket);
-        if (!exchanged && !cancelled) {
+        const exchange = await exchangeMobileHandoffTicket(ticket);
+        if (cancelled) return;
+        if (exchange.status === 403) {
+          setAuthState('customer_forbidden');
+          return;
+        }
+        if (!exchange.ok) {
           setTicketExpired(true);
-        } else if (exchanged && typeof window !== 'undefined') {
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('ticket');
-          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+        } else {
+          if (exchange.token) {
+            handoffTokenRef.current = exchange.token;
+            setHandoffToken(exchange.token);
+          }
+          if (typeof window !== 'undefined') {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('ticket');
+            window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+          }
         }
       }
 
+      const activeToken = handoffTokenRef.current;
+      const reqHeaders = authHeaders(
+        activeToken ? { Authorization: `Bearer ${activeToken}` } : undefined,
+      );
+
       try {
         const meRes = await fetch('/api/auth/me', {
-          headers: authHeaders(),
+          headers: reqHeaders,
           credentials: 'include',
           cache: 'no-store',
         });
@@ -114,7 +145,7 @@ function WhatsAppConnectContent() {
         setAuthState('authenticated');
 
         const cfgRes = await fetch('/api/whatsapp/config', {
-          headers: authHeaders(),
+          headers: reqHeaders,
           credentials: 'include',
           cache: 'no-store',
         }).catch(() => null);
@@ -377,6 +408,7 @@ function WhatsAppConnectContent() {
               label="Continue with Facebook & WhatsApp"
               mode={mode}
               handoffTicket={ticket}
+              authToken={handoffToken || undefined}
               configId={configMeta.embeddedConfigId || undefined}
               metaAppId={configMeta.metaAppId || undefined}
               onSuccess={handleSuccess}

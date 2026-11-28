@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    setAuthCookies(response.cookies, tokens);
+    setAuthCookies(response.cookies, tokens, request);
     return response;
   } catch (error) {
     if (error instanceof ProductAccessError) {

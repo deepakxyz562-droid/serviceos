@@ -22,6 +22,11 @@ export async function connectSocialPlatform(
   options?: { returnView?: string; oauthPath?: string; next?: string },
 ): Promise<{ error?: string }> {
   const ticket = await getMobileHandoffTicket();
+  if (platform === 'whatsapp' && !ticket) {
+    return {
+      error: 'Could not verify your BGOS mobile session. Please sign in to BGOS again or check your internet connection, then retry.',
+    };
+  }
   const returnUrl = 'bgos://gbp-callback';
   const authQuery = ticket ? `&ticket=${encodeURIComponent(ticket)}` : '';
   const returnView = options?.returnView || 'growth';

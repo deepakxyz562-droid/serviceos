@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
   generateToken,
+  getAuthCookieOptions,
   getRefreshSessionMetadata,
   COOKIE_OPTIONS,
   REFRESH_COOKIE_OPTIONS,
+  setAuthCookies,
   type AuthUser,
 } from '@/lib/auth';
 import { revokeRefreshSession, rotateRefreshSession } from '@/lib/auth-refresh-session';
@@ -136,8 +138,9 @@ export async function POST(request: NextRequest) {
         },
         { status: 401 },
       );
-      response.cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: '', maxAge: 0 });
-      response.cookies.set({ ...COOKIE_OPTIONS, value: '', maxAge: 0 });
+      const opts = getAuthCookieOptions(request);
+      response.cookies.set({ ...opts.refresh, value: '', maxAge: 0 });
+      response.cookies.set({ ...opts.access, value: '', maxAge: 0 });
       return response;
     }
 
@@ -170,8 +173,7 @@ export async function POST(request: NextRequest) {
       refreshToken: rotated.session.token,
       user: authUser,
     });
-    response.cookies.set({ ...COOKIE_OPTIONS, value: accessToken });
-    response.cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: rotated.session.token });
+    setAuthCookies(response.cookies, { accessToken, refreshToken: rotated.session.token }, request);
     return response;
   } catch (error) {
     log.error({ err: error }, 'auth/refresh: unexpected error');

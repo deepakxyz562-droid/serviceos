@@ -471,12 +471,27 @@ interface AuthCookieWriter {
   }): unknown;
 }
 
+export type CookieRequestContext = {
+  headers?: { get(name: string): string | null };
+  url?: string;
+};
+
+export function getAuthCookieOptions(request?: CookieRequestContext) {
+  const domain = getCookieDomain(request);
+  return {
+    access: { ...COOKIE_OPTIONS, domain },
+    refresh: { ...REFRESH_COOKIE_OPTIONS, domain },
+  };
+}
+
 export function setAuthCookies(
   cookies: AuthCookieWriter,
   tokens: { accessToken: string; refreshToken: string },
+  request?: CookieRequestContext,
 ): void {
-  cookies.set({ ...COOKIE_OPTIONS, value: tokens.accessToken });
-  cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: tokens.refreshToken });
+  const opts = getAuthCookieOptions(request);
+  cookies.set({ ...opts.access, value: tokens.accessToken });
+  cookies.set({ ...opts.refresh, value: tokens.refreshToken });
 }
 
 /**
