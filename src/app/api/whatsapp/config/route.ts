@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { getAuthUser } from '@/lib/auth';
 import { verifyHandoffTicket } from '@/lib/bgos-mobile-auth';
 import { resolveWhatsAppConfig, WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
+import { normalizeWhatsAppDigits, resolveCountryCode } from '@/lib/bgos-business-sanitizers';
 import { db } from '@/lib/db';
 
 function maskString(value: string): string {
@@ -42,34 +43,46 @@ export async function GET(request: NextRequest) {
       config.phoneNumberId &&
       config.source === 'tenant-own',
     );
+    let googleMapsWhatsappUrl: string | null = null;
+    let googleMapsWhatsappSynced = false;
+    let googleMapsWhatsappWarnings: string[] = [];
+    let resolvedCountry = 'US';
+    if (tenantId) {
+      const tenantRow = await db.tenant
+        .findUnique({
+          where: { id: tenantId },
+          select: { settingsJson: true, country: true, address: true, phone: true },
+        })
+        .catch(() => null);
+      if (tenantRow) {
+        let s: Record<string, any> = {};
+        if (tenantRow.settingsJson) {
+          try {
+            s = JSON.parse(tenantRow.settingsJson) as Record<string, any>;
+            googleMapsWhatsappUrl = s?.googlePlaceActions?.whatsappUri || s?.whatsappChatLink || null;
+            googleMapsWhatsappSynced = Boolean(s?.googlePlaceActions?.whatsappSyncedToGoogle);
+            if (Array.isArray(s?.googlePlaceActions?.whatsappWarnings)) {
+              googleMapsWhatsappWarnings = s.googlePlaceActions.whatsappWarnings.filter(
+                (w: unknown) => typeof w === 'string',
+              );
+            }
+          } catch {}
+        }
+        resolvedCountry = resolveCountryCode({
+          country: (typeof s?.country === 'string' ? s.country : null) || tenantRow.country,
+          address: (typeof s?.activeGbpAddress === 'string' ? s.activeGbpAddress : null) || tenantRow.address,
+          phone: config.displayPhoneNumber || tenantRow.phone,
+        });
+      }
+    }
+
     const phoneDigits = configured
-      ? (config.displayPhoneNumber || '').replace(/\D/g, '')
+      ? normalizeWhatsAppDigits(config.displayPhoneNumber, resolvedCountry) || ''
       : '';
     const waMeUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
     const qrCodeDataUrl = waMeUrl
       ? await QRCode.toDataURL(waMeUrl, { margin: 2, width: 320 }).catch(() => null)
       : null;
-
-    let googleMapsWhatsappUrl: string | null = null;
-    let googleMapsWhatsappSynced = false;
-    let googleMapsWhatsappWarnings: string[] = [];
-    if (tenantId) {
-      const tenantRow = await db.tenant
-        .findUnique({ where: { id: tenantId }, select: { settingsJson: true } })
-        .catch(() => null);
-      if (tenantRow?.settingsJson) {
-        try {
-          const s = JSON.parse(tenantRow.settingsJson) as Record<string, any>;
-          googleMapsWhatsappUrl = s?.googlePlaceActions?.whatsappUri || s?.whatsappChatLink || null;
-          googleMapsWhatsappSynced = Boolean(s?.googlePlaceActions?.whatsappSyncedToGoogle);
-          if (Array.isArray(s?.googlePlaceActions?.whatsappWarnings)) {
-            googleMapsWhatsappWarnings = s.googlePlaceActions.whatsappWarnings.filter(
-              (w: unknown) => typeof w === 'string',
-            );
-          }
-        } catch {}
-      }
-    }
 
     const embeddedConfigId = (
       process.env.NEXT_PUBLIC_WHATSAPP_EMBEDDED_CONFIG_ID ||

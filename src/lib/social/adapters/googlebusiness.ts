@@ -48,6 +48,7 @@
  *   the first publish attempt — see `src/lib/social/registry.ts`.
  */
 import { registerAdapter } from '@/lib/social/registry';
+import { normalizeWhatsAppDigits } from '@/lib/bgos-business-sanitizers';
 import type {
   PlatformAdapter,
   PlatformMetrics,
@@ -1874,6 +1875,7 @@ export interface GbpProfileUpdateInput {
   serviceItems?: Array<{ name: string; description?: string; categoryName?: string }>;
   attributes?: Record<string, boolean | string | string[]>;
   whatsappUrl?: string; // WhatsApp click-to-chat URL or phone
+  countryCode?: string;
   regionCode?: string;
 }
 
@@ -2178,9 +2180,15 @@ export async function updateGoogleBusinessProfile(
   // 4b. Direct WhatsApp Click-to-Chat attribute sync
   if (updates.whatsappUrl !== undefined && updates.whatsappUrl.trim()) {
     const rawWa = updates.whatsappUrl.trim();
-    const cleanDigits = rawWa.replace(/[^0-9]/g, '');
-    const normalizedDigits = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
-    const finalWaUri = rawWa.startsWith('http') ? rawWa : (normalizedDigits ? `https://wa.me/${normalizedDigits}` : '');
+    const normalizedDigits = normalizeWhatsAppDigits(
+      rawWa,
+      updates.countryCode || updates.regionCode,
+    );
+    const finalWaUri = rawWa.startsWith('http')
+      ? rawWa
+      : normalizedDigits
+        ? `https://wa.me/${normalizedDigits}`
+        : '';
     if (finalWaUri) {
       try {
         const waAttrRes = await fetch(

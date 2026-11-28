@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { resolveCountryCode } from '@/lib/bgos-business-sanitizers';
 import {
   buildOrderCustomerWhatsappMessage,
   buildWaMeUrl,
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
     const [tenant, waProvider, rows] = await Promise.all([
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { id: true, name: true, currency: true, country: true },
+        select: { id: true, name: true, currency: true, country: true, address: true, phone: true },
       }),
       db.communicationProvider.findFirst({
         where: { tenantId: user.tenantId, channel: 'whatsapp', isActive: true },
@@ -75,9 +76,14 @@ export async function GET(request: NextRequest) {
     }
 
     const currency = tenant.currency || (tenant.country === 'IN' ? 'INR' : 'USD');
+    const tenantCountry = resolveCountryCode({
+      country: tenant.country,
+      address: tenant.address,
+      phone: tenant.phone,
+    });
     const orders = rows
       .filter((r) => isProductOrderLead(r))
-      .map((r) => extractOrderFromLead(r, currency));
+      .map((r) => extractOrderFromLead(r, currency, tenantCountry));
 
     const pendingCount = orders.filter((o) => o.status === 'pending').length;
     const activeCount = orders.filter(
@@ -120,7 +126,7 @@ export async function PATCH(request: NextRequest) {
     const [tenant, existingLead] = await Promise.all([
       db.tenant.findUnique({
         where: { id: user.tenantId },
-        select: { id: true, name: true, currency: true, country: true },
+        select: { id: true, name: true, currency: true, country: true, address: true, phone: true },
       }),
       db.lead.findFirst({
         where: { id: orderId, tenantId: user.tenantId, deletedAt: null },
@@ -148,6 +154,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const currency = tenant.currency || (tenant.country === 'IN' ? 'INR' : 'USD');
+    const tenantCountry = resolveCountryCode({
+      country: tenant.country,
+      address: tenant.address,
+      phone: tenant.phone,
+    });
     const prevTags = safeParseArray(existingLead.tagsJson).filter(
       (t): t is string => typeof t === 'string' && !t.startsWith('order_status:'),
     );
@@ -190,7 +201,7 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    const updatedOrder = extractOrderFromLead(updatedRow, currency);
+    const updatedOrder = extractOrderFromLead(updatedRow, currency, tenantCountry);
     const customerMessage = buildOrderCustomerWhatsappMessage({
       businessName: tenant.name,
       orderNumber: formatOrderNumber(updatedOrder.id),
@@ -202,7 +213,7 @@ export async function PATCH(request: NextRequest) {
       currency,
       customMessage,
     });
-    const whatsappFallbackUrl = buildWaMeUrl(updatedOrder.customerPhone, customerMessage);
+    const whatsappFallbackUrl = buildWaMeUrl(updatedOrder.customerPhone, customerMessage, tenantCountry);
 
     let whatsappSent = false;
     let whatsappError: string | undefined;

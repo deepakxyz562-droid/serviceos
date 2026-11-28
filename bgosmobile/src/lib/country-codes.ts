@@ -203,3 +203,102 @@ export function buildE164(digits: string, country: CountryItem): string {
   const clean = digits.replace(/\D/g, '').slice(0, country.digits);
   return `+${country.callingCode}${clean}`;
 }
+
+const SORTED_COUNTRIES_BY_CALLING_CODE = [...COUNTRIES].sort(
+  (a, b) => b.callingCode.length - a.callingCode.length,
+);
+
+/**
+ * Normalizes a WhatsApp phone input or wa.me link into clean E.164 digits (no leading +),
+ * prepending the business country calling code when local digits omit a country prefix.
+ */
+export function formatWhatsAppDigits(
+  phone?: string | null,
+  countryCode?: string | null,
+): string | null {
+  if (!phone) return null;
+  const trimmed = phone.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    const waMatch = trimmed.match(/wa\.me\/(\d+)/i);
+    if (waMatch?.[1] && waMatch[1].length >= 7) {
+      return waMatch[1];
+    }
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  if (trimmed.startsWith('+')) return digits;
+  if (digits.startsWith('00') && digits.length >= 10) {
+    return digits.slice(2);
+  }
+  const country = getCountryByCode(countryCode || detectDeviceCountryAndTimezone().country.code);
+  const withoutZero = digits.startsWith('0') ? digits.slice(1) : digits;
+  if (withoutZero.length === country.digits && !withoutZero.startsWith(country.callingCode)) {
+    return `${country.callingCode}${withoutZero}`;
+  }
+  if (digits.length === country.digits && !digits.startsWith(country.callingCode)) {
+    return `${country.callingCode}${digits}`;
+  }
+  return digits;
+}
+
+export function buildMobileWaMeUrl(
+  phone?: string | null,
+  message?: string,
+  countryCode?: string | null,
+): string | null {
+  const digits = formatWhatsAppDigits(phone, countryCode);
+  if (!digits) return null;
+  return `https://wa.me/${digits}${message ? `?text=${encodeURIComponent(message)}` : ''}`;
+}
+
+export function splitPhoneForCountryPicker(
+  rawPhone?: string | null,
+  fallbackCountryCode?: string | null,
+): { country: CountryItem; nationalDigits: string } {
+  const fallback = getCountryByCode(
+    fallbackCountryCode || detectDeviceCountryAndTimezone().country.code,
+  );
+  const trimmed = String(rawPhone || '').trim();
+  if (!trimmed) return { country: fallback, nationalDigits: '' };
+
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return { country: fallback, nationalDigits: '' };
+
+  if (trimmed.startsWith('+') || digits.startsWith('00') || digits.length > fallback.digits) {
+    const clean = digits.startsWith('00') ? digits.slice(2) : digits;
+    const matched = SORTED_COUNTRIES_BY_CALLING_CODE.find(
+      (c) => clean.startsWith(c.callingCode) && clean.length - c.callingCode.length >= 7,
+    );
+    if (matched) {
+      return {
+        country: matched,
+        nationalDigits: clean.slice(matched.callingCode.length),
+      };
+    }
+  }
+
+  return {
+    country: fallback,
+    nationalDigits: digits.startsWith('0') ? digits.slice(1) : digits,
+  };
+}
+
+export function composeInternationalPhone(
+  inputText: string,
+  selectedCountry: CountryItem,
+): string {
+  const trimmed = inputText.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('+')) {
+    const digits = trimmed.replace(/\D/g, '');
+    return digits ? `+${digits}` : '';
+  }
+  if (trimmed.startsWith('00')) {
+    const digits = trimmed.replace(/\D/g, '');
+    return digits.length >= 10 ? `+${digits.slice(2)}` : '';
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  const withoutZero = digits.startsWith('0') ? digits.slice(1) : digits;
+  return `+${selectedCountry.callingCode}${withoutZero}`;
+}

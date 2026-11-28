@@ -405,10 +405,23 @@ export function resolveBusinessCurrency(input: {
 export function normalizeWhatsAppDigits(phone?: string | null, countryCode?: string | null): string | null {
   if (!phone) return null;
   const trimmed = phone.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    const waMatch = trimmed.match(/wa\.me\/(\d+)/i);
+    if (waMatch?.[1] && waMatch[1].length >= 7) {
+      return waMatch[1];
+    }
+  }
   const digits = trimmed.replace(/\D/g, '');
   if (digits.length < 7) return null;
   if (trimmed.startsWith('+')) return digits;
+  if (digits.startsWith('00') && digits.length >= 10) {
+    return digits.slice(2);
+  }
   const meta = getCountryLocaleMeta(countryCode || 'US');
+  const withoutLeadingZero = digits.startsWith('0') ? digits.slice(1) : digits;
+  if (withoutLeadingZero.length === meta.nationalDigits && !withoutLeadingZero.startsWith(meta.callingCode)) {
+    return `${meta.callingCode}${withoutLeadingZero}`;
+  }
   if (digits.length === meta.nationalDigits && !digits.startsWith(meta.callingCode)) {
     return `${meta.callingCode}${digits}`;
   }

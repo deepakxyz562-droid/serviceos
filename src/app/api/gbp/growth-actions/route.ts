@@ -25,6 +25,7 @@ import {
   type PendingGoogleUpdate,
 } from '@/lib/gbp/pending-update';
 import { sendBgosGbpUpdatePendingEmail } from '@/lib/emails/bgos/sender';
+import { normalizeWhatsAppDigits, resolveCountryCode } from '@/lib/bgos-business-sanitizers';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,6 +133,8 @@ export async function GET(request: NextRequest) {
           phone: true,
           whatsappPhone: true,
           whatsappConfigJson: true,
+          country: true,
+          address: true,
           slug: true,
           publicSlug: true,
         },
@@ -242,8 +245,12 @@ export async function GET(request: NextRequest) {
       tenant?.phone ||
       ''
     ).trim();
-    const cleanPhoneDigits = effectivePhone.replace(/[^0-9]/g, '');
-    const normalizedWhatsappDigits = cleanPhoneDigits.length === 10 ? `91${cleanPhoneDigits}` : cleanPhoneDigits;
+    const resolvedCountry = resolveCountryCode({
+      country: (typeof tenantSettings.country === 'string' ? tenantSettings.country : null) || tenant?.country,
+      address: (typeof tenantSettings.activeGbpAddress === 'string' ? tenantSettings.activeGbpAddress : null) || tenant?.address,
+      phone: effectivePhone || tenant?.phone,
+    });
+    const normalizedWhatsappDigits = normalizeWhatsAppDigits(effectivePhone, resolvedCountry) || '';
     const defaultWhatsappUrl = normalizedWhatsappDigits ? `https://wa.me/${normalizedWhatsappDigits}` : '';
     const activeWhatsappUrl = String(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink || defaultWhatsappUrl).trim();
     const hasWhatsappChat = Boolean(tenantSettings.googlePlaceActions?.whatsappUri || tenantSettings.whatsappChatLink);

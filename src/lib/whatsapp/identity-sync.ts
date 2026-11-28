@@ -9,6 +9,7 @@ import {
   type PendingGoogleUpdate,
 } from '@/lib/gbp/pending-update';
 import { sendBgosGbpUpdatePendingEmail } from '@/lib/emails/bgos/sender';
+import { normalizeWhatsAppDigits, resolveCountryCode } from '@/lib/bgos-business-sanitizers';
 
 export interface WhatsAppIdentitySyncInput {
   tenantId: string;
@@ -38,28 +39,29 @@ function safeParseSettings(raw?: string | null): Record<string, any> {
 }
 
 /**
- * Normalizes a phone number or wa.me link into canonical WhatsApp digits + click-to-chat URL.
+ * Normalizes a phone number or wa.me link into canonical WhatsApp digits + click-to-chat URL,
+ * prepending the business country calling code when local digits omit a prefix.
  */
-export function buildWhatsAppChatLink(phoneOrUrl?: string | null): {
+export function buildWhatsAppChatLink(
+  phoneOrUrl?: string | null,
+  countryCode?: string | null,
+): {
   phone: string;
   whatsappUrl: string;
 } {
   const raw = String(phoneOrUrl || '').trim();
   if (!raw) return { phone: '', whatsappUrl: '' };
 
-  if (/^https?:\/\//i.test(raw)) {
-    const digitsMatch = raw.match(/wa\.me\/(\d+)/i);
+  const normalizedDigits = normalizeWhatsAppDigits(raw, countryCode);
+  if (!normalizedDigits) {
     return {
-      phone: digitsMatch?.[1] ? `+${digitsMatch[1]}` : raw,
-      whatsappUrl: raw,
+      phone: raw,
+      whatsappUrl: /^https?:\/\//i.test(raw) ? raw : '',
     };
   }
 
-  const cleanDigits = raw.replace(/\D/g, '');
-  if (!cleanDigits) return { phone: raw, whatsappUrl: '' };
-  const normalizedDigits = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
   return {
-    phone: raw.startsWith('+') ? raw : `+${normalizedDigits}`,
+    phone: `+${normalizedDigits}`,
     whatsappUrl: `https://wa.me/${normalizedDigits}`,
   };
 }
@@ -86,6 +88,8 @@ export async function syncTenantWhatsAppIdentity(
       settingsJson: true,
       phone: true,
       whatsappPhone: true,
+      country: true,
+      address: true,
     },
   });
 
@@ -98,9 +102,15 @@ export async function syncTenantWhatsAppIdentity(
     String(settings.bookingPageConfig?.whatsapp || '').trim() ||
     String(tenant?.phone || '').trim();
 
+  const effectiveCountry = resolveCountryCode({
+    country: (typeof settings.country === 'string' ? settings.country : null) || tenant?.country,
+    address: (typeof settings.activeGbpAddress === 'string' ? settings.activeGbpAddress : null) || tenant?.address,
+    phone: resolvedInput || tenant?.phone,
+  });
+
   const fromUrl = params.whatsappUrl?.trim()
-    ? buildWhatsAppChatLink(params.whatsappUrl.trim())
-    : buildWhatsAppChatLink(resolvedInput);
+    ? buildWhatsAppChatLink(params.whatsappUrl.trim(), effectiveCountry)
+    : buildWhatsAppChatLink(resolvedInput, effectiveCountry);
 
   const phone = fromUrl.phone || resolvedInput;
   const whatsappUrl = fromUrl.whatsappUrl;
@@ -162,6 +172,7 @@ export async function syncTenantWhatsAppIdentity(
         if (googleAccount?.accessToken) {
           const gbpRes = await updateGoogleBusinessProfile(googleAccount, {
             whatsappUrl,
+            countryCode: effectiveCountry,
           });
           syncedToGoogle = gbpRes.appliedMasks.includes('attributes/url_whatsapp');
           if (gbpRes.warnings.length > 0) {

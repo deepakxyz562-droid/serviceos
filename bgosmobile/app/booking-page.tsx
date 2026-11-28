@@ -26,6 +26,7 @@ import { invalidateResourceScope } from '../src/lib/resource-cache';
 import { BGOS_PUBLIC_WEB_URL } from '../src/lib/constants';
 import { normalizePendingUpload, uploadFileToStorage } from '../src/lib/upload';
 import { BookingLinkModal } from '../src/components/gbp/booking-link-modal';
+import { WhatsAppNumberField } from '../src/components/whatsapp-number-field';
 import type { GbpPlaceResult } from '../src/components/gbp/types';
 import type { BgosPageVisibility, BgosWorkspace } from '../../shared/bgos-contracts';
 
@@ -1113,12 +1114,12 @@ export default function BusinessPageSettingsScreen() {
                   onChangeText={(v) => setField('phone', v)}
                   keyboardType="phone-pad"
                 />
-                <Field
+                <WhatsAppNumberField
                   label="WhatsApp Number"
                   value={config.whatsapp || ''}
-                  onChangeText={(v) => setField('whatsapp', v)}
-                  keyboardType="phone-pad"
-                  placeholder="+91 98765 43210"
+                  onChange={(v) => setField('whatsapp', v)}
+                  defaultCountryCode={workspace.data?.locale?.country}
+                  helperText="Country code is included automatically for your WhatsApp button."
                 />
                 <Field
                   label="Email Address"

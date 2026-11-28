@@ -38,6 +38,7 @@ import { withProtectedRoute } from '../src/components/navigation/protected-route
 import {
   COUNTRIES,
   CountryItem,
+  buildMobileWaMeUrl,
   detectDeviceCountryAndTimezone,
   getCountryByCode,
 } from '../src/lib/country-codes';
@@ -362,11 +363,13 @@ export function LeadsView({ embedded = false }: { embedded?: boolean }) {
   }
 
   function whatsAppLead(phoneNum: string, leadName: string, customBody?: string) {
-    const digits = phoneNum.replace(/\D/g, '');
     const msg = customBody || `Hi ${leadName}, thank you for contacting us!`;
-    Linking.openURL(
-      `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
-    ).catch(() => {
+    const url = buildMobileWaMeUrl(phoneNum, msg, workspaceRes.data?.locale?.country);
+    if (!url) {
+      setError('Invalid phone number for WhatsApp.');
+      return;
+    }
+    Linking.openURL(url).catch(() => {
       setError('Could not open WhatsApp.');
     });
   }

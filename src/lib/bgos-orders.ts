@@ -1,3 +1,4 @@
+import { normalizeWhatsAppDigits } from '@/lib/bgos-business-sanitizers';
 import type {
   BgosFulfillmentMode,
   BgosOrderItem,
@@ -48,16 +49,21 @@ function safeParseJson<T>(raw: string | null | undefined, fallback: T): T {
 }
 
 /**
- * Format numeric phone into clean digits for WhatsApp wa.me links.
+ * Format phone into country-aware canonical digits for WhatsApp wa.me links.
  */
-export function normalizePhoneDigitsForWa(phone: string | null | undefined): string | null {
-  const digits = String(phone || '').replace(/[^0-9]/g, '');
-  if (digits.length < 7 || digits.length > 15) return null;
-  return digits;
+export function normalizePhoneDigitsForWa(
+  phone: string | null | undefined,
+  countryCode?: string | null,
+): string | null {
+  return normalizeWhatsAppDigits(phone, countryCode);
 }
 
-export function buildWaMeUrl(phone: string | null | undefined, message?: string): string | null {
-  const digits = normalizePhoneDigitsForWa(phone);
+export function buildWaMeUrl(
+  phone: string | null | undefined,
+  message?: string,
+  countryCode?: string | null,
+): string | null {
+  const digits = normalizePhoneDigitsForWa(phone, countryCode);
   if (!digits) return null;
   const query = message ? `?text=${encodeURIComponent(message)}` : '';
   return `https://wa.me/${digits}${query}`;
@@ -238,6 +244,7 @@ function extractCustomerNotes(description: string | null): string | null {
 export function extractOrderFromLead(
   lead: LeadOrderRow,
   currency = 'INR',
+  countryCode?: string | null,
 ): BgosProductOrder {
   const rawItems = safeParseJson<unknown[]>(lead.lineItemsJson, []);
   const parsedItems: BgosOrderItem[] = Array.isArray(rawItems)
@@ -285,6 +292,8 @@ export function extractOrderFromLead(
     currency,
   });
 
+  const effectiveCountry = countryCode || (currency === 'INR' ? 'IN' : 'US');
+
   return {
     id: lead.id,
     orderNumber,
@@ -298,7 +307,7 @@ export function extractOrderFromLead(
     currency,
     status,
     leadStatus: lead.status,
-    whatsappUrl: buildWaMeUrl(lead.phone, msg),
+    whatsappUrl: buildWaMeUrl(lead.phone, msg, effectiveCountry),
     createdAt: new Date(lead.createdAt).toISOString(),
     updatedAt: new Date(lead.updatedAt).toISOString(),
   };

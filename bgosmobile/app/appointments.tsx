@@ -20,6 +20,7 @@ import { DateTimeField } from '../src/components/booking/date-time-field';
 import { localDay, futureLocalTime } from '../src/lib/dates';
 import { WEB_URL } from '../src/lib/constants';
 import { withProtectedRoute } from '../src/components/navigation/protected-route';
+import { buildMobileWaMeUrl } from '../src/lib/country-codes';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
 type Booking = {
@@ -460,7 +461,6 @@ export function AppointmentsView({ embedded = false }: { embedded?: boolean }) {
               {b.customerPhone && !['cancelled', 'completed'].includes(b.status) ? (
                 <Pressable
                   onPress={() => {
-                    const digits = String(b.customerPhone).replace(/[^0-9]/g, '');
                     const timeLabel = b.scheduledAt
                       ? new Date(b.scheduledAt).toLocaleString([], {
                           weekday: 'short',
@@ -470,10 +470,15 @@ export function AppointmentsView({ embedded = false }: { embedded?: boolean }) {
                           minute: '2-digit',
                         })
                       : 'soon';
-                    const msg = encodeURIComponent(
-                      `Hi ${b.customerName || 'there'}, this is a friendly reminder for your "${b.title}" appointment scheduled on ${timeLabel}. Reply if you need any changes!`,
+                    const msg = `Hi ${b.customerName || 'there'}, this is a friendly reminder for your "${b.title}" appointment scheduled on ${timeLabel}. Reply if you need any changes!`;
+                    const url = buildMobileWaMeUrl(
+                      b.customerPhone,
+                      msg,
+                      workspace.data?.locale?.country,
                     );
-                    void Linking.openURL(`https://wa.me/${digits}?text=${msg}`).catch(() => {});
+                    if (url) {
+                      void Linking.openURL(url).catch(() => {});
+                    }
                   }}
                   style={{
                     flexDirection: 'row',

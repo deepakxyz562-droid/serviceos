@@ -326,11 +326,13 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
     fetchSpy.mockRestore();
   });
 
-  it('syncTenantWhatsAppIdentity normalizes WhatsApp number, ensures active AI chatbot, and pushes Google Business attribute', async () => {
+  it('syncTenantWhatsAppIdentity normalizes WhatsApp number using tenant country, ensures active AI chatbot, and pushes Google Business attribute', async () => {
     mockDb.tenant.findUnique.mockResolvedValue({
       settingsJson: JSON.stringify({}),
       phone: null,
       whatsappPhone: null,
+      country: 'IN',
+      address: 'Patna, Bihar',
     });
     mockPrepareGoogleAccount.mockResolvedValue({ accessToken: 'gbp_tok', accountId: 'loc_1' });
     mockUpdateGbpProfile.mockResolvedValue({
@@ -354,7 +356,7 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
     expect(mockEnsureChatbot).toHaveBeenCalledWith('ten_gbp_1', { triggerSource: 'whatsapp_connect' });
     expect(mockUpdateGbpProfile).toHaveBeenCalledWith(
       { accessToken: 'gbp_tok', accountId: 'loc_1' },
-      { whatsappUrl: 'https://wa.me/919876543210' },
+      { whatsappUrl: 'https://wa.me/919876543210', countryCode: 'IN' },
     );
     expect(mockSetPendingUpdate).toHaveBeenCalledTimes(1);
     expect(mockDb.tenant.update).toHaveBeenCalledWith(
@@ -365,6 +367,38 @@ describe('BGOS WhatsApp AI, Lead Welcome & Brochure Campaign Flows', () => {
         }),
       }),
     );
+
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: JSON.stringify({}),
+      phone: null,
+      whatsappPhone: null,
+      country: 'US',
+      address: 'Fremont, CA',
+    });
+    const usRes = await syncTenantWhatsAppIdentity({
+      tenantId: 'ten_gbp_us',
+      phone: '8445783056',
+      syncChatbot: false,
+      syncGoogleBusiness: false,
+    });
+    expect(usRes.phone).toBe('+18445783056');
+    expect(usRes.whatsappUrl).toBe('https://wa.me/18445783056');
+
+    mockDb.tenant.findUnique.mockResolvedValue({
+      settingsJson: JSON.stringify({}),
+      phone: null,
+      whatsappPhone: null,
+      country: 'AE',
+      address: 'Dubai, UAE',
+    });
+    const aeRes = await syncTenantWhatsAppIdentity({
+      tenantId: 'ten_gbp_ae',
+      phone: '0501234567',
+      syncChatbot: false,
+      syncGoogleBusiness: false,
+    });
+    expect(aeRes.phone).toBe('+971501234567');
+    expect(aeRes.whatsappUrl).toBe('https://wa.me/971501234567');
   });
 
   it('POST /api/whatsapp/manual-config and GET /api/whatsapp/config surface Google Maps sync status and warnings', async () => {

@@ -41,6 +41,7 @@ vi.mock('@/lib/whatsapp-send', () => ({ sendWhatsAppMessage: mockSendWhatsAppMes
 
 import { resolveTenantPublicUrls } from '@/lib/gbp/place-actions-sync';
 import {
+  buildWaMeUrl,
   extractOrderFromLead,
   isProductOrderLead,
   resolveOrderItemsForSubmission,
@@ -278,5 +279,17 @@ describe('BGOS Product Ordering, Storefront Bag & Domain Consistency', () => {
     expect(data.order.status).toBe('confirmed');
     expect(data.whatsappSent).toBe(false);
     expect(data.whatsappFallbackUrl).toContain('https://wa.me/919999988888?text=');
+  });
+
+  it('adds business country calling code when customer phone omits country code', () => {
+    expect(buildWaMeUrl('9876543210', 'Order ready', 'IN')).toBe(
+      'https://wa.me/919876543210?text=Order%20ready',
+    );
+    expect(buildWaMeUrl('8445783056', 'Order ready', 'US')).toBe(
+      'https://wa.me/18445783056?text=Order%20ready',
+    );
+    expect(buildWaMeUrl('0501234567', 'Order ready', 'AE')).toBe(
+      'https://wa.me/971501234567?text=Order%20ready',
+    );
   });
 });

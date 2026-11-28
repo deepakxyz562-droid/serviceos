@@ -25,6 +25,7 @@ import { extractCityOrLocality } from '../src/lib/address';
 import { MediaMetadataSheet } from '../src/components/gbp/media-metadata-sheet';
 import { PendingUpdateBanner } from '../src/components/gbp/pending-update-banner';
 import { BookingLinkModal } from '../src/components/gbp/booking-link-modal';
+import { WhatsAppNumberField } from '../src/components/whatsapp-number-field';
 import type { GbpPhoto, GbpPlaceResult, PhotosResponse, SocialPost } from '../src/components/gbp/types';
 import type { BgosWorkspace } from '../src/types/bgos-contracts';
 
@@ -2252,22 +2253,15 @@ export default function ManageGoogleProfileScreen() {
         }
       >
         <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
-          Syncs your WhatsApp Business number to Google Business Profile (where supported by Google), your BGOS Booking Page, and automated alerts.
+          Syncs your WhatsApp Business number (with country code) to Google Business Profile, your BGOS Booking Page, and automated alerts so the WhatsApp chat icon stays visible.
         </Text>
 
-        <View style={{ gap: 6 }}>
-          <Text style={ui.caption}>WhatsApp Number (with country code)</Text>
-          <TextInput
-            value={editCommPhone}
-            onChangeText={setEditCommPhone}
-            style={ui.input}
-            keyboardType="phone-pad"
-            textContentType="telephoneNumber"
-            autoComplete="tel"
-            placeholder="+91 85059 45123"
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
+        <WhatsAppNumberField
+          label="WhatsApp Number"
+          value={editCommPhone}
+          onChange={setEditCommPhone}
+          defaultCountryCode={workspaceRes.data?.locale?.country}
+        />
       </BottomSheetModal>
 
       {/* ── Modal: AI Reply Salutation ──────────────────────── */}

@@ -221,9 +221,17 @@ describe('currency, WhatsApp & hours helpers', () => {
     ).toBe('INR');
   });
 
-  it('normalizes national 10-digit WhatsApp numbers using country code', () => {
+  it('normalizes national WhatsApp numbers with and without country codes across countries', () => {
     expect(normalizeWhatsAppDigits('8505945123', 'IN')).toBe('918505945123');
+    expect(normalizeWhatsAppDigits('08505945123', 'IN')).toBe('918505945123');
+    expect(normalizeWhatsAppDigits('00918505945123', 'IN')).toBe('918505945123');
     expect(normalizeWhatsAppDigits('+91 85059 45123', 'IN')).toBe('918505945123');
+    expect(normalizeWhatsAppDigits('8445783056', 'US')).toBe('18445783056');
+    expect(normalizeWhatsAppDigits('501234567', 'AE')).toBe('971501234567');
+    expect(normalizeWhatsAppDigits('0501234567', 'AE')).toBe('971501234567');
+    expect(normalizeWhatsAppDigits('81234567', 'SG')).toBe('6581234567');
+    expect(normalizeWhatsAppDigits('https://wa.me/918505945123?text=hi', 'US')).toBe('918505945123');
+    expect(normalizeWhatsAppDigits('12345', 'IN')).toBeNull();
   });
 
   it('parses schedule & evaluates open status cleanly', () => {

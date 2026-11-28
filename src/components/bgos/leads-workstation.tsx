@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
+import { normalizeWhatsAppDigits } from '@/lib/bgos-business-sanitizers';
 import {
   Dialog,
   DialogContent,
@@ -243,9 +244,8 @@ function getInitials(name?: string | null): string {
     .toUpperCase();
 }
 
-function cleanPhoneForWhatsApp(raw?: string | null): string {
-  if (!raw) return '';
-  return raw.replace(/[^0-9]/g, '');
+function cleanPhoneForWhatsApp(raw?: string | null, countryCode?: string | null): string {
+  return normalizeWhatsAppDigits(raw, countryCode) || '';
 }
 
 const FALLBACK_SERVICE_OPTIONS = [
@@ -266,6 +266,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
 
   const [workspaceCurrency, setWorkspaceCurrency] = useState<string>('USD');
   const [workspaceLocale, setWorkspaceLocale] = useState<string>('en-US');
+  const [workspaceCountry, setWorkspaceCountry] = useState<string>('US');
   const [callingCodeHint, setCallingCodeHint] = useState<string>('1');
   const [serviceOptions, setServiceOptions] = useState<string[]>([]);
   const [matchedCustomerName, setMatchedCustomerName] = useState<string | null>(null);
@@ -340,6 +341,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
           const ws = await wsRes.json().catch(() => null);
           if (ws?.billing?.currency) setWorkspaceCurrency(ws.billing.currency);
           if (ws?.locale?.locale) setWorkspaceLocale(ws.locale.locale);
+          if (ws?.locale?.country) setWorkspaceCountry(String(ws.locale.country));
           if (ws?.locale?.callingCode) setCallingCodeHint(String(ws.locale.callingCode).replace(/^\+/, ''));
         }
 
@@ -876,7 +878,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                     </div>
                   ) : (
                     stageLeads.map((lead) => {
-                      const cleanPhone = cleanPhoneForWhatsApp(lead.phone);
+                      const cleanPhone = cleanPhoneForWhatsApp(lead.phone, workspaceCountry);
                       return (
                         <div
                           key={lead.id}
@@ -1006,7 +1008,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                 ) : (
                   filteredLeads.map((lead) => {
                     const conf = STAGE_CONFIG[lead.status] || STAGE_CONFIG.new;
-                    const cleanPhone = cleanPhoneForWhatsApp(lead.phone);
+                    const cleanPhone = cleanPhoneForWhatsApp(lead.phone, workspaceCountry);
                     return (
                       <tr
                         key={lead.id}
@@ -1402,7 +1404,7 @@ export function BgosLeadsWorkstation({ isDemo = false }: { isDemo?: boolean }) {
                       {selectedLead.phone}
                     </span>
                     <a
-                      href={`https://wa.me/${cleanPhoneForWhatsApp(selectedLead.phone)}`}
+                      href={`https://wa.me/${cleanPhoneForWhatsApp(selectedLead.phone, workspaceCountry)}`}
                       target="_blank"
                       rel="noreferrer"
                       className="size-6 inline-flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition"

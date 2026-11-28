@@ -40,6 +40,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
+import { normalizeWhatsAppDigits } from '@/lib/bgos-business-sanitizers';
 import type {
   BgosPublicActivity,
   BgosPublicBusinessProfile,
@@ -395,12 +396,10 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
   }, [qrDataUrl, profile.slug]);
 
   const cleanWaDigits = useMemo(() => {
-    const raw = profile.whatsappDigits || profile.whatsappPhone || profile.phone || '';
-    const digits = raw.replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.length === 10) return `91${digits}`;
-    return digits;
-  }, [profile.whatsappDigits, profile.whatsappPhone, profile.phone]);
+    if (profile.whatsappDigits) return profile.whatsappDigits;
+    const raw = profile.whatsappPhone || profile.phone || '';
+    return normalizeWhatsAppDigits(raw, profile.country) || '';
+  }, [profile.whatsappDigits, profile.whatsappPhone, profile.phone, profile.country]);
 
   const scrollToInquiry = useCallback((message?: string) => {
     if (message) {
@@ -2595,9 +2594,7 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                     if (!res.ok) {
                       setOrderError(data.error || 'Could not place order.');
                     } else {
-                      const waNumber =
-                        profile.whatsappDigits ||
-                        (profile.whatsappPhone || profile.phone || '').replace(/[^0-9]/g, '');
+                      const waNumber = cleanWaDigits;
                       const waText = `Hi ${profile.businessName}, I placed order ${data.orderNumber || ''} (${orderFulfillment}):\n${snapshotItems
                         .map(
                           (i) =>
@@ -2773,9 +2770,9 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                 </button>
 
                 <div className="flex flex-wrap gap-2">
-                  {(profile.whatsappDigits || profile.whatsappPhone || profile.phone) && (
+                  {cleanWaDigits && (
                     <a
-                      href={`https://wa.me/${profile.whatsappDigits || (profile.whatsappPhone || profile.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                      href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
                         `Hi ${profile.businessName}, I want to order (${orderFulfillment}):\n${bagItems
                           .map((i) => `• ${i.quantity}x ${i.product.name}`)
                           .join('\n')}${bagSubtotal > 0 ? `\nTotal: ${formatCurrency(bagSubtotal, profile.currency)}` : ''}${orderName ? `\nName: ${orderName}` : ''}`,
