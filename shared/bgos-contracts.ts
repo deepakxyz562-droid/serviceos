@@ -42,6 +42,34 @@ export interface BgosSocialProfiles {
   youtube?: string;
 }
 
+export type BgosOrderStatus = 'pending' | 'confirmed' | 'ready' | 'completed' | 'cancelled';
+
+export interface BgosOrderItem {
+  productId?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number | null;
+  lineTotal: number | null;
+}
+
+export interface BgosProductOrder {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  fulfillment: BgosFulfillmentMode;
+  address?: string | null;
+  notes?: string | null;
+  items: BgosOrderItem[];
+  totalAmount: number;
+  currency: string;
+  status: BgosOrderStatus;
+  leadStatus: string;
+  whatsappUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BgosWorkspace {
   name: string;
   mode: 'local' | 'agency';

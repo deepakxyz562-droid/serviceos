@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -289,6 +291,131 @@ export function Screen({
 
 export function Card({ children, style }: { children: React.ReactNode; style?: object }) {
   return <View style={[ui.card, style]}>{children}</View>;
+}
+
+/**
+ * Keyboard-safe bottom-sheet modal with backdrop keyboard dismiss, explicit
+ * Done button for iOS numeric/phone pads, scrollable body, and pinned footer.
+ */
+export function BottomSheetModal({
+  visible,
+  onClose,
+  title,
+  titleIcon,
+  headerExtra,
+  footer,
+  children,
+  maxHeight = '88%',
+  disableClose = false,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  titleIcon?: React.ReactNode;
+  headerExtra?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+  maxHeight?: `${number}%` | number;
+  disableClose?: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardVisible(false);
+      return;
+    }
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const subShow = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+    const subHide = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [visible]);
+
+  const handleBackdropPress = () => {
+    if (keyboardVisible) {
+      Keyboard.dismiss();
+      return;
+    }
+    if (!disableClose) onClose();
+  };
+
+  const handleClosePress = () => {
+    Keyboard.dismiss();
+    if (!disableClose) onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleBackdropPress}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <Pressable
+          accessibilityLabel={keyboardVisible ? 'Dismiss keyboard' : 'Close dialog'}
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(15,23,42,0.5)' }]}
+          onPress={handleBackdropPress}
+        />
+        <View
+          style={[
+            ui.sheetCard,
+            {
+              maxHeight,
+              paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 16) + 4,
+            },
+          ]}
+        >
+          <View style={ui.sheetHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 }}>
+              {titleIcon}
+              <Text style={ui.sheetTitle} numberOfLines={2}>
+                {title}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {keyboardVisible ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss keyboard"
+                  onPress={() => Keyboard.dismiss()}
+                  style={ui.sheetDoneBtn}
+                >
+                  <Text style={ui.sheetDoneText}>Done</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={10}
+                disabled={disableClose}
+                onPress={handleClosePress}
+                style={{ opacity: disableClose ? 0.4 : 1, padding: 2 }}
+              >
+                <MaterialIcons name="close" size={22} color={colors.muted} />
+              </Pressable>
+            </View>
+          </View>
+
+          {headerExtra}
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            contentContainerStyle={{ gap: 12, paddingBottom: 6 }}
+          >
+            {children}
+          </ScrollView>
+
+          {footer ? <View style={ui.sheetFooter}>{footer}</View> : null}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }
 
 export function Action({
@@ -859,5 +986,42 @@ export const ui = StyleSheet.create({
     borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.ink,
+    flexShrink: 1,
+  },
+  sheetDoneBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.softHover,
+  },
+  sheetDoneText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.brandDark,
+  },
+  sheetFooter: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
 });

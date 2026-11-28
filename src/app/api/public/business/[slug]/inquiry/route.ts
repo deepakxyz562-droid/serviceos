@@ -13,12 +13,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { notifyOwner } from '@/lib/owner-notifications';
+import { parseBgosProducts } from '@/lib/bgos-store-catalog';
+import { formatOrderNumber, resolveOrderItemsForSubmission } from '@/lib/bgos-orders';
 
 export const runtime = 'nodejs';
 
 const RATE_LIMIT = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const RATE_LIMIT_MAX = 15;
+
+const orderItemSchema = z.object({
+  productId: z.string().trim().max(120).optional(),
+  name: z.string().trim().min(1).max(160),
+  quantity: z.number().int().min(1).max(99),
+  unitPrice: z.number().min(0).max(10_000_000).nullable().optional(),
+});
 
 const inquirySchema = z.object({
   name: z.string().trim().min(2, 'Please enter your name').max(160),
@@ -33,6 +42,13 @@ const inquirySchema = z.object({
   serviceName: z.string().trim().max(160).optional(),
   address: z.string().trim().max(300).optional(),
   message: z.string().trim().max(2000).optional(),
+  order: z
+    .object({
+      fulfillment: z.enum(['pickup', 'delivery', 'food_order', 'in_store']).optional(),
+      notes: z.string().trim().max(1000).optional(),
+      items: z.array(orderItemSchema).min(1).max(50),
+    })
+    .optional(),
 });
 
 function getVisitorFingerprint(req: NextRequest): string {
@@ -97,7 +113,7 @@ export async function POST(
       );
     }
 
-    const { name, phone, email, serviceId, serviceName, address, message } = parsed.data;
+    const { name, phone, email, serviceId, serviceName, address, message, order } = parsed.data;
     const phoneDigits = phone.replace(/[^0-9]/g, '');
     if (phoneDigits.length < 7 || phoneDigits.length > 15) {
       return NextResponse.json(
@@ -116,6 +132,9 @@ export async function POST(
         slug: true,
         publicSlug: true,
         publicProfileEnabled: true,
+        currency: true,
+        country: true,
+        settingsJson: true,
       },
     });
 
@@ -136,7 +155,26 @@ export async function POST(
     const cleanEmail = email || undefined;
     const cleanAddress = address || undefined;
     const cleanMessage = message || undefined;
-    const effectiveServiceName = resolvedService?.name || serviceName || undefined;
+    const currency = tenant.currency || (tenant.country === 'IN' ? 'INR' : 'USD');
+    const currencySymbol = currency === 'INR' ? '₹' : '$';
+
+    const catalogProducts = order ? parseBgosProducts(tenant.settingsJson) : [];
+    const resolvedOrder = order
+      ? resolveOrderItemsForSubmission(order.items, catalogProducts)
+      : null;
+    const fulfillmentMode = order?.fulfillment || 'pickup';
+    const fulfillmentLabel =
+      fulfillmentMode === 'delivery'
+        ? 'Local Delivery'
+        : fulfillmentMode === 'food_order'
+          ? 'Food Order'
+          : 'Store Pickup';
+    const orderItemsText = resolvedOrder
+      ? resolvedOrder.items.map((item) => `${item.quantity}x ${item.name}`).join(', ')
+      : '';
+    const effectiveServiceName = resolvedOrder
+      ? `[Order ${resolvedOrder.items.reduce((s, i) => s + i.quantity, 0)}x] ${resolvedOrder.items[0]?.name || 'Order'}${resolvedOrder.items.length > 1 ? ` +${resolvedOrder.items.length - 1} more` : ''}`.slice(0, 160)
+      : resolvedService?.name || serviceName || undefined;
 
     let customer: { id: string; name: string; phone: string; email: string | null } | null = null;
     try {
@@ -163,14 +201,38 @@ export async function POST(
       console.warn('[bgos/inquiry] Customer resolve warning:', err);
     }
 
-    const isProductOrder = Boolean(effectiveServiceName?.startsWith('[Order'));
-    const title = isProductOrder
-      ? `[Product Order] ${name} — ${effectiveServiceName}`
-      : `[Callback / Quote] ${name}${effectiveServiceName ? ` — ${effectiveServiceName}` : ''}`;
+    const isProductOrder = Boolean(resolvedOrder || effectiveServiceName?.startsWith('[Order'));
+    const title = resolvedOrder
+      ? `[Product Order] ${name} — ${orderItemsText}`.slice(0, 180)
+      : isProductOrder
+        ? `[Product Order] ${name} — ${effectiveServiceName}`
+        : `[Callback / Quote] ${name}${effectiveServiceName ? ` — ${effectiveServiceName}` : ''}`;
+
     const descParts: string[] = [];
+    if (resolvedOrder) {
+      descParts.push(
+        `Items: ${resolvedOrder.items
+          .map((item) =>
+            `${item.quantity}x ${item.name}${item.lineTotal !== null ? ` (${currencySymbol}${item.lineTotal})` : ''}`,
+          )
+          .join(', ')}`,
+      );
+      if (resolvedOrder.totalAmount > 0) {
+        descParts.push(`Order Total: ${currencySymbol}${resolvedOrder.totalAmount}`);
+      }
+      descParts.push(`Fulfillment: ${fulfillmentLabel}`);
+      if (order?.notes?.trim()) {
+        descParts.push(`Notes: ${order.notes.trim()}`);
+      }
+    }
     if (cleanMessage) descParts.push(cleanMessage);
-    if (cleanAddress) descParts.push(`Location: ${cleanAddress}`);
-    const description = descParts.join('\n\n') || undefined;
+    if (cleanAddress && cleanAddress !== 'Store Pickup') descParts.push(`Location: ${cleanAddress}`);
+    const description = descParts.join('\n') || undefined;
+
+    const tags = isProductOrder
+      ? ['product_order', fulfillmentMode, 'order_status:pending']
+      : [];
+    const leadValue = resolvedOrder ? resolvedOrder.totalAmount : resolvedService?.basePrice || 0;
 
     const lead = await db.lead.create({
       data: {
@@ -180,42 +242,52 @@ export async function POST(
         email: cleanEmail,
         source: 'bgos_business_page',
         status: 'new',
-        priority: 'medium',
+        priority: isProductOrder ? 'high' : 'medium',
         description,
         address: cleanAddress,
         serviceType: effectiveServiceName,
         serviceId: resolvedService?.id,
         customerId: customer?.id,
         tenantId: tenant.id,
-        value: resolvedService?.basePrice || 0,
+        value: leadValue,
+        tagsJson: JSON.stringify(tags),
+        lineItemsJson: resolvedOrder ? JSON.stringify(resolvedOrder.items) : '[]',
         notesJson: JSON.stringify([
           {
             at: new Date().toISOString(),
             by: 'system',
-            text: `Inquiry submitted from BGOS business page /b/${tenant.publicSlug || tenant.slug}.`,
+            ...(isProductOrder ? { type: 'order_status', orderStatus: 'pending' } : {}),
+            text: isProductOrder
+              ? `Product order received from BGOS storefront /b/${tenant.publicSlug || tenant.slug}.`
+              : `Inquiry submitted from BGOS business page /b/${tenant.publicSlug || tenant.slug}.`,
           },
         ]),
       },
     });
 
+    const orderNumber = isProductOrder ? formatOrderNumber(lead.id) : undefined;
+
     const summaryLines = [
-      `New inquiry for ${tenant.name}:`,
-      `Name: ${name}`,
+      isProductOrder ? `New Product Order (${orderNumber}) for ${tenant.name}:` : `New inquiry for ${tenant.name}:`,
+      `Customer: ${name}`,
       `Phone: ${phone}`,
       cleanEmail ? `Email: ${cleanEmail}` : null,
-      effectiveServiceName ? `Service: ${effectiveServiceName}` : null,
-      cleanAddress ? `Address: ${cleanAddress}` : null,
-      cleanMessage ? `Message: ${cleanMessage}` : null,
+      resolvedOrder ? `Items: ${orderItemsText}` : effectiveServiceName ? `Service: ${effectiveServiceName}` : null,
+      resolvedOrder && resolvedOrder.totalAmount > 0 ? `Total: ${currencySymbol}${resolvedOrder.totalAmount}` : null,
+      resolvedOrder ? `Fulfillment: ${fulfillmentLabel}` : null,
+      cleanAddress && cleanAddress !== 'Store Pickup' ? `Address: ${cleanAddress}` : null,
+      order?.notes?.trim() ? `Notes: ${order.notes.trim()}` : cleanMessage ? `Message: ${cleanMessage}` : null,
     ].filter(Boolean) as string[];
 
     const emailHtml = `
-      <h2 style="margin:0 0 12px 0;color:#0f172a;font-size:18px;">New Inquiry from Your Business Page</h2>
-      <p style="margin:0 0 16px 0;color:#475569;">A customer requested a quote/callback on your BGOS business page.</p>
+      <h2 style="margin:0 0 12px 0;color:#0f172a;font-size:18px;">${isProductOrder ? `New Product Order (${escapeHtml(orderNumber || '')})` : 'New Inquiry from Your Business Page'}</h2>
+      <p style="margin:0 0 16px 0;color:#475569;">${isProductOrder ? 'A customer placed an order on your BGOS storefront.' : 'A customer requested a quote/callback on your BGOS business page.'}</p>
       <table style="border-collapse:collapse;width:100%;max-width:520px;font-size:14px;">
         <tr><td style="padding:6px 0;color:#64748b;width:130px;">Customer</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${escapeHtml(name)}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b;">Phone</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${escapeHtml(phone)}</td></tr>
         ${cleanEmail ? `<tr><td style="padding:6px 0;color:#64748b;">Email</td><td style="padding:6px 0;color:#0f172a;">${escapeHtml(cleanEmail)}</td></tr>` : ''}
-        ${effectiveServiceName ? `<tr><td style="padding:6px 0;color:#64748b;">Service</td><td style="padding:6px 0;color:#0f172a;">${escapeHtml(effectiveServiceName)}</td></tr>` : ''}
+        ${resolvedOrder ? `<tr><td style="padding:6px 0;color:#64748b;">Items</td><td style="padding:6px 0;color:#0f172a;">${escapeHtml(orderItemsText)}</td></tr>` : effectiveServiceName ? `<tr><td style="padding:6px 0;color:#64748b;">Service</td><td style="padding:6px 0;color:#0f172a;">${escapeHtml(effectiveServiceName)}</td></tr>` : ''}
+        ${resolvedOrder && resolvedOrder.totalAmount > 0 ? `<tr><td style="padding:6px 0;color:#64748b;">Order Total</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${escapeHtml(`${currencySymbol}${resolvedOrder.totalAmount}`)}</td></tr>` : ''}
         ${cleanAddress ? `<tr><td style="padding:6px 0;color:#64748b;">Location</td><td style="padding:6px 0;color:#0f172a;">${escapeHtml(cleanAddress)}</td></tr>` : ''}
       </table>
       ${cleanMessage ? `<p style="margin:16px 0 4px 0;font-weight:600;color:#0f172a;">Details:</p><p style="margin:0;color:#475569;white-space:pre-wrap;">${escapeHtml(cleanMessage)}</p>` : ''}
@@ -223,17 +295,21 @@ export async function POST(
 
     notifyOwner(tenant.id, {
       eventType: 'lead.created',
-      eventLabel: 'New Business Page Inquiry',
+      eventLabel: isProductOrder ? `New Product Order ${orderNumber}` : 'New Business Page Inquiry',
       leadId: lead.id,
       customerId: customer?.id,
       actionUrl: '/leads',
       whatsappMessage: summaryLines.join('\n'),
       smsMessage: false,
-      emailSubject: `New Inquiry from ${name} — ${tenant.name}`,
+      emailSubject: isProductOrder
+        ? `New Order ${orderNumber} from ${name} — ${tenant.name}`
+        : `New Inquiry from ${name} — ${tenant.name}`,
       emailText: summaryLines.join('\n'),
       emailHtml,
-      pushTitle: `New Inquiry: ${name}`,
-      pushBody: `${name} (${phone})${effectiveServiceName ? ` asked about ${effectiveServiceName}` : ''}`,
+      pushTitle: isProductOrder ? `New Order ${orderNumber}: ${name}` : `New Inquiry: ${name}`,
+      pushBody: isProductOrder
+        ? `${name}: ${orderItemsText}${resolvedOrder && resolvedOrder.totalAmount > 0 ? ` (${currencySymbol}${resolvedOrder.totalAmount})` : ''}`
+        : `${name} (${phone})${effectiveServiceName ? ` asked about ${effectiveServiceName}` : ''}`,
     }).catch((err) => {
       console.error('[bgos/inquiry] notifyOwner failed:', err);
     });
@@ -241,8 +317,13 @@ export async function POST(
     return NextResponse.json({
       success: true,
       leadId: lead.id,
+      orderNumber: orderNumber || null,
+      totalAmount: leadValue,
+      currency,
       customerId: customer?.id || null,
-      message: `Thank you! ${tenant.name} received your request and will contact you shortly.`,
+      message: isProductOrder
+        ? `Order ${orderNumber} received! ${tenant.name} will confirm shortly.`
+        : `Thank you! ${tenant.name} received your request and will contact you shortly.`,
     });
   } catch (err) {
     console.error('[bgos/inquiry] Error:', err);

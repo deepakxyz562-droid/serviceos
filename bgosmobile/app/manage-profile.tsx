@@ -3,8 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,7 +17,7 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Screen, Card, Action, Badge, colors, ui } from '../src/components/ui';
+import { Screen, Card, Action, Badge, BottomSheetModal, colors, ui } from '../src/components/ui';
 import { useResource } from '../src/hooks/use-resource';
 import { apiRequest } from '../src/lib/api';
 import { normalizePendingUpload, type PendingUpload } from '../src/lib/upload';
@@ -1849,504 +1849,469 @@ export default function ManageGoogleProfileScreen() {
       </ScrollView>
 
       {/* ── Modal: AI Rewrite Description ───────────────────── */}
-      <Modal visible={rewriteModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="auto-awesome" size={20} color="#9333EA" />
-                <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                  Rewrite Description with AI
-                </Text>
-              </View>
-              <Pressable onPress={() => setRewriteModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
-
-            {rewriting ? (
-              <View style={{ paddingVertical: 40, alignItems: 'center', gap: 12 }}>
-                <ActivityIndicator size="large" color="#9333EA" />
-                <Text style={{ fontSize: 13, color: colors.muted }}>
-                  Optimizing for local Google Maps ranking in {city}…
-                </Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                <Text style={{ fontSize: 12, color: colors.muted, marginBottom: 12 }}>
-                  Select one of the 3 AI-optimized variations to update your Google Business Profile:
-                </Text>
-
-                {variations.map((v) => {
-                  const isSelected = selectedVariation === v.description;
-                  return (
-                    <Pressable
-                      key={v.id}
-                      onPress={() => setSelectedVariation(v.description)}
-                      style={{
-                        padding: 12,
-                        borderRadius: 12,
-                        borderWidth: 2,
-                        borderColor: isSelected ? '#9333EA' : colors.line,
-                        backgroundColor: isSelected ? '#FAF5FF' : colors.surface,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#7E22CE' : colors.ink }}>
-                          {v.title}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: colors.muted }}>{v.charCount}/750 chars</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, color: colors.ink, lineHeight: 18 }}>
-                        {v.description}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            <View style={{ marginTop: 14 }}>
-              <Action
-                label={applying ? 'Applying…' : 'Apply to Google Profile'}
-                disabled={applying || rewriting || !selectedVariation}
-                onPress={handleApplyDescription}
-              />
-            </View>
+      <BottomSheetModal
+        visible={rewriteModalOpen}
+        onClose={() => setRewriteModalOpen(false)}
+        title="Rewrite Description with AI"
+        titleIcon={<MaterialIcons name="auto-awesome" size={20} color="#9333EA" />}
+        footer={
+          <Action
+            label={applying ? 'Applying…' : 'Apply to Google Profile'}
+            disabled={applying || rewriting || !selectedVariation}
+            onPress={handleApplyDescription}
+          />
+        }
+      >
+        {rewriting ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center', gap: 12 }}>
+            <ActivityIndicator size="large" color="#9333EA" />
+            <Text style={{ fontSize: 13, color: colors.muted }}>
+              Optimizing for local Google Maps ranking in {city}…
+            </Text>
           </View>
-        </View>
-      </Modal>
+        ) : (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontSize: 12, color: colors.muted }}>
+              Select one of the 3 AI-optimized variations to update your Google Business Profile:
+            </Text>
+
+            {variations.map((v) => {
+              const isSelected = selectedVariation === v.description;
+              return (
+                <Pressable
+                  key={v.id}
+                  onPress={() => setSelectedVariation(v.description)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: isSelected ? '#9333EA' : colors.line,
+                    backgroundColor: isSelected ? '#FAF5FF' : colors.surface,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#7E22CE' : colors.ink }}>
+                      {v.title}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.muted }}>{v.charCount}/750 chars</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: colors.ink, lineHeight: 18 }}>
+                    {v.description}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </BottomSheetModal>
 
       {/* ── Modal: Edit Business Basics ─────────────────────── */}
-      <Modal visible={basicsModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                Edit Business Details
-              </Text>
-              <Pressable onPress={() => setBasicsModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
+      <BottomSheetModal
+        visible={basicsModalOpen}
+        onClose={() => setBasicsModalOpen(false)}
+        title="Edit Business Details"
+        headerExtra={
+          <Pressable
+            disabled={aiAutoFilling}
+            onPress={handleAiAutoFillProfile}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              backgroundColor: '#F5F3FF',
+              borderWidth: 1,
+              borderColor: '#DDD6FE',
+              borderRadius: 10,
+              paddingVertical: 8,
+              marginBottom: 10,
+            }}
+          >
+            {aiAutoFilling ? (
+              <ActivityIndicator size="small" color="#7C3AED" />
+            ) : (
+              <>
+                <MaterialIcons name="auto-awesome" size={16} color="#7C3AED" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#7C3AED' }}>
+                  Auto-Suggest Details with AI
+                </Text>
+              </>
+            )}
+          </Pressable>
+        }
+        footer={
+          <Action
+            label={savingBasics ? 'Saving…' : 'Save Details to Google'}
+            disabled={savingBasics}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveBasics();
+            }}
+          />
+        }
+      >
+        <View style={{ gap: 10 }}>
+          <View>
+            <Text style={ui.caption}>Primary Phone</Text>
+            <TextInput
+              value={editPhone}
+              onChangeText={setEditPhone}
+              style={[ui.input, { marginTop: 4 }]}
+              keyboardType="phone-pad"
+              placeholder="+91 98765 43210"
+            />
+          </View>
 
-            {/* AI Auto-Complete Button */}
-            <Pressable
-              disabled={aiAutoFilling}
-              onPress={handleAiAutoFillProfile}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                backgroundColor: '#F5F3FF',
-                borderWidth: 1,
-                borderColor: '#DDD6FE',
-                borderRadius: 10,
-                paddingVertical: 8,
-                marginBottom: 12,
+          <View style={{ position: 'relative', zIndex: 40 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={ui.caption}>Primary Category</Text>
+              {categoryLoading && <ActivityIndicator size="small" color="#2563EB" />}
+            </View>
+            <TextInput
+              value={editCategory}
+              onChangeText={setEditCategory}
+              onFocus={() => {
+                if (categoryResults.length > 0) setCategoryDropdownOpen(true);
               }}
-            >
-              {aiAutoFilling ? (
-                <ActivityIndicator size="small" color="#7C3AED" />
-              ) : (
-                <>
-                  <MaterialIcons name="auto-awesome" size={16} color="#7C3AED" />
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#7C3AED' }}>
-                    Auto-Suggest Details with AI
-                  </Text>
-                </>
-              )}
-            </Pressable>
-
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 10 }}>
-                <View>
-                  <Text style={ui.caption}>Primary Phone</Text>
-                  <TextInput
-                    value={editPhone}
-                    onChangeText={setEditPhone}
-                    style={[ui.input, { marginTop: 4 }]}
-                    keyboardType="phone-pad"
-                    placeholder="+91 98765 43210"
-                  />
-                </View>
-
-                <View style={{ position: 'relative', zIndex: 40 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={ui.caption}>Primary Category</Text>
-                    {categoryLoading && <ActivityIndicator size="small" color="#2563EB" />}
-                  </View>
-                  <TextInput
-                    value={editCategory}
-                    onChangeText={setEditCategory}
-                    onFocus={() => {
-                      if (categoryResults.length > 0) setCategoryDropdownOpen(true);
-                    }}
-                    style={[ui.input, { marginTop: 4 }]}
-                    placeholder="Search Google categories (e.g. Software company, Bakery...)"
-                  />
-                  {categoryDropdownOpen && categoryResults.length > 0 && (
-                    <View
-                      style={{
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: '#3B82F6',
-                        shadowColor: '#0F172A',
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.12,
-                        shadowRadius: 6,
-                        elevation: 5,
-                        maxHeight: 180,
-                        overflow: 'hidden',
-                        marginTop: 4,
+              style={[ui.input, { marginTop: 4 }]}
+              placeholder="Search Google categories (e.g. Software company, Bakery...)"
+            />
+            {categoryDropdownOpen && categoryResults.length > 0 && (
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#3B82F6',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 6,
+                  elevation: 5,
+                  maxHeight: 180,
+                  overflow: 'hidden',
+                  marginTop: 4,
+                }}
+              >
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 160 }}>
+                  {categoryResults.map((cat, idx) => (
+                    <Pressable
+                      key={`${cat}-${idx}`}
+                      onPress={() => {
+                        setEditCategory(cat);
+                        setCategoryDropdownOpen(false);
                       }}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderBottomWidth: idx < categoryResults.length - 1 ? 1 : 0,
+                        borderBottomColor: '#F1F5F9',
+                        backgroundColor: pressed ? '#EFF6FF' : '#FFFFFF',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      })}
                     >
-                      <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 160 }}>
-                        {categoryResults.map((cat, idx) => (
-                          <Pressable
-                            key={`${cat}-${idx}`}
-                            onPress={() => {
-                              setEditCategory(cat);
-                              setCategoryDropdownOpen(false);
-                            }}
-                            style={({ pressed }) => ({
-                              paddingHorizontal: 12,
-                              paddingVertical: 10,
-                              borderBottomWidth: idx < categoryResults.length - 1 ? 1 : 0,
-                              borderBottomColor: '#F1F5F9',
-                              backgroundColor: pressed ? '#EFF6FF' : '#FFFFFF',
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            })}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{cat}</Text>
-                            <MaterialIcons name="check" size={15} color="#2563EB" />
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-
-                <View>
-                  <Text style={ui.caption}>Additional Categories (comma separated)</Text>
-                  <TextInput
-                    value={editAdditionalCategories}
-                    onChangeText={setEditAdditionalCategories}
-                    style={[ui.input, { marginTop: 4 }]}
-                    placeholder="Web design, IT consulting"
-                  />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6, marginTop: 4 }}
-                  >
-                    {['Marketing Agency', 'Web Design', 'Event Venue', 'Catering Service', 'IT Consulting'].map((ac) => (
-                      <Pressable
-                        key={ac}
-                        onPress={() => {
-                          const existing = editAdditionalCategories ? editAdditionalCategories.split(',').map((x) => x.trim()).filter(Boolean) : [];
-                          if (!existing.includes(ac)) {
-                            setEditAdditionalCategories([...existing, ac].join(', '));
-                          }
-                        }}
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: 6,
-                          backgroundColor: '#F1F5F9',
-                          borderWidth: 1,
-                          borderColor: '#E2E8F0',
-                        }}
-                      >
-                        <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#475569' }}>
-                          + {ac}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View>
-                  <Text style={ui.caption}>Opening Date</Text>
-                  <TextInput
-                    value={editOpeningDate}
-                    onChangeText={setEditOpeningDate}
-                    style={[ui.input, { marginTop: 4 }]}
-                    placeholder="e.g. 15 March 2022"
-                  />
-                </View>
-
-                <View>
-                  <Text style={ui.caption}>Address / Storefront</Text>
-                  <TextInput
-                    value={editAddress}
-                    onChangeText={setEditAddress}
-                    style={[ui.input, { marginTop: 4 }]}
-                    placeholder="Full street address"
-                  />
-                </View>
-
-                <View>
-                  <Text style={ui.caption}>Website URL</Text>
-                  <TextInput
-                    value={editWebsite}
-                    onChangeText={setEditWebsite}
-                    style={[ui.input, { marginTop: 4 }]}
-                    autoCapitalize="none"
-                    placeholder="https://yourwebsite.com"
-                  />
-                </View>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{cat}</Text>
+                      <MaterialIcons name="check" size={15} color="#2563EB" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
               </View>
-            </ScrollView>
+            )}
+          </View>
 
-            <View style={{ marginTop: 14 }}>
-              <Action
-                label={savingBasics ? 'Saving…' : 'Save Details to Google'}
-                disabled={savingBasics}
-                onPress={handleSaveBasics}
-              />
-            </View>
+          <View>
+            <Text style={ui.caption}>Additional Categories (comma separated)</Text>
+            <TextInput
+              value={editAdditionalCategories}
+              onChangeText={setEditAdditionalCategories}
+              style={[ui.input, { marginTop: 4 }]}
+              placeholder="Web design, IT consulting"
+            />
+            <ScrollView
+              horizontal
+              keyboardShouldPersistTaps="handled"
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 6, marginTop: 4 }}
+            >
+              {['Marketing Agency', 'Web Design', 'Event Venue', 'Catering Service', 'IT Consulting'].map((ac) => (
+                <Pressable
+                  key={ac}
+                  onPress={() => {
+                    const existing = editAdditionalCategories ? editAdditionalCategories.split(',').map((x) => x.trim()).filter(Boolean) : [];
+                    if (!existing.includes(ac)) {
+                      setEditAdditionalCategories([...existing, ac].join(', '));
+                    }
+                  }}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                    backgroundColor: '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                  }}
+                >
+                  <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#475569' }}>
+                    + {ac}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View>
+            <Text style={ui.caption}>Opening Date</Text>
+            <TextInput
+              value={editOpeningDate}
+              onChangeText={setEditOpeningDate}
+              style={[ui.input, { marginTop: 4 }]}
+              placeholder="e.g. 15 March 2022"
+            />
+          </View>
+
+          <View>
+            <Text style={ui.caption}>Address / Storefront</Text>
+            <TextInput
+              value={editAddress}
+              onChangeText={setEditAddress}
+              style={[ui.input, { marginTop: 4 }]}
+              placeholder="Full street address"
+            />
+          </View>
+
+          <View>
+            <Text style={ui.caption}>Website URL</Text>
+            <TextInput
+              value={editWebsite}
+              onChangeText={setEditWebsite}
+              style={[ui.input, { marginTop: 4 }]}
+              autoCapitalize="none"
+              keyboardType="url"
+              placeholder="https://yourwebsite.com"
+            />
           </View>
         </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* ── Modal: Edit Operating Hours ─────────────────────── */}
-      <Modal visible={hoursModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                Business Operating Hours
-              </Text>
-              <Pressable onPress={() => setHoursModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-              <Pressable
-                onPress={() => setHoursState({ ...DEFAULT_REGULAR_HOURS })}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: '#F1F5F9',
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Mon–Fri 09:00–18:00</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  const allOpen: RegularHoursMap = {};
-                  for (const d of BUSINESS_DAYS) {
-                    allOpen[d] = { open: true, openTime: '09:00', closeTime: '21:00' };
-                  }
-                  setHoursState(allOpen);
-                }}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: '#ECFDF5',
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>All Days 09:00–21:00</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 10, paddingVertical: 4 }}>
-                {BUSINESS_DAYS.map((day) => {
-                  const row = hoursState[day] || DEFAULT_REGULAR_HOURS[day];
-                  return (
-                    <View
-                      key={day}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
-                        borderRadius: 12,
-                        padding: 10,
-                        gap: 8,
-                        backgroundColor: row.open ? '#FFFFFF' : '#F8FAFC',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>{day}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: row.open ? '#0B9042' : '#64748B' }}>
-                            {row.open ? 'Open' : 'Closed'}
-                          </Text>
-                          <Switch
-                            value={row.open}
-                            onValueChange={(val) =>
-                              setHoursState((prev) => ({
-                                ...prev,
-                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), open: val },
-                              }))
-                            }
-                            trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                            thumbColor={row.open ? '#0B9042' : '#FFFFFF'}
-                          />
-                        </View>
-                      </View>
-                      {row.open ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <TextInput
-                            value={row.openTime}
-                            onChangeText={(txt) =>
-                              setHoursState((prev) => ({
-                                ...prev,
-                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), openTime: txt },
-                              }))
-                            }
-                            placeholder="09:00"
-                            keyboardType="numbers-and-punctuation"
-                            style={{
-                              flex: 1,
-                              borderWidth: 1,
-                              borderColor: '#CBD5E1',
-                              borderRadius: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              fontSize: 13,
-                              fontWeight: '700',
-                              color: colors.ink,
-                              textAlign: 'center',
-                            }}
-                          />
-                          <Text style={{ color: '#64748B', fontWeight: '700' }}>to</Text>
-                          <TextInput
-                            value={row.closeTime}
-                            onChangeText={(txt) =>
-                              setHoursState((prev) => ({
-                                ...prev,
-                                [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), closeTime: txt },
-                              }))
-                            }
-                            placeholder="18:00"
-                            keyboardType="numbers-and-punctuation"
-                            style={{
-                              flex: 1,
-                              borderWidth: 1,
-                              borderColor: '#CBD5E1',
-                              borderRadius: 8,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              fontSize: 13,
-                              fontWeight: '700',
-                              color: colors.ink,
-                              textAlign: 'center',
-                            }}
-                          />
-                        </View>
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-
-            <View style={{ marginTop: 14 }}>
-              <Action
-                label={savingHours ? 'Saving Hours...' : isConnected ? 'Save & Sync to Google' : 'Save Operating Hours'}
-                onPress={handleSaveRegularHours}
-                disabled={savingHours}
-              />
-            </View>
+      <BottomSheetModal
+        visible={hoursModalOpen}
+        onClose={() => setHoursModalOpen(false)}
+        title="Business Operating Hours"
+        headerExtra={
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            <Pressable
+              onPress={() => setHoursState({ ...DEFAULT_REGULAR_HOURS })}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: '#F1F5F9',
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Mon–Fri 09:00–18:00</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                const allOpen: RegularHoursMap = {};
+                for (const d of BUSINESS_DAYS) {
+                  allOpen[d] = { open: true, openTime: '09:00', closeTime: '21:00' };
+                }
+                setHoursState(allOpen);
+              }}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: '#ECFDF5',
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#047857' }}>All Days 09:00–21:00</Text>
+            </Pressable>
           </View>
+        }
+        footer={
+          <Action
+            label={savingHours ? 'Saving Hours...' : isConnected ? 'Save & Sync to Google' : 'Save Operating Hours'}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveRegularHours();
+            }}
+            disabled={savingHours}
+          />
+        }
+      >
+        <View style={{ gap: 10, paddingVertical: 4 }}>
+          {BUSINESS_DAYS.map((day) => {
+            const row = hoursState[day] || DEFAULT_REGULAR_HOURS[day];
+            return (
+              <View
+                key={day}
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  padding: 10,
+                  gap: 8,
+                  backgroundColor: row.open ? '#FFFFFF' : '#F8FAFC',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: colors.ink }}>{day}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: row.open ? '#0B9042' : '#64748B' }}>
+                      {row.open ? 'Open' : 'Closed'}
+                    </Text>
+                    <Switch
+                      value={row.open}
+                      onValueChange={(val) =>
+                        setHoursState((prev) => ({
+                          ...prev,
+                          [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), open: val },
+                        }))
+                      }
+                      trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                      thumbColor={row.open ? '#0B9042' : '#FFFFFF'}
+                    />
+                  </View>
+                </View>
+                {row.open ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TextInput
+                      value={row.openTime}
+                      onChangeText={(txt) =>
+                        setHoursState((prev) => ({
+                          ...prev,
+                          [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), openTime: txt },
+                        }))
+                      }
+                      placeholder="09:00"
+                      keyboardType="numbers-and-punctuation"
+                      style={{
+                        flex: 1,
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 13,
+                        fontWeight: '700',
+                        color: colors.ink,
+                        textAlign: 'center',
+                      }}
+                    />
+                    <Text style={{ color: '#64748B', fontWeight: '700' }}>to</Text>
+                    <TextInput
+                      value={row.closeTime}
+                      onChangeText={(txt) =>
+                        setHoursState((prev) => ({
+                          ...prev,
+                          [day]: { ...(prev[day] || DEFAULT_REGULAR_HOURS[day]), closeTime: txt },
+                        }))
+                      }
+                      placeholder="18:00"
+                      keyboardType="numbers-and-punctuation"
+                      style={{
+                        flex: 1,
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 13,
+                        fontWeight: '700',
+                        color: colors.ink,
+                        textAlign: 'center',
+                      }}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* ── Modal: Communication Phone ──────────────────────── */}
-      <Modal visible={commPhoneModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                WhatsApp &amp; Google Maps Chat Number
-              </Text>
-              <Pressable onPress={() => setCommPhoneModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
+      <BottomSheetModal
+        visible={commPhoneModalOpen}
+        onClose={() => setCommPhoneModalOpen(false)}
+        title="WhatsApp & Google Maps Chat Number"
+        disableClose={savingCommPhone}
+        footer={
+          <Action
+            label={savingCommPhone ? 'Saving…' : 'Save WhatsApp Number'}
+            disabled={savingCommPhone}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveCommunicationPhone();
+            }}
+          />
+        }
+      >
+        <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
+          Syncs your WhatsApp Business number to Google Business Profile (where supported by Google), your BGOS Booking Page, and automated alerts.
+        </Text>
 
-            <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18, marginBottom: 12 }}>
-              Syncs your WhatsApp Business number to Google Business Profile (where supported by Google), your BGOS Booking Page, and automated alerts.
-            </Text>
-
-            <TextInput
-              value={editCommPhone}
-              onChangeText={setEditCommPhone}
-              style={[ui.input, { marginBottom: 14 }]}
-              keyboardType="phone-pad"
-              placeholder="+91 85059 45123"
-            />
-
-            <Action
-              label={savingCommPhone ? 'Saving…' : 'Save WhatsApp Number'}
-              disabled={savingCommPhone}
-              onPress={handleSaveCommunicationPhone}
-            />
-          </View>
+        <View style={{ gap: 6 }}>
+          <Text style={ui.caption}>WhatsApp Number (with country code)</Text>
+          <TextInput
+            value={editCommPhone}
+            onChangeText={setEditCommPhone}
+            style={ui.input}
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            autoComplete="tel"
+            placeholder="+91 85059 45123"
+            placeholderTextColor="#94A3B8"
+          />
         </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* ── Modal: AI Reply Salutation ──────────────────────── */}
-      <Modal visible={salutationModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                AI Reply Salutation
-              </Text>
-              <Pressable onPress={() => setSalutationModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
+      <BottomSheetModal
+        visible={salutationModalOpen}
+        onClose={() => setSalutationModalOpen(false)}
+        title="AI Reply Salutation"
+        disableClose={savingSalutation}
+        footer={
+          <Action
+            label={savingSalutation ? 'Saving…' : 'Save Salutation'}
+            disabled={savingSalutation}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveSalutation();
+            }}
+          />
+        }
+      >
+        <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18 }}>
+          Configure greeting phrases used by the AI reputation manager when replying to customer reviews (e.g. &quot;Namaste&quot;, &quot;Dear &#123;name&#125;&quot;, &quot;Greetings from team {title}&quot;).
+        </Text>
 
-            <Text style={{ fontSize: 12.5, color: '#64748B', lineHeight: 18, marginBottom: 12 }}>
-              Configure greeting phrases used by the AI reputation manager when replying to customer reviews (e.g. &quot;Namaste&quot;, &quot;Dear &#123;name&#125;&quot;, &quot;Greetings from team {title}&quot;).
-            </Text>
-
-            <TextInput
-              value={editSalutation}
-              onChangeText={setEditSalutation}
-              style={[ui.input, { marginBottom: 14 }]}
-              placeholder="e.g. Namaste, Dear {name}"
-            />
-
-            <Action
-              label={savingSalutation ? 'Saving…' : 'Save Salutation'}
-              disabled={savingSalutation}
-              onPress={handleSaveSalutation}
-            />
-          </View>
-        </View>
-      </Modal>
+        <TextInput
+          value={editSalutation}
+          onChangeText={setEditSalutation}
+          style={ui.input}
+          placeholder="e.g. Namaste, Dear {name}"
+        />
+      </BottomSheetModal>
 
       {/* ── Modal: 20 Local Service Areas Editor ─────────────── */}
-      <Modal visible={areasModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                Local Service Areas ({editAreasList.length}/20)
-              </Text>
-              <Pressable onPress={() => setAreasModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
-
-            <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 17 }}>
+      <BottomSheetModal
+        visible={areasModalOpen}
+        onClose={() => setAreasModalOpen(false)}
+        title={`Local Service Areas (${editAreasList.length}/20)`}
+        maxHeight="85%"
+        headerExtra={
+          <View style={{ gap: 8, marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 17 }}>
               Add up to 20 nearby neighborhoods, sectors, or suburbs around {city || 'your location'} to strengthen local Map Pack reach.
             </Text>
 
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               <TextInput
                 value={newAreaInput}
                 onChangeText={setNewAreaInput}
@@ -2381,7 +2346,6 @@ export default function ManageGoogleProfileScreen() {
                 borderColor: '#A7F3D0',
                 borderRadius: 10,
                 paddingVertical: 9,
-                marginBottom: 10,
                 opacity: suggestingAreas ? 0.6 : 1,
               }}
             >
@@ -2394,216 +2358,163 @@ export default function ManageGoogleProfileScreen() {
                 {suggestingAreas ? 'Finding Nearby Areas…' : 'AI Suggest up to 20 Nearby Areas'}
               </Text>
             </Pressable>
-
-            <ScrollView style={{ maxHeight: 240, marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {editAreasList.map((area) => (
-                  <Pressable
-                    key={area}
-                    onPress={() => setEditAreasList((prev) => prev.filter((a) => a !== area))}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 5,
-                      backgroundColor: '#F8FAFC',
-                      borderWidth: 1,
-                      borderColor: '#CBD5E1',
-                      borderRadius: 10,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{area}</Text>
-                    <MaterialIcons name="close" size={14} color="#64748B" />
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-
-            <Action
-              label={savingAreas ? 'Saving Areas…' : `Save Service Areas (${editAreasList.length}/20)`}
-              disabled={savingAreas}
-              onPress={() => void handleSaveServiceAreas()}
-            />
           </View>
-        </View>
-      </Modal>
-
-      {/* ── Modal: Secondary Phone ────────────────────────────── */}
-      <Modal visible={secondaryPhoneModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                Edit Secondary Phone
-              </Text>
-              <Pressable onPress={() => setSecondaryPhoneModalOpen(false)}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
-
-            <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 12 }}>
-              Add a backup or mobile number for customers contacting {title}.
-            </Text>
-
-            <TextInput
+        }
+        footer={
+          <Action
+            label={savingAreas ? 'Saving Areas…' : `Save Service Areas (${editAreasList.length}/20)`}
+            disabled={savingAreas}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveServiceAreas();
+            }}
+          />
+        }
+      >
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {editAreasList.map((area) => (
+            <Pressable
+              key={area}
+              onPress={() => setEditAreasList((prev) => prev.filter((a) => a !== area))}
               style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#F8FAFC',
                 borderWidth: 1,
                 borderColor: '#CBD5E1',
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                fontSize: 14,
-                color: colors.ink,
-                marginBottom: 16,
+                borderRadius: 10,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
               }}
-              value={editSecondaryPhone}
-              onChangeText={setEditSecondaryPhone}
-              placeholder="e.g. 620842086"
-              keyboardType="phone-pad"
-            />
-
-            <Action
-              label={savingSecondaryPhone ? 'Saving…' : 'Save Secondary Phone'}
-              disabled={savingSecondaryPhone}
-              onPress={handleSaveSecondaryPhone}
-            />
-          </View>
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{area}</Text>
+              <MaterialIcons name="close" size={14} color="#64748B" />
+            </Pressable>
+          ))}
         </View>
-      </Modal>
+      </BottomSheetModal>
+
+      {/* ── Modal: Secondary Phone ────────────────────────────── */}
+      <BottomSheetModal
+        visible={secondaryPhoneModalOpen}
+        onClose={() => setSecondaryPhoneModalOpen(false)}
+        title="Edit Secondary Phone"
+        disableClose={savingSecondaryPhone}
+        footer={
+          <Action
+            label={savingSecondaryPhone ? 'Saving…' : 'Save Secondary Phone'}
+            disabled={savingSecondaryPhone}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveSecondaryPhone();
+            }}
+          />
+        }
+      >
+        <Text style={{ fontSize: 13, color: colors.muted }}>
+          Add a backup or mobile number for customers contacting {title}.
+        </Text>
+
+        <TextInput
+          style={ui.input}
+          value={editSecondaryPhone}
+          onChangeText={setEditSecondaryPhone}
+          placeholder="e.g. +91 98765 43210"
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+        />
+      </BottomSheetModal>
 
       {/* Service Add/Edit Modal inside Manage Google Profile */}
-      <Modal
+      <BottomSheetModal
         visible={svcModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          if (!savingSvc) setSvcModalOpen(false);
-        }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' }}>
-          <View
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 18,
-              gap: 12,
+        onClose={() => !savingSvc && setSvcModalOpen(false)}
+        title={editingSvcId ? 'Edit Service' : 'Add Service'}
+        disableClose={savingSvc}
+        footer={
+          <Action
+            label={savingSvc ? 'Saving…' : editingSvcId ? 'Save & Sync Service' : 'Add & Sync Service'}
+            icon="check"
+            disabled={savingSvc}
+            onPress={() => {
+              Keyboard.dismiss();
+              void handleSaveProfileService();
             }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.ink }}>
-                {editingSvcId ? 'Edit Service' : 'Add Service'}
-              </Text>
-              <Pressable onPress={() => !savingSvc && setSvcModalOpen(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={colors.muted} />
-              </Pressable>
-            </View>
+          />
+        }
+      >
+        <View style={{ gap: 4 }}>
+          <Text style={styles.rowLabel}>Service Name</Text>
+          <TextInput
+            style={ui.input}
+            value={svcName}
+            onChangeText={setSvcName}
+            placeholder="e.g. Custom Software Development"
+          />
+        </View>
 
-            <View style={{ gap: 4 }}>
-              <Text style={styles.rowLabel}>Service Name</Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 14,
-                  color: colors.ink,
-                }}
-                value={svcName}
-                onChangeText={setSvcName}
-                placeholder="e.g. Custom Software Development"
-              />
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.rowLabel}>Price ({currencySymbol})</Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#CBD5E1',
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    fontSize: 14,
-                    color: colors.ink,
-                  }}
-                  value={svcPrice}
-                  onChangeText={setSvcPrice}
-                  keyboardType="decimal-pad"
-                  placeholder="0 for Request Quote"
-                />
-              </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.rowLabel}>Duration (mins)</Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#CBD5E1',
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    fontSize: 14,
-                    color: colors.ink,
-                  }}
-                  value={svcDuration}
-                  onChangeText={setSvcDuration}
-                  keyboardType="number-pad"
-                  placeholder="60"
-                />
-              </View>
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={styles.rowLabel}>Description (used on Page, Chatbot &amp; Google)</Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  fontSize: 13.5,
-                  color: colors.ink,
-                  minHeight: 82,
-                  textAlignVertical: 'top',
-                }}
-                multiline
-                maxLength={500}
-                value={svcDesc}
-                onChangeText={setSvcDesc}
-                placeholder="Describe this service and who it is for..."
-              />
-            </View>
-
-            {isConnected && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={styles.rowLabel}>Sync to Google Business Profile</Text>
-                  <Text style={{ fontSize: 11.5, color: colors.muted }}>
-                    Push updated service name &amp; description directly to Google
-                  </Text>
-                </View>
-                <Switch
-                  value={svcSyncGoogle}
-                  onValueChange={setSvcSyncGoogle}
-                  trackColor={{ true: '#0B9042' }}
-                />
-              </View>
-            )}
-
-            <Action
-              label={savingSvc ? 'Saving…' : editingSvcId ? 'Save & Sync Service' : 'Add & Sync Service'}
-              icon="check"
-              disabled={savingSvc}
-              onPress={() => void handleSaveProfileService()}
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.rowLabel}>Price ({currencySymbol})</Text>
+            <TextInput
+              style={ui.input}
+              value={svcPrice}
+              onChangeText={setSvcPrice}
+              keyboardType="decimal-pad"
+              placeholder="0 for Request Quote"
+            />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.rowLabel}>Duration (mins)</Text>
+            <TextInput
+              style={ui.input}
+              value={svcDuration}
+              onChangeText={setSvcDuration}
+              keyboardType="number-pad"
+              placeholder="60"
             />
           </View>
         </View>
-      </Modal>
+
+        <View style={{ gap: 4 }}>
+          <Text style={styles.rowLabel}>Description (used on Page, Chatbot &amp; Google)</Text>
+          <TextInput
+            style={{
+              borderWidth: 1,
+              borderColor: '#CBD5E1',
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 13.5,
+              color: colors.ink,
+              minHeight: 82,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            maxLength={500}
+            value={svcDesc}
+            onChangeText={setSvcDesc}
+            placeholder="Describe this service and who it is for..."
+          />
+        </View>
+
+        {isConnected && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={styles.rowLabel}>Sync to Google Business Profile</Text>
+              <Text style={{ fontSize: 11.5, color: colors.muted }}>
+                Push updated service name &amp; description directly to Google
+              </Text>
+            </View>
+            <Switch
+              value={svcSyncGoogle}
+              onValueChange={setSvcSyncGoogle}
+              trackColor={{ true: '#0B9042' }}
+            />
+          </View>
+        )}
+      </BottomSheetModal>
 
       <MediaMetadataSheet
         visible={mediaComposerOpen}
@@ -2833,18 +2744,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginTop: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
   },
   infoTabBar: {
     flexDirection: 'row',

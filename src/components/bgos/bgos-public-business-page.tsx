@@ -22,8 +22,10 @@ import {
   Mail,
   MapPin,
   MessageCircle,
+  Minus,
   Navigation,
   Phone,
+  Plus,
   QrCode,
   Send,
   Share2,
@@ -32,6 +34,7 @@ import {
   Sparkles,
   Star,
   Tag,
+  Trash2,
   Truck,
   UserPlus,
   X,
@@ -163,17 +166,81 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
   const [bookSuccess, setBookSuccess] = useState<string | null>(null);
   const [bookError, setBookError] = useState<string | null>(null);
 
-  // Standalone product order modal state
-  const [orderProduct, setOrderProduct] = useState<(typeof profile.products)[number] | null>(null);
-  const [orderQty, setOrderQty] = useState(1);
-  const [orderFulfillment, setOrderFulfillment] = useState<'pickup' | 'delivery'>('pickup');
+  // Multi-item storefront bag & checkout modal state
+  const [bag, setBag] = useState<Record<string, number>>({});
+  const [bagOpen, setBagOpen] = useState(false);
+  const [orderFulfillment, setOrderFulfillment] = useState<'pickup' | 'delivery'>(
+    profile.storeSettings?.deliveryEnabled && !profile.storeSettings?.pickupEnabled
+      ? 'delivery'
+      : 'pickup',
+  );
   const [orderName, setOrderName] = useState('');
   const [orderPhone, setOrderPhone] = useState('');
   const [orderAddress, setOrderAddress] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [orderSubmitting, setOrderSubmitting] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{
+    message: string;
+    orderNumber?: string | null;
+    whatsappUrl?: string | null;
+  } | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+
+  const bagItems = useMemo(() => {
+    const items: Array<{
+      product: (typeof profile.products)[number];
+      quantity: number;
+      lineTotal: number | null;
+    }> = [];
+    for (const prod of profile.products || []) {
+      const qty = bag[prod.id] || 0;
+      if (qty <= 0) continue;
+      const lineTotal = prod.price && prod.price > 0 ? Math.round(prod.price * qty * 100) / 100 : null;
+      items.push({ product: prod, quantity: qty, lineTotal });
+    }
+    return items;
+  }, [bag, profile.products]);
+
+  const bagCount = useMemo(
+    () => bagItems.reduce((sum, item) => sum + item.quantity, 0),
+    [bagItems],
+  );
+
+  const bagSubtotal = useMemo(
+    () => bagItems.reduce((sum, item) => sum + (item.lineTotal || 0), 0),
+    [bagItems],
+  );
+
+  const bagHasUnpricedItems = useMemo(
+    () => bagItems.some((item) => item.product.price === null || item.product.price <= 0),
+    [bagItems],
+  );
+
+  const adjustBagQty = useCallback((productId: string, delta: number) => {
+    setBag((prev) => {
+      const nextQty = Math.max(0, Math.min(99, (prev[productId] || 0) + delta));
+      const next = { ...prev };
+      if (nextQty === 0) {
+        delete next[productId];
+      } else {
+        next[productId] = nextQty;
+      }
+      return next;
+    });
+  }, []);
+
+  const openBagForProduct = useCallback(
+    (prod: (typeof profile.products)[number]) => {
+      setBag((prev) => {
+        if ((prev[prod.id] || 0) > 0) return prev;
+        return { ...prev, [prod.id]: 1 };
+      });
+      setOrderSuccess(null);
+      setOrderError(null);
+      setBagOpen(true);
+    },
+    [],
+  );
 
   const todayWeekday = useMemo(() => {
     try {
@@ -861,82 +928,193 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                         Food Ordering
                       </span>
                     )}
+                    {bagCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderSuccess(null);
+                          setOrderError(null);
+                          setBagOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: accent }}
+                      >
+                        <ShoppingBag className="h-3.5 w-3.5" />
+                        Bag ({bagCount})
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {profile.products?.length > 0 ? (
-                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {profile.products.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/40 p-3.5"
-                      >
-                        <div className="flex gap-3">
-                          {prod.imageUrl ? (
-                            <img
-                              src={prod.imageUrl}
-                              alt={prod.name}
-                              className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover"
-                            />
-                          ) : null}
-                          <div className="min-w-0 flex-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                              {prod.category}
-                            </span>
-                            <h3 className="truncate text-sm font-semibold text-slate-900">
-                              {prod.name}
-                            </h3>
-                            {prod.description ? (
-                              <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-600">
-                                {prod.description}
-                              </p>
-                            ) : null}
+                  <>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {profile.products.map((prod) => {
+                        const qtyInBag = bag[prod.id] || 0;
+                        return (
+                          <div
+                            key={prod.id}
+                            className={`flex flex-col justify-between gap-3 rounded-xl border p-3.5 transition-colors ${
+                              qtyInBag > 0
+                                ? 'border-emerald-300 bg-emerald-50/35'
+                                : 'border-slate-200/80 bg-slate-50/40'
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              {prod.imageUrl ? (
+                                <img
+                                  src={prod.imageUrl}
+                                  alt={prod.name}
+                                  className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 bg-white object-cover"
+                                />
+                              ) : null}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                    {prod.category}
+                                  </span>
+                                  {prod.inStock === false && (
+                                    <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                                      Out of stock
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="truncate text-sm font-semibold text-slate-900">
+                                  {prod.name}
+                                </h3>
+                                {prod.description ? (
+                                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-600">
+                                    {prod.description}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-2.5">
+                              <span className="text-sm font-bold text-slate-900">
+                                {prod.price && prod.price > 0
+                                  ? formatCurrency(prod.price, profile.currency, { compact: true })
+                                  : 'Price on inquiry'}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {cleanWaDigits && (
+                                  <a
+                                    href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
+                                      `Hi ${profile.businessName}, I would like to order "${prod.name}"${prod.price ? ` (${formatCurrency(prod.price, profile.currency)})` : ''}. Please confirm availability and delivery.`,
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                    title="Order via WhatsApp"
+                                  >
+                                    <MessageCircle className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline">WhatsApp</span>
+                                  </a>
+                                )}
+                                {prod.inStock === false ? null : qtyInBag > 0 ? (
+                                  <div className="inline-flex items-center rounded-lg border border-emerald-300 bg-white">
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustBagQty(prod.id, -1)}
+                                      className="px-2 py-1 text-slate-700 hover:bg-slate-50"
+                                      aria-label={`Remove one ${prod.name}`}
+                                    >
+                                      <Minus className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="min-w-[24px] text-center text-xs font-bold text-slate-900">
+                                      {qtyInBag}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustBagQty(prod.id, 1)}
+                                      className="px-2 py-1 text-slate-700 hover:bg-slate-50"
+                                      aria-label={`Add one ${prod.name}`}
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustBagQty(prod.id, 1)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                      Add
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openBagForProduct(prod)}
+                                      className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                                      style={{ backgroundColor: accent }}
+                                    >
+                                      Order
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                        );
+                      })}
+                    </div>
+
+                    {bagCount > 0 && (
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/90 p-3.5">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                            Your Order Bag ({bagCount} {bagCount === 1 ? 'item' : 'items'})
+                          </p>
+                          <p className="text-sm font-extrabold text-slate-900">
+                            {bagSubtotal > 0
+                              ? `${formatCurrency(bagSubtotal, profile.currency, { compact: true })}${bagHasUnpricedItems ? ' + quote items' : ''}`
+                              : 'Quote on request'}
+                          </p>
                         </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-2.5">
-                          <span className="text-sm font-bold text-slate-900">
-                            {prod.price && prod.price > 0
-                              ? formatCurrency(prod.price, profile.currency, { compact: true })
-                              : 'Price on inquiry'}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            {cleanWaDigits && (
-                              <a
-                                href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
-                                  `Hi ${profile.businessName}, I would like to order "${prod.name}"${prod.price ? ` (${formatCurrency(prod.price, profile.currency)})` : ''}. Please confirm availability and delivery.`,
-                                )}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
-                                title="Order via WhatsApp"
-                              >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">WhatsApp</span>
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOrderProduct(prod);
-                                setOrderQty(1);
-                                setOrderFulfillment(
-                                  profile.storeSettings?.deliveryEnabled && !profile.storeSettings?.pickupEnabled
-                                    ? 'delivery'
-                                    : 'pickup',
-                                );
-                                setOrderSuccess(null);
-                                setOrderError(null);
-                              }}
-                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                              style={{ backgroundColor: accent }}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {cleanWaDigits && (
+                            <a
+                              href={`https://wa.me/${cleanWaDigits}?text=${encodeURIComponent(
+                                `Hi ${profile.businessName}, I would like to order:\n${bagItems
+                                  .map(
+                                    (item) =>
+                                      `• ${item.quantity}x ${item.product.name}${
+                                        item.lineTotal
+                                          ? ` (${formatCurrency(item.lineTotal, profile.currency)})`
+                                          : ''
+                                      }`,
+                                  )
+                                  .join('\n')}${
+                                  bagSubtotal > 0
+                                    ? `\nTotal: ${formatCurrency(bagSubtotal, profile.currency)}`
+                                    : ''
+                                }`,
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"
                             >
-                              Order
-                            </button>
-                          </div>
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              WhatsApp Bag
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderSuccess(null);
+                              setOrderError(null);
+                              setBagOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white shadow-sm hover:opacity-95"
+                            style={{ backgroundColor: accent }}
+                          >
+                            <ShoppingBag className="h-3.5 w-3.5" />
+                            Review &amp; Place Order
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-slate-50/60 px-4 py-3">
                     <p className="text-xs text-slate-600">
@@ -2279,8 +2457,8 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
         </div>
       )}
 
-      {/* Standalone Product Order / Request Modal */}
-      {orderProduct && (
+      {/* Multi-Item Product Order Bag Modal */}
+      {bagOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
           role="dialog"
@@ -2290,17 +2468,19 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
-                  Order {orderProduct.name}
+                  {orderSuccess ? 'Order Confirmation' : `Your Order Bag (${bagCount})`}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {orderProduct.price && orderProduct.price > 0
-                    ? `${formatCurrency(orderProduct.price * orderQty, profile.currency, { compact: true })} (${orderQty} × ${formatCurrency(orderProduct.price, profile.currency, { compact: true })})`
-                    : profile.businessName}
+                  {orderSuccess
+                    ? profile.businessName
+                    : bagSubtotal > 0
+                      ? `Total: ${formatCurrency(bagSubtotal, profile.currency, { compact: true })}${bagHasUnpricedItems ? ' + quote items' : ''}`
+                      : profile.businessName}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setOrderProduct(null)}
+                onClick={() => setBagOpen(false)}
                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close order dialog"
               >
@@ -2311,14 +2491,43 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
             {orderSuccess ? (
               <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-                <p className="mt-3 text-base font-bold text-emerald-950">Order Request Sent!</p>
-                <p className="mt-1 text-xs text-emerald-800">{orderSuccess}</p>
+                <p className="mt-3 text-base font-bold text-emerald-950">
+                  {orderSuccess.orderNumber
+                    ? `Order ${orderSuccess.orderNumber} Sent!`
+                    : 'Order Request Sent!'}
+                </p>
+                <p className="mt-1 text-xs text-emerald-800">{orderSuccess.message}</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {orderSuccess.whatsappUrl ? (
+                    <a
+                      href={orderSuccess.whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Send Copy on WhatsApp
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setBagOpen(false)}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : bagItems.length === 0 ? (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5 text-center">
+                <p className="text-sm font-semibold text-slate-800">Your order bag is empty</p>
+                <p className="mt-1 text-xs text-slate-500">Add one or more items from the catalog to place an order.</p>
                 <button
                   type="button"
-                  onClick={() => setOrderProduct(null)}
-                  className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                  onClick={() => setBagOpen(false)}
+                  className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
                 >
-                  Done
+                  Browse Products
                 </button>
               </div>
             ) : (
@@ -2334,6 +2543,27 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                     setOrderError('Please enter your delivery address.');
                     return;
                   }
+                  const minOrder = profile.storeSettings?.minOrderAmount;
+                  if (
+                    orderFulfillment === 'delivery' &&
+                    typeof minOrder === 'number' &&
+                    minOrder > 0 &&
+                    bagSubtotal > 0 &&
+                    bagSubtotal < minOrder
+                  ) {
+                    setOrderError(
+                      `Minimum order for delivery is ${formatCurrency(minOrder, profile.currency, { compact: true })}. You can switch to Store Pickup or add more items.`,
+                    );
+                    return;
+                  }
+                  const snapshotItems = bagItems.map((entry) => ({
+                    productId: entry.product.id,
+                    name: entry.product.name,
+                    quantity: entry.quantity,
+                    unitPrice: entry.product.price ?? null,
+                    lineTotal: entry.lineTotal,
+                  }));
+                  const snapshotSubtotal = bagSubtotal;
                   setOrderSubmitting(true);
                   try {
                     const res = await fetch(
@@ -2344,30 +2574,46 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                         body: JSON.stringify({
                           name: orderName.trim(),
                           phone: orderPhone.trim(),
-                          serviceName: `[Order x${orderQty}] ${orderProduct.name}`,
                           address:
                             orderFulfillment === 'delivery'
                               ? orderAddress.trim()
                               : 'Store Pickup',
-                          message: [
-                            `Product Order: ${orderProduct.name}`,
-                            `Quantity: ${orderQty}`,
-                            `Fulfillment: ${orderFulfillment === 'delivery' ? 'Local Delivery' : 'Store Pickup'}`,
-                            orderNotes.trim() ? `Notes: ${orderNotes.trim()}` : '',
-                          ]
-                            .filter(Boolean)
-                            .join('\n'),
+                          order: {
+                            fulfillment: orderFulfillment,
+                            notes: orderNotes.trim() || undefined,
+                            items: snapshotItems.map((i) => ({
+                              productId: i.productId,
+                              name: i.name,
+                              quantity: i.quantity,
+                              unitPrice: i.unitPrice,
+                            })),
+                          },
                         }),
                       },
                     );
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) {
-                      setOrderError(data.error || 'Could not place order request.');
+                      setOrderError(data.error || 'Could not place order.');
                     } else {
-                      setOrderSuccess(
-                        data.message ||
-                          `${profile.businessName} received your order for ${orderProduct.name} and will confirm shortly.`,
-                      );
+                      const waNumber =
+                        profile.whatsappDigits ||
+                        (profile.whatsappPhone || profile.phone || '').replace(/[^0-9]/g, '');
+                      const waText = `Hi ${profile.businessName}, I placed order ${data.orderNumber || ''} (${orderFulfillment}):\n${snapshotItems
+                        .map(
+                          (i) =>
+                            `• ${i.quantity}x ${i.name}${i.lineTotal ? ` (${formatCurrency(i.lineTotal, profile.currency)})` : ''}`,
+                        )
+                        .join('\n')}${snapshotSubtotal > 0 ? `\nTotal: ${formatCurrency(snapshotSubtotal, profile.currency)}` : ''}\nName: ${orderName.trim()}`;
+                      setBag({});
+                      setOrderSuccess({
+                        message:
+                          data.message ||
+                          `${profile.businessName} received your order and will confirm shortly.`,
+                        orderNumber: data.orderNumber || null,
+                        whatsappUrl: waNumber
+                          ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waText)}`
+                          : null,
+                      });
                     }
                   } catch {
                     setOrderError('Network error — please try again.');
@@ -2384,48 +2630,75 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Quantity</label>
-                    <div className="flex items-center rounded-xl border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setOrderQty((q) => Math.max(1, q - 1))}
-                        className="px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                      >
-                        −
-                      </button>
-                      <span className="flex-1 text-center text-sm font-semibold text-slate-900">
-                        {orderQty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setOrderQty((q) => Math.min(99, q + 1))}
-                        className="px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">Fulfillment</label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {(['pickup', 'delivery'] as const).map((mode) => (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  {bagItems.map((entry) => (
+                    <div
+                      key={entry.product.id}
+                      className="flex items-center justify-between gap-2 border-b border-slate-200/70 pb-2 last:border-b-0 last:pb-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-slate-900">
+                          {entry.product.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {entry.lineTotal !== null
+                            ? formatCurrency(entry.lineTotal, profile.currency, { compact: true })
+                            : 'Quote on request'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white">
+                          <button
+                            type="button"
+                            onClick={() => adjustBagQty(entry.product.id, -1)}
+                            className="px-2 py-1 text-slate-600 hover:bg-slate-50"
+                            aria-label={`Decrease quantity for ${entry.product.name}`}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="min-w-[22px] text-center text-xs font-semibold text-slate-900">
+                            {entry.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => adjustBagQty(entry.product.id, 1)}
+                            className="px-2 py-1 text-slate-600 hover:bg-slate-50"
+                            aria-label={`Increase quantity for ${entry.product.name}`}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
                         <button
-                          key={mode}
                           type="button"
-                          onClick={() => setOrderFulfillment(mode)}
-                          className={`rounded-xl border px-2 py-2 text-xs font-semibold capitalize ${
-                            orderFulfillment === mode
-                              ? 'border-transparent text-white'
-                              : 'border-slate-200 bg-white text-slate-700'
-                          }`}
-                          style={orderFulfillment === mode ? { backgroundColor: accent } : undefined}
+                          onClick={() => adjustBagQty(entry.product.id, -entry.quantity)}
+                          className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          aria-label={`Remove ${entry.product.name}`}
                         >
-                          {mode}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      ))}
+                      </div>
                     </div>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Fulfillment</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['pickup', 'delivery'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setOrderFulfillment(mode)}
+                        className={`rounded-xl border px-2 py-2 text-xs font-semibold capitalize ${
+                          orderFulfillment === mode
+                            ? 'border-transparent text-white'
+                            : 'border-slate-200 bg-white text-slate-700'
+                        }`}
+                        style={orderFulfillment === mode ? { backgroundColor: accent } : undefined}
+                      >
+                        {mode === 'pickup' ? 'Store Pickup' : 'Local Delivery'}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -2490,8 +2763,10 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                   {orderSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending Order...
+                      Placing Order...
                     </>
+                  ) : bagSubtotal > 0 ? (
+                    `Place Order (${formatCurrency(bagSubtotal, profile.currency, { compact: true })})`
                   ) : (
                     'Place Order Request'
                   )}
@@ -2501,7 +2776,9 @@ export function BgosPublicBusinessPage({ profile, chatbotMeta }: BgosPublicBusin
                   {(profile.whatsappDigits || profile.whatsappPhone || profile.phone) && (
                     <a
                       href={`https://wa.me/${profile.whatsappDigits || (profile.whatsappPhone || profile.phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                        `Hi ${profile.businessName}, I want to order "${orderProduct.name}" x${orderQty} (${orderFulfillment}).${orderName ? ` Name: ${orderName}` : ''}`,
+                        `Hi ${profile.businessName}, I want to order (${orderFulfillment}):\n${bagItems
+                          .map((i) => `• ${i.quantity}x ${i.product.name}`)
+                          .join('\n')}${bagSubtotal > 0 ? `\nTotal: ${formatCurrency(bagSubtotal, profile.currency)}` : ''}${orderName ? `\nName: ${orderName}` : ''}`,
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"

@@ -55,15 +55,14 @@ export function resolveTenantPublicUrls(
   const slug = String(rawSlug).trim();
   const origin = (
     process.env.BGOS_PUBLIC_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
     'https://bgos.site'
   ).replace(/\/+$/, '');
-  const profileUrl = `https://bgos.site/${encodeURIComponent(slug)}`;
+  const profileUrl = `${origin}/${encodeURIComponent(slug)}`;
   const customBooking =
     typeof settings?.bookingLink === 'string' && /^https?:\/\//i.test(settings.bookingLink.trim())
       ? settings.bookingLink.trim()
       : '';
-  const bookingUrl = customBooking || `https://bgos.site/${encodeURIComponent(slug)}/book`;
+  const bookingUrl = customBooking || `${origin}/${encodeURIComponent(slug)}/book`;
   const productsFeedUrl = `${origin}/api/public/business/${encodeURIComponent(slug)}/products-feed`;
   const defaultOrderUrl = `${profileUrl}#products`;
   return { slug, origin, profileUrl, bookingUrl, productsFeedUrl, defaultOrderUrl };
